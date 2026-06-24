@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Scheduled</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+</head>
+<body>
+  <div id="splash" class="splash"><img src="scheduled-splash.jpeg" alt="Scheduled"></div>
+  <main id="app" class="app hidden">
+    <section id="loginPage" class="login-card">
+      <div class="brand"><img src="scheduled-icon.jpeg" alt="Scheduled"><h1>scheduled</h1><p>Tutoring, made simple.</p></div>
+      <div id="notice" class="notice hidden"></div>
+      <label>Email</label><input id="loginEmail" type="email" placeholder="name@example.com">
+      <label>Password</label><input id="loginPassword" type="password" placeholder="Password">
+      <button onclick="login()">Login</button>
+      <p class="hint">Please log in using your assigned email and password.</p>
+      <button class="ghost" onclick="toggleSetup()">Create first admin</button>
+      <div id="setup" class="hidden setup">
+        <hr><h3>First admin setup</h3>
+        <p class="hint">Use once to create your owner account.</p>
+        <input id="setupName" placeholder="Full name" value="Marly Al Houkayem">
+        <input id="setupEmail" type="email" placeholder="Admin email">
+        <input id="setupPassword" type="password" placeholder="Admin password">
+        <button onclick="createFirstAdmin()">Create Admin</button>
+      </div>
+    </section>
+    <section id="dashboard" class="hidden">
+      <header class="topbar"><div><h1>Scheduled</h1><p id="roleLabel"></p></div><button class="ghost" onclick="logout()">Logout</button></header>
+      <nav id="tabs" class="tabs"></nav>
+      <section id="content" class="content"></section>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
