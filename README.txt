@@ -1,16 +1,12 @@
-Scheduled All Upgrades v1.3
+Scheduled v1.5 — Course-First Booking
 
 Adds:
-- Calendar month view
-- Edit/delete bookings
-- Session notes editing
-- Export bookings/payments to CSV
-- Better monthly financial dashboard
-- Generate repeated date-by-date availability
-- Keeps exact-date availability
-- Keeps edit/delete availability
-- Keeps unavailable dates
-- Keeps automatic slot blocking
-- Keeps 15-minute buffer between different students
+- Student booking starts with a full course dropdown/list
+- After choosing a course, students see all tutors who teach it
+- Tutors are shown alphabetically to avoid favoring one tutor
+- Student chooses tutor clearly from equal cards
+- Then date/time/duration/location appear
+- Keeps slot blocking and 15-minute buffer
+- Keeps tutor-created student accounts
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
