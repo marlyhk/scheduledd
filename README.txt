@@ -1,14 +1,10 @@
-Scheduled v1.6 — Request Access
+Scheduled v1.7 — Structured Location Options
 
 Adds:
-- Removes public Create First Admin button
-- Adds Request Access form on login page
-- Request saves name, email, phone, courses needed, and optional message
-- Adds Admin > Access Requests tab
-- Admin can approve or reject requests
-- Approval creates a student account with a temporary password
-- Students are not assigned to one tutor; after login, they can choose any tutor for a course
+- Tutor availability location choices: Online, On Campus, Both
+- Campus name required for On Campus or Both
+- Multiple location options can be selected
+- Students only see location options for the selected tutor/date/time slot
+- Keeps course-first booking and request access
 
-Important Firebase Rules:
-Your Realtime Database rules must allow public write to accessRequests while keeping the rest protected.
-Use the rules provided by ChatGPT after upload.
+Upload all files to GitHub and commit. Vercel redeploys automatically.

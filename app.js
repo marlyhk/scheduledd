@@ -130,15 +130,33 @@ function exportPage(){
   $("content").innerHTML=`<div class="card"><h2>Export</h2><p class="muted">Download bookings and payments as a CSV file. You can open it in Excel or Google Sheets.</p><button onclick="exportCSV()">Export Bookings CSV</button></div>`;
 }
 async function generateAvailabilityRange(){
-  const from=$("gfrom").value, to=$("gto").value, day=$("gday").value, start=$("gstart").value, end=$("gend").value, loc=$("gloc").value;
+  const from=$("gfrom").value, to=$("gto").value, day=$("gday").value, start=$("gstart").value, end=$("gend").value;
   if(!from||!to||!start||!end)return alert("Fill all required fields.");
+  if(toMin(end)<=toMin(start))return alert("End time must be after start time.");
+  const online=$("glocOnline")?.checked;
+  const campus=$("glocCampus")?.checked;
+  const both=$("glocBoth")?.checked;
+  const campusName=($("gcampusName")?.value||"").trim();
+  let locations=[];
+  if(online)locations.push("Online");
+  if(campus){
+    if(!campusName)return alert("Please specify the campus name.");
+    locations.push(`On Campus (${campusName})`);
+  }
+  if(both){
+    if(!campusName)return alert("Please specify the campus name.");
+    locations.push("Online");
+    locations.push(`On Campus (${campusName})`);
+  }
+  locations=[...new Set(locations)];
+  if(!locations.length)return alert("Please choose Online, On Campus, or Both.");
   let count=0;
   let cur=new Date(from+"T12:00:00"), last=new Date(to+"T12:00:00");
   while(cur<=last){
     const iso=cur.toISOString().slice(0,10);
     const weekday=cur.toLocaleDateString("en-US",{weekday:"long"});
     if(weekday===day){
-      await db.ref("availability").push({tutorId:currentUser.uid,date:iso,start,end,location:loc,createdAt:Date.now(),generated:true});
+      await db.ref("availability").push({tutorId:currentUser.uid,date:iso,start,end,locations,campusName,createdAt:Date.now(),generated:true});
       count++;
     }
     cur.setDate(cur.getDate()+1);
@@ -158,6 +176,41 @@ function tutorsForCourse(course){
   return tutors().filter(t=>(t.courses||[]).includes(course)).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
 }
 
+
+
+function selectedAvailabilityLocations(){
+  const online=$("locOnline")?.checked;
+  const campus=$("locCampus")?.checked;
+  const both=$("locBoth")?.checked;
+  const campusName=($("campusName")?.value||"").trim();
+  let locations=[];
+  if(online)locations.push("Online");
+  if(campus){
+    if(!campusName)return {error:"Please specify the campus name."};
+    locations.push(`On Campus (${campusName})`);
+  }
+  if(both){
+    if(!campusName)return {error:"Please specify the campus name."};
+    locations.push("Online");
+    locations.push(`On Campus (${campusName})`);
+  }
+  locations=[...new Set(locations)];
+  if(!locations.length)return {error:"Please choose Online, On Campus, or Both."};
+  return {locations,campusName};
+}
+function formatLocationsFromAvailability(a){
+  if(Array.isArray(a.locations)&&a.locations.length)return a.locations.join(", ");
+  return a.location||"";
+}
+function slotLocationOptions(tutorId,date,time,duration){
+  const av=list(DATA.availability).filter(a=>a.tutorId===tutorId&&a.date===date&&toMin(a.start)<=toMin(time)&&toMin(a.end)>=toMin(time)+Number(duration)*60);
+  let locations=[];
+  av.forEach(a=>{
+    if(Array.isArray(a.locations))locations.push(...a.locations);
+    else if(a.location)locations.push(a.location);
+  });
+  return [...new Set(locations)];
+}
 
 function accessRequestsPage(){
   const requests=list(DATA.accessRequests).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -252,27 +305,46 @@ function schedulePage(){$("content").innerHTML=`<div class="card"><h2>Daily Sche
 function availabilityPage(){
   let a=list(DATA.availability).filter(x=>x.tutorId===currentUser.uid).sort((x,y)=>(x.date||"").localeCompare(y.date||"") || (x.start||"").localeCompare(y.start||""));
   let un=list(DATA.unavailable).filter(x=>x.tutorId===currentUser.uid).sort((x,y)=>(x.date||"").localeCompare(y.date||""));
-  $("content").innerHTML=`<div class="card"><h2>Calendar Availability</h2><p class="muted">Add availability for specific dates. Students only see generated slots that do not overlap bookings. Different students get a 15-minute buffer automatically.</p>
-  <table class="table"><tr><th>Date</th><th>Start</th><th>End</th><th>Location</th><th>Edit</th></tr>
-  ${a.map(x=>`<tr><td>${x.date||""}</td><td>${x.start||""}</td><td>${x.end||""}</td><td>${x.location||""}</td><td><button onclick="editAvailability('${x.id}')">Edit</button><button class="danger" onclick="deleteAvailability('${x.id}')">Delete</button></td></tr>`).join("")}</table>
+  $("content").innerHTML=`<div class="card"><h2>Calendar Availability</h2><p class="muted">Add availability for specific dates. Students only see generated slots that do not overlap bookings. Location options are linked to each availability block.</p>
+  <table class="table"><tr><th>Date</th><th>Start</th><th>End</th><th>Location Options</th><th>Edit</th></tr>
+  ${a.map(x=>`<tr><td>${x.date||""}</td><td>${x.start||""}</td><td>${x.end||""}</td><td>${formatLocationsFromAvailability(x)}</td><td><button onclick="editAvailability('${x.id}')">Edit</button><button class="danger" onclick="deleteAvailability('${x.id}')">Delete</button></td></tr>`).join("")}</table>
   <hr><h3>Add Availability for a Date</h3>
-  <div class="row"><input id="adate" type="date"><input id="astart" type="time"><input id="aend" type="time"><input id="aloc" placeholder="Online / Campus"></div>
+  <div class="row"><input id="adate" type="date"><input id="astart" type="time"><input id="aend" type="time"></div>
+  <label>Location Options</label>
+  <div class="checkbox-grid">
+    <label class="check"><input type="checkbox" id="locOnline">Online</label>
+    <label class="check"><input type="checkbox" id="locCampus">On Campus</label>
+    <label class="check"><input type="checkbox" id="locBoth">Both</label>
+  </div>
+  <input id="campusName" placeholder="Campus name if on campus/both, e.g. Koura Campus">
   <button onclick="addAvailability()">Add Date Availability</button></div>
 
   <div class="card"><h2>Unavailable Dates</h2>
   <table class="table"><tr><th>Date</th><th>Reason</th><th>Edit</th></tr>
   ${un.map(x=>`<tr><td>${x.date}</td><td>${x.reason||""}</td><td><button class="danger" onclick="deleteUnavailable('${x.id}')">Delete</button></td></tr>`).join("")}</table>
   <hr><div class="row"><input id="udate" type="date"><input id="ureason" placeholder="Reason e.g. exam week"></div>
-  <button onclick="addUnavailable()">Add Unavailable Date</button></div>`
+  <button onclick="addUnavailable()">Add Unavailable Date</button></div>
+
+  <div class="card"><h2>Generate Repeated Availability</h2><p class="muted">Create date-by-date availability automatically. You can still edit/delete individual dates after.</p>
+  <div class="row"><input id="gfrom" type="date"><input id="gto" type="date"><select id="gday"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option></select><input id="gstart" type="time"><input id="gend" type="time"></div>
+  <label>Generated Availability Location Options</label>
+  <div class="checkbox-grid">
+    <label class="check"><input type="checkbox" id="glocOnline">Online</label>
+    <label class="check"><input type="checkbox" id="glocCampus">On Campus</label>
+    <label class="check"><input type="checkbox" id="glocBoth">Both</label>
+  </div>
+  <input id="gcampusName" placeholder="Campus name if on campus/both, e.g. Koura Campus">
+  <button onclick="generateAvailabilityRange()">Generate Availability</button></div>`
 }
 
 async function addAvailability(){
   if(!$("adate").value||!$("astart").value||!$("aend").value)return alert("Please choose date, start time, and end time.");
   if(toMin($("aend").value)<=toMin($("astart").value))return alert("End time must be after start time.");
-  await db.ref("availability").push({tutorId:currentUser.uid,date:$("adate").value,start:$("astart").value,end:$("aend").value,location:$("aloc").value,createdAt:Date.now()});
+  const loc=selectedAvailabilityLocations();
+  if(loc.error)return alert(loc.error);
+  await db.ref("availability").push({tutorId:currentUser.uid,date:$("adate").value,start:$("astart").value,end:$("aend").value,locations:loc.locations,campusName:loc.campusName||"",createdAt:Date.now()});
   await loadData();availabilityPage()
 }
-async function addUnavailable(){await db.ref("unavailable").push({tutorId:currentUser.uid,date:$("udate").value,reason:$("ureason").value,createdAt:Date.now()});await loadData();availabilityPage()}
 
 async function editAvailability(id){
   let a=DATA.availability[id];
@@ -283,10 +355,11 @@ async function editAvailability(id){
   if(start===null)return;
   let end=prompt("End time (HH:MM):",a.end||"");
   if(end===null)return;
-  let location=prompt("Location:",a.location||"");
-  if(location===null)return;
+  let locationsText=prompt("Location options, comma separated. Example: Online, On Campus (Koura Campus)",formatLocationsFromAvailability(a));
+  if(locationsText===null)return;
   if(toMin(end)<=toMin(start))return alert("End time must be after start time.");
-  await db.ref("availability/"+id).update({date,start,end,location});
+  const locations=locationsText.split(",").map(x=>x.trim()).filter(Boolean);
+  await db.ref("availability/"+id).update({date,start,end,locations,location:null});
   await loadData();availabilityPage();
 }
 async function deleteAvailability(id){
@@ -331,7 +404,7 @@ function bookingPage(){
     <div class="row">
       <div><label>3. Date</label><input id="bd" type="date" onchange="updateSlots()"></div>
       <div><label>4. Duration</label><select id="bdu" onchange="updateSlots()"><option value="1">1 hour</option><option value="1.5">1h 30min</option><option value="2">2 hours</option><option value="2.5">2h 30min</option><option value="3">3 hours</option></select></div>
-      <div><label>5. Available Time</label><select id="bs" onchange="updatePrice()"></select></div>
+      <div><label>5. Available Time</label><select id="bs" onchange="updateBookingLocations();updatePrice()"></select></div>
     </div>
 
     <label>Session Format</label>
@@ -367,7 +440,7 @@ function updateTutorListForCourse(){
     ${availableTutors.map(t=>`<div class="card">
       <h3>${t.name}</h3>
       <p><b>Rate:</b> ${money(t.rate)}/hour/person</p>
-      <p><b>Location:</b> ${(t.locations||[]).join(", ")}</p>
+      <p><b>General Locations:</b> ${(t.locations||[]).join(", ")||"Set by availability"}</p>
       <button onclick="selectTutorForBooking('${t.id}')">Choose ${t.name}</button>
     </div>`).join("")}
   </div>`;
@@ -391,7 +464,13 @@ function updateSlots(){
   if(!$("bt")||!$("bt").value)return;
   let slots=generateSlots($("bt").value,$("bd").value,$("bdu").value);
   $("bs").innerHTML=slots.length?slots.map(s=>`<option>${s}</option>`).join(""):`<option value="">No available slots</option>`;
+  updateBookingLocations();
   updatePrice();
+}
+function updateBookingLocations(){
+  if(!$("bt")||!$("bt").value||!$("bs"))return;
+  const locs=slotLocationOptions($("bt").value,$("bd").value,$("bs").value,$("bdu").value);
+  $("bl").innerHTML=locs.length?locs.map(l=>`<option>${l}</option>`).join(""):`<option value="">No location available</option>`;
 }
 function updatePrice(){
   if(!$("bt")||!$("bt").value)return;
