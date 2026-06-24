@@ -1,7 +1,5 @@
-Scheduled Firebase Live
+Scheduled smart booking update
 
-Upload these files to GitHub and commit. Vercel will redeploy.
+Adds automatic slot blocking, generated available time dropdown, 15-minute buffer between different students, unavailable dates, and session notes.
 
-Before use: enable Firebase Authentication > Email/Password and create Realtime Database.
-
-First open the site and click Create first admin.
+Upload all files to GitHub and commit. Vercel redeploys automatically.
