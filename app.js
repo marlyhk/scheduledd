@@ -5,18 +5,29 @@ const auth=firebase.auth(),db=firebase.database(),$=id=>document.getElementById(
 const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = secondaryApp.auth();
 
-let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{}};
+let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{}};
 setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")},900);
-function notice(m){$("notice").textContent=m;$("notice").classList.remove("hidden")} function toggleSetup(){$("setup").classList.toggle("hidden")}
-async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{}}}
+function notice(m){$("notice").textContent=m;$("notice").classList.remove("hidden")}
+function toggleRequestAccess(){$("requestAccess").classList.toggle("hidden")}
+async function submitAccessRequest(){
+  const name=$("reqName").value.trim(),email=$("reqEmail").value.trim(),phone=$("reqPhone").value.trim(),courses=$("reqCourses").value.trim(),message=$("reqMessage").value.trim();
+  if(!name||!email||!phone||!courses)return notice("Please fill full name, email, phone number, and course(s) needed.");
+  try{
+    await db.ref("accessRequests").push({name,email,phone,courses,message,status:"pending",createdAt:Date.now()});
+    $("reqName").value="";$("reqEmail").value="";$("reqPhone").value="";$("reqCourses").value="";$("reqMessage").value="";
+    notice("Access request submitted. We will contact you after review.");
+    $("requestAccess").classList.add("hidden");
+  }catch(e){notice(e.message)}
+}
+async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{}}}
 auth.onAuthStateChanged(async u=>{if(!u)return;currentUser=u;let s=await db.ref("users/"+u.uid).once("value");profile=s.val();if(!profile){notice("Account exists but no Scheduled profile was found.");await auth.signOut();return}await loadData();$("loginPage").classList.add("hidden");$("dashboard").classList.remove("hidden");$("roleLabel").textContent=`${profile.name} • ${profile.role.toUpperCase()}`;renderTabs()});
 async function login(){try{await auth.signInWithEmailAndPassword($("loginEmail").value.trim(),$("loginPassword").value.trim())}catch(e){notice(e.message)}} async function logout(){await auth.signOut();location.reload()}
 async function createFirstAdmin(){try{let c=await auth.createUserWithEmailAndPassword($("setupEmail").value.trim(),$("setupPassword").value.trim());await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name:$("setupName").value.trim(),email:$("setupEmail").value.trim(),role:"admin",createdAt:Date.now()});notice("Admin created. You are logged in.")}catch(e){notice(e.message)}}
 function list(o){return Object.entries(o||{}).map(([id,v])=>({id,...v}))} function user(id){return DATA.users[id]||{}} function tutors(){return list(DATA.users).filter(u=>u.role==="tutor")} function students(){return list(DATA.users).filter(u=>u.role==="student")} function safe(s){return s.replace(/[.#$/\[\]]/g,"_")}
 function myBookings(){let b=list(DATA.bookings);if(profile.role==="admin")return b;if(profile.role==="tutor")return b.filter(x=>x.tutorId===currentUser.uid);return b.filter(x=>x.studentId===currentUser.uid)}
 function total(b){return(b.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0)} function paid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>p.paid).reduce((s,p)=>s+Number(p.amount||0),0)} function unpaid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>!p.paid).reduce((s,p)=>s+Number(p.amount||0),0)} function badge(p){return`<span class="badge ${p?'paid':'unpaid'}">${p?'Paid':'Unpaid'}</span>`} function method(l){return(l||"").toLowerCase().includes("online")?"Whish":"Cash"}
-function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Students","Courses","Calendar","Bookings","Documents","Export"]:profile.role==="tutor"?["Schedule","Calendar","Availability","Students","Financial","Documents","Profile"]:["Book","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i==0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
-async function openTab(tab,btn){await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");({Overview:adminOverview,Tutors:adminTutors,Students:adminStudents,Courses:adminCourses,Bookings:()=>bookingsPage(true),Calendar:calendarPage,Export:exportPage,Documents:docsPage,Schedule:schedulePage,Availability:availabilityPage,Financial:financialPage,Profile:profilePage,Book:bookingPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage}[tab])()}
+function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Students","Courses","Access Requests","Calendar","Bookings","Documents","Export"]:profile.role==="tutor"?["Schedule","Calendar","Availability","Students","Financial","Documents","Profile"]:["Book","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i==0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
+async function openTab(tab,btn){await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");({Overview:adminOverview,Tutors:adminTutors,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Bookings:()=>bookingsPage(true),Calendar:calendarPage,Export:exportPage,Documents:docsPage,Schedule:schedulePage,Availability:availabilityPage,Financial:financialPage,Profile:profilePage,Book:bookingPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage}[tab])()}
 
 function toMin(t){let [h,m]=(t||"00:00").split(":").map(Number);return h*60+m}
 function toTime(min){let h=Math.floor(min/60),m=min%60;return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")}
@@ -147,6 +158,50 @@ function tutorsForCourse(course){
   return tutors().filter(t=>(t.courses||[]).includes(course)).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
 }
 
+
+function accessRequestsPage(){
+  const requests=list(DATA.accessRequests).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  $("content").innerHTML=`<div class="card"><h2>Access Requests</h2>
+  <p class="muted">Review access requests. Approving creates a student account with a temporary password. Students can choose any tutor after login.</p>
+  ${requests.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>Courses</th><th>Message</th><th>Status</th><th>Actions</th></tr>
+  ${requests.map(r=>`<tr><td>${r.name||""}</td><td>${r.email||""}</td><td>${r.phone||""}</td><td>${r.courses||""}</td><td>${r.message||""}</td><td>${r.status||"pending"}</td><td>${(r.status||"pending")==="pending"?`<button onclick="approveAccessRequest('${r.id}')">Approve</button><button class="danger" onclick="rejectAccessRequest('${r.id}')">Reject</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No access requests yet.</p>`}
+  </div>`;
+}
+function generateTempPassword(){
+  return "Scheduled-" + Math.floor(1000+Math.random()*9000);
+}
+async function approveAccessRequest(id){
+  const r=DATA.accessRequests[id];
+  if(!r)return alert("Request not found.");
+  const password=generateTempPassword();
+  try{
+    let c=await secondaryAuth.createUserWithEmailAndPassword(r.email,password);
+    await db.ref("users/"+c.user.uid).set({
+      uid:c.user.uid,
+      name:r.name,
+      email:r.email,
+      phone:r.phone,
+      role:"student",
+      type:"individual",
+      requestedCourses:r.courses,
+      createdBy:currentUser.uid,
+      createdFromAccessRequest:id,
+      createdAt:Date.now()
+    });
+    await db.ref("accessRequests/"+id).update({status:"approved",approvedAt:Date.now(),createdStudentUid:c.user.uid});
+    await secondaryAuth.signOut();
+    await loadData();
+    alert(`Approved. Student account created.\n\nEmail: ${r.email}\nTemporary password: ${password}\n\nSend these credentials to the student.`);
+    accessRequestsPage();
+  }catch(e){alert(e.message)}
+}
+async function rejectAccessRequest(id){
+  if(!confirm("Reject this access request?"))return;
+  await db.ref("accessRequests/"+id).update({status:"rejected",rejectedAt:Date.now()});
+  await loadData();
+  accessRequestsPage();
+}
+
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Firebase is connected. Smart slot blocking and 15-minute buffers are active.</p></div>`}
 function usersTable(a){return a.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Role/Type</th><th>Details</th></tr>${a.map(u=>`<tr><td>${u.name||""}</td><td>${u.email||""}</td><td>${u.role}${u.type?"/"+u.type:""}</td><td>${u.rate?money(u.rate)+"/h/person<br>":""}${u.whatsapp||""}<br>${(u.locations||[]).join(", ")}<br>${(u.courses||[]).join(", ")}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
 function adminTutors(){$("content").innerHTML=`<div class="card"><h2>Tutors</h2>${usersTable(tutors())}<hr><h3>Create Tutor</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"></div><input id="tl" placeholder="Locations: Online, On Campus (Koura Campus)"><button onclick="createAccount('tutor')">Create Tutor</button></div>`}
@@ -172,7 +227,6 @@ async function createAccount(role){
       name=$("sn").value;email=$("se").value;password=$("sp").value;
       extra={phone:$("sphone").value,type:$("stype").value,members:$("smembers").value.split(",").map(x=>x.trim()).filter(Boolean)};
       if(profile.role==="tutor"){
-        extra.assignedTutorId=currentUser.uid;
         extra.createdBy=currentUser.uid;
       }
       if(profile.role==="admin"){

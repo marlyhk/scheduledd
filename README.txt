@@ -1,12 +1,14 @@
-Scheduled v1.5 — Course-First Booking
+Scheduled v1.6 — Request Access
 
 Adds:
-- Student booking starts with a full course dropdown/list
-- After choosing a course, students see all tutors who teach it
-- Tutors are shown alphabetically to avoid favoring one tutor
-- Student chooses tutor clearly from equal cards
-- Then date/time/duration/location appear
-- Keeps slot blocking and 15-minute buffer
-- Keeps tutor-created student accounts
+- Removes public Create First Admin button
+- Adds Request Access form on login page
+- Request saves name, email, phone, courses needed, and optional message
+- Adds Admin > Access Requests tab
+- Admin can approve or reject requests
+- Approval creates a student account with a temporary password
+- Students are not assigned to one tutor; after login, they can choose any tutor for a course
 
-Upload all files to GitHub and commit. Vercel redeploys automatically.
+Important Firebase Rules:
+Your Realtime Database rules must allow public write to accessRequests while keeping the rest protected.
+Use the rules provided by ChatGPT after upload.
