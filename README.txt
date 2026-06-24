@@ -1,12 +1,16 @@
-Scheduled Calendar Availability Update
+Scheduled All Upgrades v1.3
 
 Adds:
-- Date-specific tutor availability instead of weekly-only availability
-- Edit existing availability
-- Delete existing availability
-- Date-specific generated booking slots
+- Calendar month view
+- Edit/delete bookings
+- Session notes editing
+- Export bookings/payments to CSV
+- Better monthly financial dashboard
+- Generate repeated date-by-date availability
+- Keeps exact-date availability
+- Keeps edit/delete availability
+- Keeps unavailable dates
 - Keeps automatic slot blocking
 - Keeps 15-minute buffer between different students
-- Keeps unavailable dates
 
-Upload all files to GitHub and commit. Vercel will redeploy automatically.
+Upload all files to GitHub and commit. Vercel redeploys automatically.

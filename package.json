@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-calendar-availability",
-  "version": "1.2.0",
+  "name": "scheduled-all-upgrades",
+  "version": "1.3.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg public/"

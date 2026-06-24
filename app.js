@@ -11,8 +11,8 @@ async function createFirstAdmin(){try{let c=await auth.createUserWithEmailAndPas
 function list(o){return Object.entries(o||{}).map(([id,v])=>({id,...v}))} function user(id){return DATA.users[id]||{}} function tutors(){return list(DATA.users).filter(u=>u.role==="tutor")} function students(){return list(DATA.users).filter(u=>u.role==="student")} function safe(s){return s.replace(/[.#$/\[\]]/g,"_")}
 function myBookings(){let b=list(DATA.bookings);if(profile.role==="admin")return b;if(profile.role==="tutor")return b.filter(x=>x.tutorId===currentUser.uid);return b.filter(x=>x.studentId===currentUser.uid)}
 function total(b){return(b.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0)} function paid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>p.paid).reduce((s,p)=>s+Number(p.amount||0),0)} function unpaid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>!p.paid).reduce((s,p)=>s+Number(p.amount||0),0)} function badge(p){return`<span class="badge ${p?'paid':'unpaid'}">${p?'Paid':'Unpaid'}</span>`} function method(l){return(l||"").toLowerCase().includes("online")?"Whish":"Cash"}
-function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Students","Courses","Bookings","Documents"]:profile.role==="tutor"?["Schedule","Availability","Financial","Documents","Profile"]:["Book","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i==0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
-async function openTab(tab,btn){await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");({Overview:adminOverview,Tutors:adminTutors,Students:adminStudents,Courses:adminCourses,Bookings:()=>bookingsPage(true),Documents:docsPage,Schedule:schedulePage,Availability:availabilityPage,Financial:financialPage,Profile:profilePage,Book:bookingPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage}[tab])()}
+function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Students","Courses","Calendar","Bookings","Documents","Export"]:profile.role==="tutor"?["Schedule","Calendar","Availability","Financial","Documents","Profile"]:["Book","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i==0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
+async function openTab(tab,btn){await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");({Overview:adminOverview,Tutors:adminTutors,Students:adminStudents,Courses:adminCourses,Bookings:()=>bookingsPage(true),Calendar:calendarPage,Export:exportPage,Documents:docsPage,Schedule:schedulePage,Availability:availabilityPage,Financial:financialPage,Profile:profilePage,Book:bookingPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage}[tab])()}
 
 function toMin(t){let [h,m]=(t||"00:00").split(":").map(Number);return h*60+m}
 function toTime(min){let h=Math.floor(min/60),m=min%60;return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")}
@@ -44,6 +44,95 @@ function generateSlots(tutorId,date,duration){
   return [...new Set(slots)].sort();
 }
 
+
+function monthName(date){return date.toLocaleDateString("en-US",{month:"long",year:"numeric"})}
+function getMonthDays(year,month){
+  const first=new Date(year,month,1);
+  const last=new Date(year,month+1,0);
+  let days=[];
+  for(let d=1;d<=last.getDate();d++){
+    const dt=new Date(year,month,d);
+    const iso=dt.toISOString().slice(0,10);
+    days.push({date:iso,day:d,weekday:dt.toLocaleDateString("en-US",{weekday:"short"})});
+  }
+  return days;
+}
+function calendarPage(){
+  const now=new Date();
+  const year=Number(localStorage.getItem("calYear")||now.getFullYear());
+  const month=Number(localStorage.getItem("calMonth")||now.getMonth());
+  const days=getMonthDays(year,month);
+  const bs=myBookings();
+  $("content").innerHTML=`<div class="card"><h2>Calendar View</h2>
+  <div class="row"><button onclick="moveMonth(-1)">Previous Month</button><div class="card small"><b>${monthName(new Date(year,month,1))}</b></div><button onclick="moveMonth(1)">Next Month</button></div>
+  <div class="grid">${days.map(d=>{
+    const dayBookings=bs.filter(b=>b.date===d.date).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
+    return `<div class="card small"><b>${d.weekday} ${d.day}</b><br><span class="muted">${d.date}</span><hr>${dayBookings.length?dayBookings.map(b=>`<div><b>${b.start}</b> • ${b.course}<br>${user(b.studentId).name||""}<br>${Number(b.duration||1)}h • ${b.location||""}</div><hr>`).join(""):`<span class="muted">No sessions</span>`}</div>`
+  }).join("")}</div></div>`;
+}
+function moveMonth(delta){
+  let now=new Date();
+  let y=Number(localStorage.getItem("calYear")||now.getFullYear());
+  let m=Number(localStorage.getItem("calMonth")||now.getMonth());
+  let d=new Date(y,m+delta,1);
+  localStorage.setItem("calYear",d.getFullYear());
+  localStorage.setItem("calMonth",d.getMonth());
+  calendarPage();
+}
+async function deleteBooking(id){
+  if(!confirm("Delete this booking?"))return;
+  await db.ref("bookings/"+id).remove();
+  await loadData();
+  bookingsPage(profile.role!=="student");
+}
+async function editBooking(id){
+  let b=DATA.bookings[id];
+  if(!b)return alert("Booking not found.");
+  let date=prompt("Date (YYYY-MM-DD):",b.date||""); if(date===null)return;
+  let start=prompt("Start time (HH:MM):",b.start||""); if(start===null)return;
+  let duration=prompt("Duration in hours:",b.duration||1); if(duration===null)return;
+  let location=prompt("Location:",b.location||""); if(location===null)return;
+  let course=prompt("Course:",b.course||""); if(course===null)return;
+  await db.ref("bookings/"+id).update({date,start,duration:Number(duration),location,course,paymentMethod:method(location)});
+  await loadData();
+  bookingsPage(profile.role!=="student");
+}
+function exportCSV(){
+  const rows=[["Date","Time","Course","Tutor","Student/Group","Duration","Location","Payment Method","Total","Payments"]];
+  myBookings().forEach(b=>{
+    rows.push([b.date,b.start,b.course,user(b.tutorId).name||"",user(b.studentId).name||"",b.duration,b.location,b.paymentMethod,total(b),(b.payments||[]).map(p=>`${p.name}: ${money(p.amount)} ${p.paid?"Paid":"Unpaid"}`).join(" | ")]);
+  });
+  const csv=rows.map(r=>r.map(x=>`"${String(x??"").replaceAll('"','""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="scheduled-export.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function exportPage(){
+  $("content").innerHTML=`<div class="card"><h2>Export</h2><p class="muted">Download bookings and payments as a CSV file. You can open it in Excel or Google Sheets.</p><button onclick="exportCSV()">Export Bookings CSV</button></div>`;
+}
+async function generateAvailabilityRange(){
+  const from=$("gfrom").value, to=$("gto").value, day=$("gday").value, start=$("gstart").value, end=$("gend").value, loc=$("gloc").value;
+  if(!from||!to||!start||!end)return alert("Fill all required fields.");
+  let count=0;
+  let cur=new Date(from+"T12:00:00"), last=new Date(to+"T12:00:00");
+  while(cur<=last){
+    const iso=cur.toISOString().slice(0,10);
+    const weekday=cur.toLocaleDateString("en-US",{weekday:"long"});
+    if(weekday===day){
+      await db.ref("availability").push({tutorId:currentUser.uid,date:iso,start,end,location:loc,createdAt:Date.now(),generated:true});
+      count++;
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  await loadData();
+  alert(`Generated ${count} availability blocks.`);
+  availabilityPage();
+}
+
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Firebase is connected. Smart slot blocking and 15-minute buffers are active.</p></div>`}
 function usersTable(a){return a.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Role/Type</th><th>Details</th></tr>${a.map(u=>`<tr><td>${u.name||""}</td><td>${u.email||""}</td><td>${u.role}${u.type?"/"+u.type:""}</td><td>${u.rate?money(u.rate)+"/h/person<br>":""}${u.whatsapp||""}<br>${(u.locations||[]).join(", ")}<br>${(u.courses||[]).join(", ")}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
 function adminTutors(){$("content").innerHTML=`<div class="card"><h2>Tutors</h2>${usersTable(tutors())}<hr><h3>Create Tutor</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"></div><input id="tl" placeholder="Locations: Online, On Campus (Koura Campus)"><button onclick="createAccount('tutor')">Create Tutor</button></div>`}
@@ -51,7 +140,7 @@ function adminStudents(){$("content").innerHTML=`<div class="card"><h2>Students 
 async function createAccount(role){try{let name,email,password,extra={};if(role==="tutor"){name=$("tn").value;email=$("te").value;password=$("tp").value;extra={whatsapp:$("tw").value,rate:Number($("tr").value||15),locations:$("tl").value.split(",").map(x=>x.trim()).filter(Boolean),courses:[]}}else{name=$("sn").value;email=$("se").value;password=$("sp").value;extra={phone:$("sphone").value,type:$("stype").value,members:$("smembers").value.split(",").map(x=>x.trim()).filter(Boolean)}}let c=await auth.createUserWithEmailAndPassword(email,password);await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name,email,role,createdAt:Date.now(),...extra});alert("Account created. Log back into admin if you were switched to the new account.");await loadData();role==="tutor"?adminTutors():adminStudents()}catch(e){alert(e.message)}}
 function adminCourses(){$("content").innerHTML=`<div class="card"><h2>Course Management</h2><p class="muted">Only admin assigns courses to tutors.</p><table class="table"><tr><th>Tutor</th><th>Courses</th></tr>${tutors().map(t=>`<tr><td>${t.name}</td><td>${(t.courses||[]).join(", ")}</td></tr>`).join("")}</table><hr><div class="row"><select id="ct">${tutors().map(t=>`<option value="${t.id}">${t.name}</option>`)}</select><input id="cn" placeholder="Course name exactly: Physics 213"></div><button onclick="assignCourse()">Assign Course</button></div>`}
 async function assignCourse(){let t=user($("ct").value),c=$("cn").value.trim(),cs=Array.from(new Set([...(t.courses||[]),c])).filter(Boolean);await db.ref("users/"+$("ct").value+"/courses").set(cs);await db.ref("courses/"+safe(c)).set({name:c});await loadData();adminCourses()}
-function rows(bs,edit){return bs.length?`<table class="table"><tr><th>Date</th><th>Time</th><th>Course</th><th>Tutor</th><th>Student/Group</th><th>Details</th><th>Payments</th><th>Notes</th></tr>${bs.map(b=>`<tr><td>${b.date}</td><td>${b.start}</td><td>${b.course}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${b.duration}h • ${b.format} ${b.groupSize||1}<br>${b.location}<br>${b.paymentMethod}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${money(total(b))}</td><td>${(b.payments||[]).map((p,i)=>`${p.name}: ${money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">Toggle</button>`:""}`).join("<br>")}</td><td>${b.notes||""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No sessions yet.</p>`}
+function rows(bs,edit){return bs.length?`<table class="table"><tr><th>Date</th><th>Time</th><th>Course</th><th>Tutor</th><th>Student/Group</th><th>Details</th><th>Payments</th><th>Notes</th><th>Actions</th></tr>${bs.map(b=>`<tr><td>${b.date}</td><td>${b.start}</td><td>${b.course}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${b.duration}h • ${b.format} ${b.groupSize||1}<br>${b.location}<br>${b.paymentMethod}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${money(total(b))}</td><td>${(b.payments||[]).map((p,i)=>`${p.name}: ${money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">Toggle</button>`:""}`).join("<br>")}</td><td>${b.notes||""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td><td>${edit?`<button onclick="editBooking('${b.id}')">Edit</button><button class="danger" onclick="deleteBooking('${b.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No sessions yet.</p>`}
 function bookingsPage(edit){$("content").innerHTML=`<div class="card"><h2>Bookings</h2>${rows(myBookings(),edit&&profile.role!=="student")}</div>`} async function togglePayment(id,i){let b=DATA.bookings[id];b.payments[i].paid=!b.payments[i].paid;await db.ref(`bookings/${id}/payments`).set(b.payments);await loadData();profile.role==="admin"?bookingsPage(true):financialPage()}
 async function editNotes(id){let b=DATA.bookings[id];let n=prompt("Session notes:",b.notes||"");if(n!==null){await db.ref(`bookings/${id}/notes`).set(n);await loadData();profile.role==="admin"?bookingsPage(true):schedulePage()}}
 function schedulePage(){$("content").innerHTML=`<div class="card"><h2>Daily Schedule</h2>${rows(myBookings(),true)}</div>`}
@@ -105,7 +194,17 @@ async function deleteUnavailable(id){
   await db.ref("unavailable/"+id).remove();
   await loadData();availabilityPage();
 }
-function financialPage(){let b=myBookings();$("content").innerHTML=`<div class="grid"><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Sessions</h3><h1>${b.length}</h1></div></div><div class="card"><h2>Financial Details</h2>${rows(b,true)}</div>`}
+function financialPage(){
+  let b=myBookings();
+  const now=new Date(), month=now.toISOString().slice(0,7);
+  const monthBookings=b.filter(x=>(x.date||"").startsWith(month));
+  $("content").innerHTML=`<div class="grid">
+  <div class="card"><h3>Total Paid</h3><h1>${money(paid(b))}</h1></div>
+  <div class="card"><h3>Total Unpaid</h3><h1>${money(unpaid(b))}</h1></div>
+  <div class="card"><h3>This Month Paid</h3><h1>${money(paid(monthBookings))}</h1></div>
+  <div class="card"><h3>This Month Unpaid</h3><h1>${money(unpaid(monthBookings))}</h1></div>
+  </div><div class="card"><h2>Financial Details</h2>${rows(b,true)}</div>`;
+}
 function bookingPage(){$("content").innerHTML=`<div class="card"><h2>Book a Session</h2><label>Search Course</label><input id="search" placeholder="Physics 213" oninput="courseResults()"><div id="results"></div><hr><label>Tutor</label><select id="bt" onchange="updateBooking()">${tutors().map(t=>`<option value="${t.id}">${t.name}</option>`).join("")}</select><label>Course</label><select id="bc"></select><div class="row"><div><label>Date</label><input id="bd" type="date" onchange="updateSlots()"></div><div><label>Duration</label><select id="bdu" onchange="updateSlots()"><option value="1">1 hour</option><option value="1.5">1h 30min</option><option value="2">2 hours</option><option value="2.5">2h 30min</option><option value="3">3 hours</option></select></div><div><label>Available Time</label><select id="bs" onchange="updatePrice()"></select></div></div><label>Format</label><div class="row"><select id="bf" onchange="updatePrice()"><option>Individual</option><option>Group</option></select><select id="bg" onchange="updatePrice()"><option value="1">1 student</option><option value="2">2 students</option><option value="3">3 students</option><option value="4">4 students</option><option value="5">5 students</option></select></div><label>Session Type</label><div class="checkbox-grid">${["Course & Formulas","Book Exercises","Previous Exams","Other"].map(x=>`<label class="check"><input type="checkbox" class="stype" value="${x}">${x}</label>`).join("")}</div><label>Location</label><select id="bl" onchange="updatePrice()"></select><div id="price" class="card small"></div><button onclick="confirmBooking()">Confirm Booking + WhatsApp</button></div>`;updateBooking()}
 function courseResults(){let q=$("search").value.toLowerCase(),f=tutors().filter(t=>(t.courses||[]).some(c=>c.toLowerCase().includes(q)));$("results").innerHTML=q?`<div class="grid">${f.map(t=>`<div class="card"><h3>${t.name}</h3><p>${money(t.rate)}/hour/person</p><p>${(t.courses||[]).join(", ")}</p><p>${(t.locations||[]).join(", ")}</p></div>`).join("")}</div>`:""}
 function updateBooking(){let t=user($("bt").value);$("bc").innerHTML=(t.courses||[]).map(c=>`<option>${c}</option>`).join("");$("bl").innerHTML=(t.locations||[]).map(l=>`<option>${l}</option>`).join("");updateSlots();updatePrice()}
