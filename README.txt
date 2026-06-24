@@ -1,5 +1,12 @@
-Scheduled smart booking update
+Scheduled Calendar Availability Update
 
-Adds automatic slot blocking, generated available time dropdown, 15-minute buffer between different students, unavailable dates, and session notes.
+Adds:
+- Date-specific tutor availability instead of weekly-only availability
+- Edit existing availability
+- Delete existing availability
+- Date-specific generated booking slots
+- Keeps automatic slot blocking
+- Keeps 15-minute buffer between different students
+- Keeps unavailable dates
 
-Upload all files to GitHub and commit. Vercel redeploys automatically.
+Upload all files to GitHub and commit. Vercel will redeploy automatically.

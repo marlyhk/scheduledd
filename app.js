@@ -32,8 +32,7 @@ function candidateWorks(tutorId,studentId,date,start,duration){
 }
 function generateSlots(tutorId,date,duration){
   if(!date||!duration||isTutorUnavailable(tutorId,date))return [];
-  const d=dayName(date);
-  const av=list(DATA.availability).filter(a=>a.tutorId===tutorId&&a.day===d);
+  const av=list(DATA.availability).filter(a=>a.tutorId===tutorId&&a.date===date);
   let slots=[];
   for(const a of av){
     let start=toMin(a.start),end=toMin(a.end);
@@ -56,10 +55,56 @@ function rows(bs,edit){return bs.length?`<table class="table"><tr><th>Date</th><
 function bookingsPage(edit){$("content").innerHTML=`<div class="card"><h2>Bookings</h2>${rows(myBookings(),edit&&profile.role!=="student")}</div>`} async function togglePayment(id,i){let b=DATA.bookings[id];b.payments[i].paid=!b.payments[i].paid;await db.ref(`bookings/${id}/payments`).set(b.payments);await loadData();profile.role==="admin"?bookingsPage(true):financialPage()}
 async function editNotes(id){let b=DATA.bookings[id];let n=prompt("Session notes:",b.notes||"");if(n!==null){await db.ref(`bookings/${id}/notes`).set(n);await loadData();profile.role==="admin"?bookingsPage(true):schedulePage()}}
 function schedulePage(){$("content").innerHTML=`<div class="card"><h2>Daily Schedule</h2>${rows(myBookings(),true)}</div>`}
-function availabilityPage(){let a=list(DATA.availability).filter(x=>x.tutorId===currentUser.uid);let un=list(DATA.unavailable).filter(x=>x.tutorId===currentUser.uid);$("content").innerHTML=`<div class="card"><h2>Edit Availability</h2><p class="muted">Students only see generated slots that do not overlap existing bookings. Different students get a 15-minute buffer automatically.</p><table class="table"><tr><th>Day</th><th>Start</th><th>End</th><th>Location</th></tr>${a.map(x=>`<tr><td>${x.day}</td><td>${x.start}</td><td>${x.end}</td><td>${x.location}</td></tr>`).join("")}</table><hr><h3>Add Weekly Availability</h3><div class="row"><select id="aday"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option></select><input id="astart" type="time"><input id="aend" type="time"><input id="aloc" placeholder="Online / Campus"></div><button onclick="addAvailability()">Add Availability</button></div><div class="card"><h2>Unavailable Dates</h2><table class="table"><tr><th>Date</th><th>Reason</th></tr>${un.map(x=>`<tr><td>${x.date}</td><td>${x.reason||""}</td></tr>`).join("")}</table><hr><div class="row"><input id="udate" type="date"><input id="ureason" placeholder="Reason e.g. exam week"></div><button onclick="addUnavailable()">Add Unavailable Date</button></div>`}
+function availabilityPage(){
+  let a=list(DATA.availability).filter(x=>x.tutorId===currentUser.uid).sort((x,y)=>(x.date||"").localeCompare(y.date||"") || (x.start||"").localeCompare(y.start||""));
+  let un=list(DATA.unavailable).filter(x=>x.tutorId===currentUser.uid).sort((x,y)=>(x.date||"").localeCompare(y.date||""));
+  $("content").innerHTML=`<div class="card"><h2>Calendar Availability</h2><p class="muted">Add availability for specific dates. Students only see generated slots that do not overlap bookings. Different students get a 15-minute buffer automatically.</p>
+  <table class="table"><tr><th>Date</th><th>Start</th><th>End</th><th>Location</th><th>Edit</th></tr>
+  ${a.map(x=>`<tr><td>${x.date||""}</td><td>${x.start||""}</td><td>${x.end||""}</td><td>${x.location||""}</td><td><button onclick="editAvailability('${x.id}')">Edit</button><button class="danger" onclick="deleteAvailability('${x.id}')">Delete</button></td></tr>`).join("")}</table>
+  <hr><h3>Add Availability for a Date</h3>
+  <div class="row"><input id="adate" type="date"><input id="astart" type="time"><input id="aend" type="time"><input id="aloc" placeholder="Online / Campus"></div>
+  <button onclick="addAvailability()">Add Date Availability</button></div>
 
-async function addAvailability(){await db.ref("availability").push({tutorId:currentUser.uid,day:$("aday").value,start:$("astart").value,end:$("aend").value,location:$("aloc").value,createdAt:Date.now()});await loadData();availabilityPage()}
+  <div class="card"><h2>Unavailable Dates</h2>
+  <table class="table"><tr><th>Date</th><th>Reason</th><th>Edit</th></tr>
+  ${un.map(x=>`<tr><td>${x.date}</td><td>${x.reason||""}</td><td><button class="danger" onclick="deleteUnavailable('${x.id}')">Delete</button></td></tr>`).join("")}</table>
+  <hr><div class="row"><input id="udate" type="date"><input id="ureason" placeholder="Reason e.g. exam week"></div>
+  <button onclick="addUnavailable()">Add Unavailable Date</button></div>`
+}
+
+async function addAvailability(){
+  if(!$("adate").value||!$("astart").value||!$("aend").value)return alert("Please choose date, start time, and end time.");
+  if(toMin($("aend").value)<=toMin($("astart").value))return alert("End time must be after start time.");
+  await db.ref("availability").push({tutorId:currentUser.uid,date:$("adate").value,start:$("astart").value,end:$("aend").value,location:$("aloc").value,createdAt:Date.now()});
+  await loadData();availabilityPage()
+}
 async function addUnavailable(){await db.ref("unavailable").push({tutorId:currentUser.uid,date:$("udate").value,reason:$("ureason").value,createdAt:Date.now()});await loadData();availabilityPage()}
+
+async function editAvailability(id){
+  let a=DATA.availability[id];
+  if(!a)return alert("Availability not found.");
+  let date=prompt("Date (YYYY-MM-DD):",a.date||"");
+  if(date===null)return;
+  let start=prompt("Start time (HH:MM):",a.start||"");
+  if(start===null)return;
+  let end=prompt("End time (HH:MM):",a.end||"");
+  if(end===null)return;
+  let location=prompt("Location:",a.location||"");
+  if(location===null)return;
+  if(toMin(end)<=toMin(start))return alert("End time must be after start time.");
+  await db.ref("availability/"+id).update({date,start,end,location});
+  await loadData();availabilityPage();
+}
+async function deleteAvailability(id){
+  if(!confirm("Delete this availability?"))return;
+  await db.ref("availability/"+id).remove();
+  await loadData();availabilityPage();
+}
+async function deleteUnavailable(id){
+  if(!confirm("Delete this unavailable date?"))return;
+  await db.ref("unavailable/"+id).remove();
+  await loadData();availabilityPage();
+}
 function financialPage(){let b=myBookings();$("content").innerHTML=`<div class="grid"><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Sessions</h3><h1>${b.length}</h1></div></div><div class="card"><h2>Financial Details</h2>${rows(b,true)}</div>`}
 function bookingPage(){$("content").innerHTML=`<div class="card"><h2>Book a Session</h2><label>Search Course</label><input id="search" placeholder="Physics 213" oninput="courseResults()"><div id="results"></div><hr><label>Tutor</label><select id="bt" onchange="updateBooking()">${tutors().map(t=>`<option value="${t.id}">${t.name}</option>`).join("")}</select><label>Course</label><select id="bc"></select><div class="row"><div><label>Date</label><input id="bd" type="date" onchange="updateSlots()"></div><div><label>Duration</label><select id="bdu" onchange="updateSlots()"><option value="1">1 hour</option><option value="1.5">1h 30min</option><option value="2">2 hours</option><option value="2.5">2h 30min</option><option value="3">3 hours</option></select></div><div><label>Available Time</label><select id="bs" onchange="updatePrice()"></select></div></div><label>Format</label><div class="row"><select id="bf" onchange="updatePrice()"><option>Individual</option><option>Group</option></select><select id="bg" onchange="updatePrice()"><option value="1">1 student</option><option value="2">2 students</option><option value="3">3 students</option><option value="4">4 students</option><option value="5">5 students</option></select></div><label>Session Type</label><div class="checkbox-grid">${["Course & Formulas","Book Exercises","Previous Exams","Other"].map(x=>`<label class="check"><input type="checkbox" class="stype" value="${x}">${x}</label>`).join("")}</div><label>Location</label><select id="bl" onchange="updatePrice()"></select><div id="price" class="card small"></div><button onclick="confirmBooking()">Confirm Booking + WhatsApp</button></div>`;updateBooking()}
 function courseResults(){let q=$("search").value.toLowerCase(),f=tutors().filter(t=>(t.courses||[]).some(c=>c.toLowerCase().includes(q)));$("results").innerHTML=q?`<div class="grid">${f.map(t=>`<div class="card"><h3>${t.name}</h3><p>${money(t.rate)}/hour/person</p><p>${(t.courses||[]).join(", ")}</p><p>${(t.locations||[]).join(", ")}</p></div>`).join("")}</div>`:""}
