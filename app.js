@@ -39,16 +39,58 @@ setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("h
 function notice(m){$("notice").textContent=m;$("notice").classList.remove("hidden")}
 function cleanPhone(p){return String(p||"").replace(/[^\d]/g,"")}
 function openWhatsApp(phone,msg){const p=cleanPhone(phone);if(!p)return alert("No WhatsApp number saved.");window.open(`https://wa.me/${p}?text=${encodeURIComponent(msg)}`,"_blank")}
-function toggleRequestAccess(){$("requestAccess").classList.toggle("hidden")}
+
+function openRequestAccessForm(prefillCourses=""){
+  $("loginPage").innerHTML=`<div class="login-card">
+    <button class="ghost" onclick="location.reload()">← Back to Login</button>
+    <div class="brand">
+      <img src="scheduled-icon.jpeg" alt="Scheduled" onerror="this.style.display='none'">
+      <h1 class="brand-word">Request Access</h1>
+      <p>Submit your details so admin can create your Scheduled account.</p>
+    </div>
+    <div id="notice" class="notice hidden"></div>
+    <label>Full Name</label>
+    <input id="reqName" placeholder="Full name">
+    <label>Email Address</label>
+    <input id="reqEmail" type="email" placeholder="Email address">
+    <label>Phone Number</label>
+    <input id="reqPhone" placeholder="Phone number">
+    <label>University</label>
+    <input id="reqUniversity" placeholder="University">
+    <label>Course(s) Needed</label>
+    <input id="reqCourses" placeholder="Course(s) needed" value="${prefillCourses||""}">
+    <label>Message</label>
+    <textarea id="reqMessage" placeholder="Message (optional)"></textarea>
+    <button onclick="submitAccessRequest()">Submit Request</button>
+  </div>`;
+}
+function toggleRequestAccess(){
+  if($("requestAccess")){
+    $("requestAccess").classList.toggle("hidden");
+  }else{
+    openRequestAccessForm();
+  }
+}
+
 async function submitAccessRequest(){
-  const name=$("reqName").value.trim(),email=$("reqEmail").value.trim(),phone=$("reqPhone").value.trim(),university=($("reqUniversity")?.value||"").trim(),courses=$("reqCourses").value.trim(),message=$("reqMessage").value.trim();
-  if(!name||!email||!phone||!university||!courses)return notice("Please fill full name, email, phone number, university, and course(s) needed.");
   try{
+    const name=($("reqName")?.value||"").trim();
+    const email=($("reqEmail")?.value||"").trim();
+    const phone=($("reqPhone")?.value||"").trim();
+    const university=($("reqUniversity")?.value||"").trim();
+    const courses=($("reqCourses")?.value||"").trim();
+    const message=($("reqMessage")?.value||"").trim();
+
+    if(!name||!email||!phone||!university||!courses){
+      return notice("Please fill full name, email, phone number, university, and course(s) needed.");
+    }
+
     await db.ref("accessRequests").push({name,email,phone,university,courses,message,status:"pending",createdAt:Date.now()});
     ["reqName","reqEmail","reqPhone","reqUniversity","reqCourses","reqMessage"].forEach(id=>{if($(id))$(id).value=""});
     notice("Access request submitted. We will contact you after review.");
-    $("requestAccess").classList.add("hidden");
-  }catch(e){notice(e.message)}
+  }catch(e){
+    notice(e.message || "Could not submit request. Please try again.");
+  }
 }
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
@@ -248,24 +290,7 @@ function publicProfileCard(p,logged){
   </div>`;
 }
 
-function showPublicRequestAccess(prefillCourses=""){
-  $("loginPage").innerHTML=`<div class="login-card">
-    <button class="ghost" onclick="browsePublicTutors()">← Back to Tutors</button>
-    <div class="brand">
-      <img src="scheduled-icon.jpeg" alt="Scheduled" onerror="this.style.display='none'">
-      <h1 class="brand-word">Request Access</h1>
-      <p>Submit your details so admin can create your Scheduled account.</p>
-    </div>
-    <div id="notice" class="notice hidden"></div>
-    <label>Full Name</label><input id="reqName" placeholder="Full name">
-    <label>Email Address</label><input id="reqEmail" type="email" placeholder="Email address">
-    <label>Phone Number</label><input id="reqPhone" placeholder="Phone number">
-    <label>University</label><input id="reqUniversity" placeholder="University">
-    <label>Course(s) Needed</label><input id="reqCourses" placeholder="Course(s) needed" value="${prefillCourses}">
-    <label>Message</label><textarea id="reqMessage" placeholder="Message (optional)"></textarea>
-    <button onclick="submitAccessRequest()">Submit Request</button>
-  </div>`;
-}
+function showPublicRequestAccess(prefillCourses=""){openRequestAccessForm(prefillCourses)}
 async function browsePublicTutors(){
   await loadData();
   $("loginPage").innerHTML=`<div class="login-card" style="width:min(1050px,100%);">

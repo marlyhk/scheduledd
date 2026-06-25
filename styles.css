@@ -159,3 +159,5 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}.small{font-size:13
 .tutor-card:hover{transform:translateY(-2px);box-shadow:0 18px 45px rgba(31,42,55,.10)}
 .tutor-meta{color:var(--muted);font-size:14px;line-height:1.45}
 .admin-note{font-size:13px;color:var(--muted);background:var(--blue2);padding:12px;border-radius:16px;margin:10px 0}
+
+.login-card > .ghost:first-child{margin-bottom:12px}
