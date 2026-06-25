@@ -414,8 +414,8 @@ async function deletePublicTutorProfile(id){
   await loadData();publicTutorProfilesPage();
 }
 
-function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Documents","Export"]:profile.role==="tutor"?["Schedule","Calendar","Availability","My Students","Financial","Documents","Profile"]:["Book","All Tutors","My Tutors","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
-async function openTab(tab,btn){await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Profile:profilePage,Book:bookingPage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
+function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Tutor Reports","Documents","Export"]:profile.role==="tutor"?["Schedule","Calendar","Availability","My Students","Financial","Documents","Profile"]:["Book","All Tutors","My Tutors","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
+async function openTab(tab,btn){await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),"Tutor Reports":adminTutorReportsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Profile:profilePage,Book:bookingPage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}
 
@@ -687,10 +687,65 @@ function bookWithTutor(id, course=""){
 }
 function myStudentsPage(){let ids=[...new Set(list(DATA.bookings).filter(b=>b.tutorId===currentUser.uid).map(b=>b.studentId))];let ss=ids.map(id=>({id,...user(id)})).filter(s=>s.role==="student");$("content").innerHTML=`<div class="card"><h2>My Students</h2>${ss.length?`<div class="grid">${ss.map(s=>{let bs=list(DATA.bookings).filter(b=>b.tutorId===currentUser.uid&&b.studentId===s.id);return`<div class="card"><h3>${s.name}</h3><p>${s.email||""}<br>${s.phone||""}</p><b>Upcoming</b><br>${bs.filter(b=>!b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Past</b><br>${bs.filter(b=>b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Unpaid:</b> ${money(unpaid(bs))}</div>`}).join("")}</div>`:`<p class="muted">No students yet. Students appear here after booking with you.</p>`}</div>`}
 
-function financialPage(){let b=myBookings(),month=new Date().toISOString().slice(0,7),mb=b.filter(x=>(x.date||"").startsWith(month));$("content").innerHTML=`<div class="grid"><div class="card"><h3>Total Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Total Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>This Month Paid</h3><h1>${money(paid(mb))}</h1></div><div class="card"><h3>This Month Unpaid</h3><h1>${money(unpaid(mb))}</h1></div></div><div class="card"><h2>Financial Details</h2>${bookingRows(b,true)}</div>`}
+
+function csvEscape(x){return `"${String(x??"").replaceAll('"','""')}"`}
+function downloadCSV(filename, rows){
+  const csv=rows.map(r=>r.map(csvEscape).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);
+}
+function bookingMonth(b){return String(b.date||"").slice(0,7)}
+function tutorBookingsFor(tutorId){return list(DATA.bookings).filter(b=>b.tutorId===tutorId)}
+function tutorMonthlyStats(tutorId, month){
+  const bs=tutorBookingsFor(tutorId).filter(b=>!month||bookingMonth(b)===month);
+  return {bs,hours:bs.reduce((s,b)=>s+Number(b.duration||0),0),earned:bs.reduce((s,b)=>s+total(b),0),paidAmount:paid(bs),unpaidAmount:unpaid(bs)};
+}
+function exportTutorBookingsCSV(tutorId=currentUser.uid, month=""){
+  const t=user(tutorId);
+  const bs=tutorBookingsFor(tutorId).filter(b=>!month||bookingMonth(b)===month).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.start||"").localeCompare(b.start||""));
+  const rows=[["Tutor","Student/Group","Date","Time","Month","Course","Duration Hours","Location","Payment Method","Total","Paid Amount","Unpaid Amount","Payment Details","Status"]];
+  bs.forEach(b=>rows.push([t.name||"",user(b.studentId).name||"",b.date||"",typeof formatTime12==="function"?formatTime12(b.start):b.start,bookingMonth(b),b.course||"",b.duration||"",b.location||"",b.paymentMethod||"",total(b),paid([b]),unpaid([b]),(b.payments||[]).map(p=>`${p.name}: ${money(p.amount)} ${p.paid?"Paid":"Unpaid"}`).join(" | "),b.done?"Past/Done":"Upcoming"]));
+  downloadCSV(`Scheduled_${(t.name||"Tutor").replace(/\s+/g,"_")}_${month||"all"}_bookings_payments.csv`,rows);
+}
+
+function financialPage(){
+  let b=myBookings(),month=new Date().toISOString().slice(0,7),mb=b.filter(x=>(x.date||"").startsWith(month));
+  $("content").innerHTML=`<div class="grid"><div class="card"><h3>Total Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Total Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>This Month Paid</h3><h1>${money(paid(mb))}</h1></div><div class="card"><h3>This Month Unpaid</h3><h1>${money(unpaid(mb))}</h1></div></div>
+  ${profile.role==="tutor"?`<div class="card"><h2>Excel / CSV Export</h2><p class="muted">Download your bookings and payments by student, date, and payment status.</p><div class="row"><input id="tutorExportMonth" type="month" value="${month}"><button onclick="exportTutorBookingsCSV(currentUser.uid,$('tutorExportMonth').value)">Export Selected Month</button><button onclick="exportTutorBookingsCSV(currentUser.uid,'')">Export All</button></div></div>`:""}
+  <div class="card"><h2>Financial Details</h2>${bookingRows(b,true)}</div>`;
+}
+
+function adminTutorReportsPage(){
+  const currentMonth=new Date().toISOString().slice(0,7);
+  $("content").innerHTML=`<div class="card"><h2>Tutor Monthly Reports</h2><p class="muted">See how many hours each tutor did per month and how much they earned.</p><div class="row"><input id="reportMonth" type="month" value="${currentMonth}" onchange="renderTutorReportTable()"><button onclick="exportAdminTutorMonthlyCSV()">Export Monthly Report CSV</button></div><div id="tutorReportTable"></div></div>`;
+  renderTutorReportTable();
+}
+function renderTutorReportTable(){
+  const month=$("reportMonth")?.value||new Date().toISOString().slice(0,7);
+  const rows=tutors().map(t=>({t,...tutorMonthlyStats(t.id,month)}));
+  const totalHours=rows.reduce((s,r)=>s+r.hours,0),totalEarned=rows.reduce((s,r)=>s+r.earned,0),totalPaid=rows.reduce((s,r)=>s+r.paidAmount,0),totalUnpaid=rows.reduce((s,r)=>s+r.unpaidAmount,0);
+  $("tutorReportTable").innerHTML=`<div class="grid"><div class="card"><div class="report-sub">Total Hours</div><div class="report-total">${totalHours}</div></div><div class="card"><div class="report-sub">Total Earned</div><div class="report-total">${money(totalEarned)}</div></div><div class="card"><div class="report-sub">Paid</div><div class="report-total">${money(totalPaid)}</div></div><div class="card"><div class="report-sub">Unpaid</div><div class="report-total">${money(totalUnpaid)}</div></div></div>
+  ${rows.length?`<table class="table"><tr><th>Tutor</th><th>University</th><th>Month</th><th>Sessions</th><th>Hours</th><th>Earned</th><th>Paid</th><th>Unpaid</th><th>Export</th></tr>${rows.map(r=>`<tr><td>${r.t.name||""}</td><td>${r.t.university||""}</td><td>${month}</td><td>${r.bs.length}</td><td>${r.hours}</td><td>${money(r.earned)}</td><td>${money(r.paidAmount)}</td><td>${money(r.unpaidAmount)}</td><td><button onclick="exportTutorBookingsCSV('${r.t.id}','${month}')">Export Tutor</button></td></tr>`).join("")}</table>`:`<p class="muted">No tutors found.</p>`}`;
+}
+function exportAdminTutorMonthlyCSV(){
+  const month=$("reportMonth")?.value||new Date().toISOString().slice(0,7);
+  const rows=[["Tutor","University","Month","Sessions","Hours","Earned","Paid","Unpaid"]];
+  tutors().forEach(t=>{const s=tutorMonthlyStats(t.id,month);rows.push([t.name||"",t.university||"",month,s.bs.length,s.hours,s.earned,s.paidAmount,s.unpaidAmount])});
+  downloadCSV(`Scheduled_Admin_Tutor_Report_${month}.csv`,rows);
+}
+
 function docsPage(){let docs=list(DATA.documents).filter(d=>profile.role!=="student"||d.ownerId===currentUser.uid);$("content").innerHTML=`<div class="card"><h2>Documents</h2><p class="muted">Free version stores Google Drive view-only links.</p><table class="table"><tr><th>Title</th><th>Owner</th><th>Link</th></tr>${docs.map(d=>`<tr><td>${d.title}</td><td>${user(d.ownerId).name||""}</td><td>${d.url?`<a href="${d.url}" target="_blank">Open</a>`:""}</td></tr>`).join("")}</table>${profile.role!=="student"?`<hr><h3>Add Document Link</h3><div class="row"><select id="do">${students().map(s=>`<option value="${s.id}">${s.name}</option>`).join("")}</select><input id="dt" placeholder="Title"><input id="du" placeholder="Google Drive view-only link"></div><button onclick="addDoc()">Add Document</button>`:""}</div>`}
 async function addDoc(){await db.ref("documents").push({ownerId:$("do").value,title:$("dt").value,url:$("du").value,createdAt:Date.now()});await loadData();docsPage()}
-function exportPage(){$("content").innerHTML=`<div class="card"><h2>Export</h2><p class="muted">Download bookings and payments as CSV.</p><button onclick="exportCSV()">Export Bookings CSV</button></div>`}
+function exportPage(){
+  $("content").innerHTML=`<div class="card"><h2>Export</h2><p class="muted">Download bookings and payments as CSV.</p><button onclick="exportCSV()">Export All Bookings CSV</button>${profile.role==="admin"?`<hr><h3>Admin Tutor Monthly Report</h3><div class="row"><input id="exportMonth" type="month" value="${new Date().toISOString().slice(0,7)}"><button onclick="exportAdminTutorMonthlyFromExport()">Export Tutor Monthly Report</button></div>`:""}</div>`;
+}
+function exportAdminTutorMonthlyFromExport(){
+  const month=$("exportMonth")?.value||new Date().toISOString().slice(0,7);
+  const rows=[["Tutor","University","Month","Sessions","Hours","Earned","Paid","Unpaid"]];
+  tutors().forEach(t=>{const s=tutorMonthlyStats(t.id,month);rows.push([t.name||"",t.university||"",month,s.bs.length,s.hours,s.earned,s.paidAmount,s.unpaidAmount])});
+  downloadCSV(`Scheduled_Admin_Tutor_Report_${month}.csv`,rows);
+}
 function exportCSV(){const rows=[["Date","Time","Course","Tutor","Student/Group","Duration","Location","Payment Method","Total","Payments"]];myBookings().forEach(b=>rows.push([b.date,b.start,b.course,user(b.tutorId).name||"",user(b.studentId).name||"",b.duration,b.location,b.paymentMethod,total(b),(b.payments||[]).map(p=>`${p.name}: ${money(p.amount)} ${p.paid?"Paid":"Unpaid"}`).join(" | ")]));const csv=rows.map(r=>r.map(x=>`"${String(x??"").replaceAll('"','""')}"`).join(",")).join("\n"),blob=new Blob([csv],{type:"text/csv"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="scheduled-export.csv";a.click();URL.revokeObjectURL(url)}
 function profilePage(){$("content").innerHTML=`<div class="card"><h2>Profile</h2><p><b>Name:</b> ${profile.name}</p><p><b>Email:</b> ${profile.email}</p><p><b>Role:</b> ${profile.role}</p><label>New password</label><input id="np" type="password" placeholder="New password"><button onclick="changePassword()">Change Password</button>${profile.role==="tutor"?`<hr><p><b>WhatsApp:</b> ${profile.whatsapp||""}</p><button class="whatsapp" onclick="openWhatsApp('${profile.whatsapp||""}','Hi, I have a question about tutoring on Scheduled.')">WhatsApp Button Preview</button>`:""}</div>`}
 async function changePassword(){try{await auth.currentUser.updatePassword($("np").value);alert("Password changed")}catch(e){alert(e.message)}}
