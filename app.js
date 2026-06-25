@@ -506,7 +506,7 @@ function assignedCourseNames(studentId){
 
 
 const MOTIVATION_QUOTES=["Small progress is still progress — show up today.","Your future self is built by what you do now.","One focused session can change your whole week.","Start, and motivation follows.","Study smart, ask questions, keep moving.","Consistency beats intensity.","You are closer than you think. Keep going."];
-function todayISO(){return localISODate(new Date())}function currentMonth(){return new Date().toISOString().slice(0,7)}function isToday(date){return date===todayISO()}function thisMonthBookings(bs){const m=currentMonth();return bs.filter(b=>(b.date||"").startsWith(m))}function upcomingBookingsForUser(){const t=todayISO();return myBookings().filter(b=>!b.done&&(b.date||"")>=t).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.start||"").localeCompare(b.start||""))}function totalHours(bs){return bs.reduce((s,b)=>s+Number(b.duration||0),0)}function nextBooking(){const u=upcomingBookingsForUser();return u.length?u[0]:null}function randomMotivation(){return MOTIVATION_QUOTES[Math.floor(Math.random()*MOTIVATION_QUOTES.length)]}
+function todayISO(){return localISODate(new Date())}function currentMonth(){return new Date().toISOString().slice(0,7)}function isToday(date){return date===todayISO()}function thisMonthBookings(bs){const m=currentMonth();return bs.filter(b=>(b.date||"").startsWith(m))}function upcomingBookingsForUser(){const t=todayISO();return myBookings().filter(b=>!b.done&&(b.date||"")>=t).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.start||"").localeCompare(b.start||""))}function totalHours(bs){return bs.reduce((s,b)=>s+Number(b.duration||0),0)}function nextBooking(){const u=upcomingBookingsForUser();return u.length?u[0]:null}function randomMotivation(){return (scheduledTodayBanner&&scheduledTodayBanner().text)||"Keep going — you are doing better than you think.";}
 function getNotificationsForRole(){return list(DATA.notifications||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).filter(n=>n.to==="everyone"||n.to===profile.role||n.userId===currentUser.uid)}async function createNotification(to,title,message,userId=""){await db.ref("notifications").push({to,title,message,userId,createdAt:Date.now(),read:false})}
 function getAnnouncementsForRole(){return list(DATA.announcements||{}).filter(a=>a.audience==="everyone"||a.audience===profile.role||(a.university&&profile.university&&a.university===profile.university)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))}
 function getReviewsForTutor(tutorId){return list(DATA.reviews||{}).filter(r=>r.tutorId===tutorId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))}function avgRating(tutorId){const rs=getReviewsForTutor(tutorId);return rs.length?(rs.reduce((s,r)=>s+Number(r.rating||0),0)/rs.length).toFixed(1):"—"}
@@ -518,7 +518,7 @@ function contactSelectedTutorForTime(){const t=user($("bt")?.value);openWhatsApp
 
 
 function dashboardPage(){if(profile.role==="admin")return adminDashboardPage();if(profile.role==="tutor")return tutorDashboardPage();return studentDashboardPage()}
-function studentDashboardPage(){const nb=nextBooking(),my=myBookings(),month=thisMonthBookings(my),quote=randomMotivation();$("content").innerHTML=`<div class="dashboard-hero"><h2>Hi ${profile.name||"there"} 👋</h2><p class="muted">Here is your learning overview.</p><div class="motivation-ticker"><span>${quote}</span></div><div class="quick-actions"><button onclick="openTab('Book')">Book New Session</button><button class="ghost" onclick="emergencySessionsPage()">⚡ Need Help Today?</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Next Session</div><div class="kpi-value">${nb?`${nb.date}<br><span class="small">${formatTime12(nb.start)}</span>`:"None"}</div></div><div class="kpi-card"><div class="kpi-label">Hours This Month</div><div class="kpi-value">${totalHours(month)}</div></div><div class="kpi-card"><div class="kpi-label">Upcoming Sessions</div><div class="kpi-value">${my.filter(b=>!b.done).length}</div></div><div class="kpi-card"><div class="kpi-label">My Tutors</div><div class="kpi-value">${studentTutors(currentUser.uid).length}</div></div></div><div class="grid"><div class="card"><h2>Upcoming Sessions</h2>${upcomingBookingsForUser().slice(0,5).map(b=>`<div class="timeline-item"><b>${b.course}</b><br>${b.date} • ${formatTime12(b.start)}<br>${user(b.tutorId).name||""}<br><a href="${calendarLinkForBooking(b)}" target="_blank">Add to Google Calendar</a></div>`).join("")||"<p class='muted'>No upcoming sessions.</p>"}</div><div class="card"><h2>Assigned Courses</h2><p>${assignedCourseBadges(currentUser.uid)}</p><hr><h2>Announcements</h2>${getAnnouncementsForRole().slice(0,3).map(a=>`<div class="announcement-card"><b>${a.title||""}</b><p>${a.message||""}</p></div>`).join("")||"<p class='muted'>No announcements yet.</p>"}</div></div>`}
+function studentDashboardPage(){const nb=nextBooking(),my=myBookings(),month=thisMonthBookings(my),quote=randomMotivation();$("content").innerHTML=`<div class="dashboard-hero"><h2>Hi ${profile.name||"there"} 👋</h2><p class="muted">Here is your learning overview.</p>${renderStudentInspoBanner()}<div class="quick-actions"><button onclick="openTab('Book')">Book New Session</button><button class="ghost" onclick="emergencySessionsPage()">⚡ Need Help Today?</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Next Session</div><div class="kpi-value">${nb?`${nb.date}<br><span class="small">${formatTime12(nb.start)}</span>`:"None"}</div></div><div class="kpi-card"><div class="kpi-label">Hours This Month</div><div class="kpi-value">${totalHours(month)}</div></div><div class="kpi-card"><div class="kpi-label">Upcoming Sessions</div><div class="kpi-value">${my.filter(b=>!b.done).length}</div></div><div class="kpi-card"><div class="kpi-label">My Tutors</div><div class="kpi-value">${studentTutors(currentUser.uid).length}</div></div></div><div class="grid"><div class="card"><h2>Upcoming Sessions</h2>${upcomingBookingsForUser().slice(0,5).map(b=>`<div class="timeline-item"><b>${b.course}</b><br>${b.date} • ${formatTime12(b.start)}<br>${user(b.tutorId).name||""}<br><a href="${calendarLinkForBooking(b)}" target="_blank">Add to Google Calendar</a></div>`).join("")||"<p class='muted'>No upcoming sessions.</p>"}</div><div class="card"><h2>Assigned Courses</h2><p>${assignedCourseBadges(currentUser.uid)}</p><hr><h2>Announcements</h2>${getAnnouncementsForRole().slice(0,3).map(a=>`<div class="announcement-card"><b>${a.title||""}</b><p>${a.message||""}</p></div>`).join("")||"<p class='muted'>No announcements yet.</p>"}</div></div>`}
 function tutorDashboardPage(){const b=myBookings(),today=b.filter(x=>isToday(x.date)&&!x.done),month=thisMonthBookings(b);$("content").innerHTML=`<div class="dashboard-hero"><h2>Welcome back, ${profile.name||"Tutor"} 👋</h2><p class="muted">Your tutoring business overview.</p><div class="quick-actions"><button onclick="openTab('Availability')">Add Availability</button><button class="ghost" onclick="openTab('Calendar')">Open Calendar</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Today's Sessions</div><div class="kpi-value">${today.length}</div></div><div class="kpi-card"><div class="kpi-label">Hours This Month</div><div class="kpi-value">${totalHours(month)}</div></div><div class="kpi-card"><div class="kpi-label">This Month Earnings</div><div class="kpi-value">${money(month.reduce((s,b)=>s+total(b),0))}</div></div><div class="kpi-card"><div class="kpi-label">Average Rating</div><div class="kpi-value">${avgRating(currentUser.uid)}</div></div></div><div class="grid"><div class="card"><h2>Today</h2>${today.map(b=>`<div class="timeline-item"><b>${formatTime12(b.start)} • ${b.course}</b><br>${user(b.studentId).name||""}<br>${b.location||""}</div>`).join("")||"<p class='muted'>No sessions today.</p>"}</div><div class="card"><h2>Pending Payments</h2>${b.filter(x=>unpaid([x])>0).slice(0,6).map(x=>`<div class="timeline-item">${x.date} • ${user(x.studentId).name||""}<br>${money(unpaid([x]))} unpaid<br><button onclick="markBookingPayment('${x.id}')">Mark as Paid</button></div>`).join("")||"<p class='muted'>No pending payments.</p>"}</div></div>`}
 function adminDashboardPage(){const bs=list(DATA.bookings),today=bs.filter(b=>isToday(b.date)),month=thisMonthBookings(bs),req=list(DATA.accessRequests).filter(r=>(r.status||"pending")==="pending");$("content").innerHTML=`<div class="dashboard-hero"><h2>Scheduled Admin Dashboard</h2><p class="muted">Everything important in one place.</p><div class="quick-actions"><button onclick="openTab('Students')">Add Student</button><button onclick="openTab('Tutors')">Add Tutor</button><button class="ghost" onclick="openTab('Announcements')">Send Announcement</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Students</div><div class="kpi-value">${students().length}</div></div><div class="kpi-card"><div class="kpi-label">Tutors</div><div class="kpi-value">${tutors().length}</div></div><div class="kpi-card"><div class="kpi-label">Sessions Today</div><div class="kpi-value">${today.length}</div></div><div class="kpi-card"><div class="kpi-label">Revenue This Month</div><div class="kpi-value">${money(month.reduce((s,b)=>s+total(b),0))}</div></div><div class="kpi-card"><div class="kpi-label">Pending Requests</div><div class="kpi-value">${req.length}</div></div><div class="kpi-card"><div class="kpi-label">Unpaid</div><div class="kpi-value">${money(unpaid(bs))}</div></div></div>`}
 function announcementsPage(){if(profile.role==="admin"){$("content").innerHTML=`<div class="card"><h2>Announcements</h2><div class="row"><input id="annTitle" placeholder="Title"><select id="annAudience"><option value="everyone">Everyone</option><option value="student">Students</option><option value="tutor">Tutors</option></select></div><textarea id="annMessage" placeholder="Announcement message"></textarea><button onclick="sendAnnouncement()">Send Announcement</button></div><div class="card"><h2>Previous Announcements</h2>${list(DATA.announcements||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(a=>`<div class="announcement-card"><b>${a.title}</b><p>${a.message}</p><span class="muted">${a.audience}</span></div>`).join("")||"<p class='muted'>None yet.</p>"}</div>`}else{$("content").innerHTML=`<div class="card"><h2>Announcements</h2>${getAnnouncementsForRole().map(a=>`<div class="announcement-card"><b>${a.title}</b><p>${a.message}</p></div>`).join("")||"<p class='muted'>No announcements yet.</p>"}</div>`}}
@@ -545,29 +545,61 @@ function v56MotivationQuotes(){
     "Consistency beats intensity when exams get close."
   ];
 }
-function randomMotivation(){
-  const quotes=v56MotivationQuotes();
-  return quotes[Math.floor(Math.random()*quotes.length)]||"Keep going — you are doing better than you think.";
-}
+function randomMotivation(){return (scheduledTodayBanner&&scheduledTodayBanner().text)||"Keep going — you are doing better than you think.";}
 function motivationBannerSettingsPage(){
   if(!profile || profile.role!=="admin"){
     $("content").innerHTML=`<div class="card"><h2>Access denied</h2><p class="muted">Only admin can manage the motivation banner.</p></div>`;
     return;
   }
   const quotes=v56List(DATA.motivationQuotes||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  $("content").innerHTML=`<div class="card"><h2>Motivation Banner</h2>
-    <p class="muted">These phrases appear in the moving banner inside student dashboards. If none are added, default phrases are used.</p>
-    <textarea id="motivationText" placeholder="Write a new motivation phrase..."></textarea>
-    <button onclick="addMotivationQuote()">Add Phrase</button>
-    <hr><h3>Current Custom Phrases</h3>
-    ${quotes.length?quotes.map(q=>`<span class="banner-pill">${q.text}<button class="ghost" onclick="deleteMotivationQuote('${q.id}')">×</button></span>`).join(""):"<p class='muted'>No custom phrases yet.</p>"}
+  const settings=DATA.bannerSettings||{};
+  $("content").innerHTML=`<div class="card"><h2>Motivation Banner Manager</h2>
+    <p class="muted">Create aesthetic student inspiration cards that feel polished enough to screenshot and share.</p>
+    <div class="banner-control-card">
+      <label class="check"><input id="examMode" type="checkbox" ${settings.examMode?"checked":""}> Exam Week Mode</label>
+      <button onclick="saveBannerSettings()">Save Banner Settings</button>
+    </div>
+    <div class="banner-manager-grid">
+      <input id="motivationIcon" placeholder="Icon e.g. 🌱" value="✨" oninput="updateBannerPreview()">
+      <select id="motivationTheme" onchange="updateBannerPreview()">
+        <option value="focus">Focus Blue</option>
+        <option value="minimal">Minimal White</option>
+        <option value="night">Night Navy</option>
+        <option value="energy">Energy</option>
+        <option value="growth">Growth</option>
+        <option value="exam">Exam</option>
+        <option value="rainbow">Pastel Rainbow</option>
+        <option value="achieve">Achievement</option>
+      </select>
+      <select id="motivationTime">
+        <option value="anytime">Anytime</option>
+        <option value="morning">Morning</option>
+        <option value="afternoon">Afternoon</option>
+        <option value="evening">Evening</option>
+        <option value="exam">Exam Week</option>
+      </select>
+    </div>
+    <textarea id="motivationText" placeholder="Main quote..." oninput="updateBannerPreview()">Progress, not perfection.</textarea>
+    <input id="motivationSub" placeholder="Small subtitle..." value="Small steps still count." oninput="updateBannerPreview()">
+    <button onclick="addMotivationQuote()">Add Banner Card</button>
+    <div id="bannerPreview">${bannerPreviewCard()}</div>
+    <hr><h3>Custom Banner Cards</h3>
+    ${quotes.length?quotes.map(q=>`<div class="banner-table-row"><div><b>${q.icon||"✨"} ${q.text}</b><div class="banner-meta">${q.theme||"focus"} • ${q.time||"anytime"} • ${q.sub||""}</div></div><button class="ghost" onclick="deleteMotivationQuote('${q.id}')">Delete</button></div>`).join(""):"<p class='muted'>No custom cards yet. Default Scheduled cards are being used.</p>"}
   </div>`;
 }
 async function addMotivationQuote(){
   if(!profile || profile.role!=="admin")return alert("Only admin can change the motivation banner.");
   const text=($("motivationText")?.value||"").trim();
   if(!text)return alert("Write a motivation phrase first.");
-  await db.ref("motivationQuotes").push({text,createdAt:Date.now(),createdBy:currentUser.uid});
+  await db.ref("motivationQuotes").push({
+    text,
+    icon:$("motivationIcon")?.value||"✨",
+    theme:$("motivationTheme")?.value||"focus",
+    time:$("motivationTime")?.value||"anytime",
+    sub:($("motivationSub")?.value||"").trim(),
+    createdAt:Date.now(),
+    createdBy:currentUser.uid
+  });
   await loadData();
   motivationBannerSettingsPage();
 }
@@ -696,6 +728,124 @@ async function createTutorScheduledSession(){
   await loadData();
   alert("Session created successfully.");
   tutorScheduleSessionPage();
+}
+
+
+/* ===== v5.8 aesthetic student banner system ===== */
+const SCHEDULED_DEFAULT_BANNERS=[
+  {text:"Progress, not perfection.",icon:"🌱",theme:"growth",time:"anytime",sub:"Small steps still count."},
+  {text:"One lesson closer.",icon:"📚",theme:"focus",time:"anytime",sub:"Keep building momentum."},
+  {text:"Stay focused.",icon:"🎯",theme:"minimal",time:"anytime",sub:"Your goals are worth the effort."},
+  {text:"Keep showing up.",icon:"💙",theme:"focus",time:"anytime",sub:"Consistency makes the difference."},
+  {text:"Learn. Practice. Repeat.",icon:"✨",theme:"rainbow",time:"anytime",sub:"That is how confidence grows."},
+  {text:"Start now.",icon:"🚀",theme:"achieve",time:"morning",sub:"Action beats overthinking."},
+  {text:"Every minute counts.",icon:"🧠",theme:"focus",time:"anytime",sub:"Use this moment well."},
+  {text:"Consistency wins.",icon:"💪",theme:"energy",time:"anytime",sub:"Results follow repetition."},
+  {text:"Trust the process.",icon:"🌟",theme:"minimal",time:"anytime",sub:"You are becoming better."},
+  {text:"Study now, celebrate later.",icon:"📖",theme:"night",time:"evening",sub:"Future you will thank you."},
+  {text:"Future you is counting on you.",icon:"⏳",theme:"achieve",time:"anytime",sub:"Make one choice today that helps tomorrow."},
+  {text:"Success is built daily.",icon:"🎓",theme:"focus",time:"morning",sub:"One page, one problem, one step."},
+  {text:"You’ve got this.",icon:"🔥",theme:"energy",time:"anytime",sub:"Even when it feels hard."},
+  {text:"Stay curious.",icon:"⭐",theme:"rainbow",time:"anytime",sub:"Questions mean your brain is working."},
+  {text:"Keep moving forward.",icon:"🌈",theme:"rainbow",time:"anytime",sub:"Progress is still progress."},
+  {text:"Feeling confused means you’re learning.",icon:"🧩",theme:"minimal",time:"anytime",sub:"Stay with it a little longer."},
+  {text:"Mistakes are proof you’re trying.",icon:"✍️",theme:"growth",time:"anytime",sub:"Every correction teaches you something."},
+  {text:"You don’t have to know everything today.",icon:"☁️",theme:"minimal",time:"anytime",sub:"Just learn the next thing."},
+  {text:"Keep asking questions.",icon:"💡",theme:"focus",time:"anytime",sub:"That is how understanding starts."},
+  {text:"Every expert was once a beginner.",icon:"🌱",theme:"growth",time:"anytime",sub:"You are allowed to start small."},
+  {text:"A winner is a loser who tried one more time.",icon:"🏆",theme:"achieve",time:"anytime",sub:"Try one more time today."},
+  {text:"One page at a time. One step closer.",icon:"📄",theme:"minimal",time:"anytime",sub:"Do not rush the process."},
+  {text:"Stay consistent. Results will follow.",icon:"📈",theme:"achieve",time:"anytime",sub:"Quiet work becomes visible later."},
+  {text:"Your future self is watching.",icon:"🔭",theme:"night",time:"evening",sub:"Give them something to be proud of."},
+  {text:"Small efforts become big achievements.",icon:"✨",theme:"growth",time:"anytime",sub:"Do not underestimate today."},
+  {text:"Show up, even when motivation doesn’t.",icon:"💪",theme:"energy",time:"anytime",sub:"Discipline carries you."},
+  {text:"Discipline is remembering what you want most.",icon:"🎯",theme:"focus",time:"anytime",sub:"Choose your bigger goal."},
+  {text:"Every study session counts.",icon:"⏱️",theme:"focus",time:"anytime",sub:"This one matters too."},
+  {text:"Don’t quit because it’s difficult.",icon:"🔥",theme:"energy",time:"anytime",sub:"Difficult does not mean impossible."},
+  {text:"Your only competition is who you were yesterday.",icon:"⭐",theme:"achieve",time:"anytime",sub:"Beat yesterday by one small step."},
+  {text:"Every focused hour is an investment in your future.",icon:"⏳",theme:"night",time:"evening",sub:"Spend it wisely."},
+  {text:"Success isn’t luck—it’s consistency repeated daily.",icon:"🏁",theme:"achieve",time:"anytime",sub:"Keep stacking the days."},
+  {text:"One day, today’s hard work will be your success story.",icon:"🎓",theme:"rainbow",time:"anytime",sub:"You are writing it now."},
+  {text:"Keep studying until confidence replaces doubt.",icon:"🧠",theme:"focus",time:"anytime",sub:"Confidence is earned."},
+  {text:"The best investment you’ll ever make is in yourself.",icon:"💙",theme:"minimal",time:"anytime",sub:"Your education stays with you."},
+  {text:"Success is built when no one is watching.",icon:"🌙",theme:"night",time:"evening",sub:"Quiet effort counts."},
+  {text:"You don’t have to be perfect. Just keep going.",icon:"🌱",theme:"growth",time:"anytime",sub:"That is enough for today."},
+  {text:"One productive day can change your entire week.",icon:"☀️",theme:"energy",time:"morning",sub:"Start with one focused task."},
+  {text:"Difficult doesn’t mean impossible.",icon:"🧗",theme:"achieve",time:"anytime",sub:"It means you are growing."},
+  {text:"Keep learning. Keep improving. Keep believing.",icon:"✨",theme:"rainbow",time:"anytime",sub:"You are not done yet."},
+  {text:"Your potential is greater than today’s obstacles.",icon:"🌟",theme:"achieve",time:"anytime",sub:"Do not shrink your dream."},
+  {text:"Good morning! Today’s effort becomes tomorrow’s success.",icon:"☀️",theme:"energy",time:"morning",sub:"Start with one small win."},
+  {text:"Halfway through the day—keep the momentum going!",icon:"📚",theme:"focus",time:"afternoon",sub:"You are still in the game."},
+  {text:"Finish today’s goals so tomorrow starts lighter.",icon:"🌙",theme:"night",time:"evening",sub:"Your future self will breathe easier."},
+  {text:"Stay calm. Trust your preparation. One question at a time.",icon:"💙",theme:"exam",time:"exam",sub:"You can handle this."}
+];
+
+function scheduledBannerTimeSlot(){
+  const h=new Date().getHours();
+  if(h>=5&&h<12)return "morning";
+  if(h>=12&&h<18)return "afternoon";
+  return "evening";
+}
+function scheduledBannerMode(){
+  const settings=DATA.bannerSettings||{};
+  return settings.examMode?"exam":"normal";
+}
+function scheduledBannerPool(){
+  const custom=v56List(DATA.motivationQuotes||{}).map(q=>({
+    text:q.text,
+    icon:q.icon||"✨",
+    theme:q.theme||"focus",
+    time:q.time||"anytime",
+    sub:q.sub||q.subtitle||"Scheduled"
+  })).filter(q=>q.text);
+  const pool=custom.length?custom:SCHEDULED_DEFAULT_BANNERS;
+  const mode=scheduledBannerMode();
+  const slot=scheduledBannerTimeSlot();
+  if(mode==="exam"){
+    const exam=pool.filter(q=>q.time==="exam"||q.theme==="exam");
+    if(exam.length)return exam;
+  }
+  const timed=pool.filter(q=>q.time==="anytime"||q.time===slot);
+  return timed.length?timed:pool;
+}
+function scheduledTodayBanner(){
+  const pool=scheduledBannerPool();
+  const dayKey=new Date().toISOString().slice(0,10)+scheduledBannerTimeSlot()+scheduledBannerMode();
+  let hash=0;
+  for(let i=0;i<dayKey.length;i++)hash=(hash*31+dayKey.charCodeAt(i))>>>0;
+  return pool[hash%pool.length]||SCHEDULED_DEFAULT_BANNERS[0];
+}
+function renderStudentInspoBanner(){
+  const b=scheduledTodayBanner();
+  return `<div class="inspo-card inspo-theme-${b.theme||"focus"}">
+    <div class="inspo-topline"><span>${scheduledBannerMode()==="exam"?"Exam Mode":"Scheduled Motivation"}</span><span>Screenshot-worthy ✨</span></div>
+    <div class="inspo-icon">${b.icon||"✨"}</div>
+    <div class="inspo-quote">${b.text||""}</div>
+    <div class="inspo-sub">${b.sub||"Keep going."}</div>
+    <div class="inspo-brand">Scheduled</div>
+  </div>`;
+}
+function bannerPreviewCard(){
+  const text=($("motivationText")?.value||"Progress, not perfection.").trim();
+  const icon=$("motivationIcon")?.value||"✨";
+  const theme=$("motivationTheme")?.value||"focus";
+  const sub=($("motivationSub")?.value||"Small steps still count.").trim();
+  return `<div class="banner-preview-wrap"><div class="inspo-card inspo-theme-${theme}">
+    <div class="inspo-topline"><span>Scheduled Motivation</span><span>Preview ✨</span></div>
+    <div class="inspo-icon">${icon}</div>
+    <div class="inspo-quote">${text}</div>
+    <div class="inspo-sub">${sub}</div>
+    <div class="inspo-brand">Scheduled</div>
+  </div></div>`;
+}
+function updateBannerPreview(){
+  if($("bannerPreview"))$("bannerPreview").innerHTML=bannerPreviewCard();
+}
+async function saveBannerSettings(){
+  if(!profile||profile.role!=="admin")return alert("Only admin can change banner settings.");
+  await db.ref("bannerSettings").set({examMode:$("examMode")?.checked||false,updatedAt:Date.now(),updatedBy:currentUser.uid});
+  await loadData();
+  motivationBannerSettingsPage();
 }
 
 function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
