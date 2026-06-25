@@ -1,13 +1,14 @@
-Scheduled v1.9 — Admin Edit Tutors
-
-Adds:
-- Admin can edit existing tutor name
-- Admin can edit university
-- Admin can edit hourly rate
-- Admin can edit WhatsApp number
-- Admin can edit courses
-- Admin can edit general locations
-- Admin can remove tutors using soft-delete
-- Removed tutors no longer appear in tutor/course booking lists
+Scheduled Final Version
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
+
+Important Firebase Realtime Database rules for public Request Access:
+{
+  "rules": {
+    "accessRequests": { ".read": "auth != null", ".write": true },
+    ".read": "auth != null",
+    ".write": "auth != null"
+  }
+}
+
+Includes final requested updates: Request Access, Become a Tutor WhatsApp, credential WhatsApp messages, better branding, booking confirmation pop-up, hidden buffer text, tutor/student sections, admin tutor editing, university filter, location options, calendar availability, and Firebase-connected booking.

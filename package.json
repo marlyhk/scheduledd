@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-admin-edit-tutors",
-  "version": "1.9.0",
+  "name": "scheduled-final-version",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg public/"
