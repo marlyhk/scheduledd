@@ -167,6 +167,15 @@ async function generateAvailabilityRange(){
 }
 
 
+
+function allUniversityNames(){
+  let names=tutors().map(t=>t.university).filter(Boolean);
+  return [...new Set(names)].sort((a,b)=>a.localeCompare(b));
+}
+function tutorsForCourseAndUniversity(course,university){
+  return tutorsForCourse(course).filter(t=>!university || t.university===university).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+}
+
 function allCourseNames(){
   let names=[];
   tutors().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));
@@ -256,8 +265,8 @@ async function rejectAccessRequest(id){
 }
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Firebase is connected. Smart slot blocking and 15-minute buffers are active.</p></div>`}
-function usersTable(a){return a.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Role/Type</th><th>Details</th></tr>${a.map(u=>`<tr><td>${u.name||""}</td><td>${u.email||""}</td><td>${u.role}${u.type?"/"+u.type:""}</td><td>${u.rate?money(u.rate)+"/h/person<br>":""}${u.whatsapp||""}<br>${(u.locations||[]).join(", ")}<br>${(u.courses||[]).join(", ")}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
-function adminTutors(){$("content").innerHTML=`<div class="card"><h2>Tutors</h2>${usersTable(tutors())}<hr><h3>Create Tutor</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"></div><input id="tl" placeholder="Locations: Online, On Campus (Koura Campus)"><button onclick="createAccount('tutor')">Create Tutor</button></div>`}
+function usersTable(a){return a.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Role/Type</th><th>Details</th></tr>${a.map(u=>`<tr><td>${u.name||""}</td><td>${u.email||""}</td><td>${u.role}${u.type?"/"+u.type:""}</td><td>${u.rate?money(u.rate)+"/h/person<br>":""}${u.university?`University: ${u.university}<br>`:""}${u.whatsapp||""}<br>${(u.locations||[]).join(", ")}<br>${(u.courses||[]).join(", ")}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
+function adminTutors(){$("content").innerHTML=`<div class="card"><h2>Tutors</h2>${usersTable(tutors())}<hr><h3>Create Tutor</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"><input id="tuiv" placeholder="University e.g. University of Balamand"></div><input id="tl" placeholder="Locations: Online, On Campus (Koura Campus)"><button onclick="createAccount('tutor')">Create Tutor</button></div>`}
 function adminStudents(){
   const visibleStudents = profile.role==="admin" ? students() : students().filter(s=>s.assignedTutorId===currentUser.uid || s.createdBy===currentUser.uid);
   $("content").innerHTML=`<div class="card"><h2>${profile.role==="admin"?"Students / Groups":"My Students / Groups"}</h2>
@@ -275,7 +284,7 @@ async function createAccount(role){
     if(role==="tutor"){
       if(profile.role!=="admin") return alert("Only admin can create tutor accounts.");
       name=$("tn").value;email=$("te").value;password=$("tp").value;
-      extra={whatsapp:$("tw").value,rate:Number($("tr").value||15),locations:$("tl").value.split(",").map(x=>x.trim()).filter(Boolean),courses:[]}
+      extra={whatsapp:$("tw").value,rate:Number($("tr").value||15),university:$("tuiv").value.trim(),locations:$("tl").value.split(",").map(x=>x.trim()).filter(Boolean),courses:[]}
     }else{
       name=$("sn").value;email=$("se").value;password=$("sp").value;
       extra={phone:$("sphone").value,type:$("stype").value,members:$("smembers").value.split(",").map(x=>x.trim()).filter(Boolean)};
@@ -385,8 +394,9 @@ function financialPage(){
 }
 function bookingPage(){
   const courses=allCourseNames();
+  const universities=allUniversityNames();
   $("content").innerHTML=`<div class="card"><h2>Book a Session</h2>
-  <p class="muted">Choose a course first. Then choose from the tutors who teach that course.</p>
+  <p class="muted">Choose a course first. Then filter by university if needed. Tutors are shown equally and alphabetically.</p>
 
   <label>1. Choose Course</label>
   <select id="bcourseFirst" onchange="updateTutorListForCourse()">
@@ -394,17 +404,23 @@ function bookingPage(){
     ${courses.map(c=>`<option value="${c}">${c}</option>`).join("")}
   </select>
 
+  <label>2. Choose University</label>
+  <select id="buniversity" onchange="updateTutorListForCourse()">
+    <option value="">All universities</option>
+    ${universities.map(u=>`<option value="${u}">${u}</option>`).join("")}
+  </select>
+
   <div id="courseTutorList"></div>
 
   <div id="bookingDetails" class="hidden">
     <hr>
-    <label>2. Selected Tutor</label>
+    <label>3. Selected Tutor</label>
     <select id="bt" onchange="updateBooking()"></select>
 
     <div class="row">
-      <div><label>3. Date</label><input id="bd" type="date" onchange="updateSlots()"></div>
-      <div><label>4. Duration</label><select id="bdu" onchange="updateSlots()"><option value="1">1 hour</option><option value="1.5">1h 30min</option><option value="2">2 hours</option><option value="2.5">2h 30min</option><option value="3">3 hours</option></select></div>
-      <div><label>5. Available Time</label><select id="bs" onchange="updateBookingLocations();updatePrice()"></select></div>
+      <div><label>4. Date</label><input id="bd" type="date" onchange="updateSlots()"></div>
+      <div><label>5. Duration</label><select id="bdu" onchange="updateSlots()"><option value="1">1 hour</option><option value="1.5">1h 30min</option><option value="2">2 hours</option><option value="2.5">2h 30min</option><option value="3">3 hours</option></select></div>
+      <div><label>6. Available Time</label><select id="bs" onchange="updateBookingLocations();updatePrice()"></select></div>
     </div>
 
     <label>Session Format</label>
@@ -423,6 +439,7 @@ function bookingPage(){
 }
 function updateTutorListForCourse(){
   const course=$("bcourseFirst").value;
+  const university=$("buniversity").value;
   const listBox=$("courseTutorList");
   const details=$("bookingDetails");
   if(!course){
@@ -430,15 +447,16 @@ function updateTutorListForCourse(){
     details.classList.add("hidden");
     return;
   }
-  const availableTutors=tutorsForCourse(course);
+  const availableTutors=tutorsForCourseAndUniversity(course,university);
   if(!availableTutors.length){
-    listBox.innerHTML=`<div class="card"><p class="muted">No tutors available for this course yet.</p></div>`;
+    listBox.innerHTML=`<div class="card"><p class="muted">No tutors available for this course${university?` at ${university}`:""} yet.</p></div>`;
     details.classList.add("hidden");
     return;
   }
-  listBox.innerHTML=`<hr><h3>2. Choose Tutor</h3><div class="grid">
+  listBox.innerHTML=`<hr><h3>${university?`Tutors at ${university}`:"Available Tutors"}</h3><div class="grid">
     ${availableTutors.map(t=>`<div class="card">
       <h3>${t.name}</h3>
+      <p><b>University:</b> ${t.university||"Not specified"}</p>
       <p><b>Rate:</b> ${money(t.rate)}/hour/person</p>
       <p><b>General Locations:</b> ${(t.locations||[]).join(", ")||"Set by availability"}</p>
       <button onclick="selectTutorForBooking('${t.id}')">Choose ${t.name}</button>
@@ -455,27 +473,13 @@ function selectTutorForBooking(tutorId){
 }
 function updateBooking(){
   if(!$("bt")||!$("bt").value)return;
-  let t=user($("bt").value);
-  $("bl").innerHTML=(t.locations||[]).map(l=>`<option>${l}</option>`).join("");
-  updateSlots();
+  if(typeof updateSlots==="function"){updateSlots();}
   updatePrice();
-}
-function updateSlots(){
-  if(!$("bt")||!$("bt").value)return;
-  let slots=generateSlots($("bt").value,$("bd").value,$("bdu").value);
-  $("bs").innerHTML=slots.length?slots.map(s=>`<option>${s}</option>`).join(""):`<option value="">No available slots</option>`;
-  updateBookingLocations();
-  updatePrice();
-}
-function updateBookingLocations(){
-  if(!$("bt")||!$("bt").value||!$("bs"))return;
-  const locs=slotLocationOptions($("bt").value,$("bd").value,$("bs").value,$("bdu").value);
-  $("bl").innerHTML=locs.length?locs.map(l=>`<option>${l}</option>`).join(""):`<option value="">No location available</option>`;
 }
 function updatePrice(){
   if(!$("bt")||!$("bt").value)return;
   let t=user($("bt").value),d=Number($("bdu").value),g=$("bf").value==="Group"?Number($("bg").value):1;
-  $("price").innerHTML=`<b>Course:</b> ${$("bcourseFirst").value}<br><b>Tutor:</b> ${t.name}<br><b>Rate:</b> ${money(t.rate)}/hour/person<br><b>Duration:</b> ${d}h<br><b>Students:</b> ${g}<br><b>Total:</b> ${money((t.rate||0)*d*g)}<br><b>Payment:</b> ${method($("bl").value)}<br><b>Slot rule:</b> booked times are hidden; 15-minute buffer applies between different students.`;
+  $("price").innerHTML=`<b>Course:</b> ${$("bcourseFirst").value}<br><b>Tutor:</b> ${t.name}<br><b>University:</b> ${t.university||"Not specified"}<br><b>Rate:</b> ${money(t.rate)}/hour/person<br><b>Duration:</b> ${d}h<br><b>Students:</b> ${g}<br><b>Total:</b> ${money((t.rate||0)*d*g)}<br><b>Payment:</b> ${method($("bl").value)}<br><b>Slot rule:</b> booked times are hidden; 15-minute buffer applies between different students.`;
 }
 async function confirmBooking(){
   if(!$("bcourseFirst").value)return alert("Please choose a course.");
@@ -488,7 +492,7 @@ async function confirmBooking(){
   let payments=names.map(n=>({name:n,amount:(t.rate||0)*d,paid:false}));
   let b={studentId:currentUser.uid,tutorId:$("bt").value,course:$("bcourseFirst").value,date:$("bd").value,start:$("bs").value,duration:d,format:$("bf").value,groupSize:g,sessionTypes:[...document.querySelectorAll(".stype:checked")].map(x=>x.value),location:loc,paymentMethod:method(loc),payments,notes:"",attachments:[],createdAt:Date.now()};
   await db.ref("bookings").push(b);
-  let msg=encodeURIComponent(`📚 New Tutoring Booking\n\nTutor: ${t.name}\nStudent/Group: ${profile.name}\nCourse: ${b.course}\nDate: ${b.date}\nTime: ${b.start}\nDuration: ${d}h\nFormat: ${b.format} (${g})\nType: ${b.sessionTypes.join(", ")}\nLocation: ${loc}\nPayment Method: ${b.paymentMethod}\nTotal: ${money(total(b))}`);
+  let msg=encodeURIComponent(`📚 New Tutoring Booking\n\nTutor: ${t.name}\nUniversity: ${t.university||"Not specified"}\nStudent/Group: ${profile.name}\nCourse: ${b.course}\nDate: ${b.date}\nTime: ${b.start}\nDuration: ${d}h\nFormat: ${b.format} (${g})\nType: ${b.sessionTypes.join(", ")}\nLocation: ${loc}\nPayment Method: ${b.paymentMethod}\nTotal: ${money(total(b))}`);
   window.open(`https://wa.me/${t.whatsapp||""}?text=${msg}`,"_blank");
   alert("Booking saved. The slot is now blocked for other students.");
   await loadData();

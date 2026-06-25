@@ -1,10 +1,5 @@
-Scheduled v1.7 — Structured Location Options
+Scheduled v1.8 — University Filter
 
-Adds:
-- Tutor availability location choices: Online, On Campus, Both
-- Campus name required for On Campus or Both
-- Multiple location options can be selected
-- Students only see location options for the selected tutor/date/time slot
-- Keeps course-first booking and request access
+Adds university field for tutors and lets students filter tutors by university after choosing a course.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
