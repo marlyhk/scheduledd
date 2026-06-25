@@ -1,4 +1,51 @@
 
+window.addEventListener("error", function(e){
+  try{
+    const app=document.getElementById("app");
+    const splash=document.getElementById("splash");
+    if(splash)splash.classList.add("hidden");
+    if(app)app.classList.remove("hidden");
+    const dash=document.getElementById("dashboard");
+    const login=document.getElementById("loginPage");
+    const target=document.getElementById("content")||login||app;
+    if(target){
+      target.innerHTML=`<div class="error-card"><h2>Something broke</h2><p>The website hit an error instead of staying blank.</p><p class="muted">${String(e.message||"Unknown error")}</p><button onclick="location.reload()">Reload</button></div>`;
+    }
+  }catch(err){}
+});
+window.addEventListener("unhandledrejection", function(e){
+  try{
+    const target=document.getElementById("content")||document.getElementById("loginPage")||document.getElementById("app");
+    if(target){
+      target.innerHTML=`<div class="error-card"><h2>Something broke</h2><p class="muted">${String((e.reason&&e.reason.message)||e.reason||"Unknown error")}</p><button onclick="location.reload()">Reload</button></div>`;
+    }
+  }catch(err){}
+});
+function toggleMenu(){
+  const tabs=$("tabs");
+  if(!tabs)return;
+  tabs.classList.toggle("open");
+  let backdrop=document.getElementById("menuBackdrop");
+  if(tabs.classList.contains("open")){
+    if(!backdrop){
+      backdrop=document.createElement("div");
+      backdrop.id="menuBackdrop";
+      backdrop.className="menu-backdrop";
+      backdrop.onclick=toggleMenu;
+      document.body.appendChild(backdrop);
+    }
+  }else if(backdrop){
+    backdrop.remove();
+  }
+}
+function closeMenu(){
+  const tabs=$("tabs");
+  if(tabs)tabs.classList.remove("open");
+  const backdrop=document.getElementById("menuBackdrop");
+  if(backdrop)backdrop.remove();
+}
+
+
 function emailKey(email){
   return String(email||"").trim().toLowerCase().replace(/\./g,",");
 }
@@ -203,6 +250,12 @@ function slotLocationOptions(tutorId,date,time,duration,course){
 function dayHasAvailable(tutorId,date,course){return generateSlots(tutorId,date,1,course).length>0}
 function selectedLocations(prefix=""){const online=$(prefix+"locOnline")?.checked,campus=$(prefix+"locCampus")?.checked,both=$(prefix+"locBoth")?.checked,campusName=($(prefix+"campusName")?.value||"").trim();let locations=[];if(online)locations.push("Online");if(campus){if(!campusName)return{error:"Please specify campus name."};locations.push(`On Campus (${campusName})`)}if(both){if(!campusName)return{error:"Please specify campus name."};locations.push("Online",`On Campus (${campusName})`)}locations=[...new Set(locations)];if(!locations.length)return{error:"Please choose Online, On Campus, or Both."};return{locations,campusName}}
 function paymentSummary(b){return(b.payments||[]).map((p,i)=>`${p.name}: ${money(p.amount)} ${badge(p.paid)}`).join("<br>")}
+function studentTutors(studentId){
+  const bookingIds=list(DATA.bookings).filter(b=>b.studentId===studentId).map(b=>b.tutorId);
+  const assignedIds=assignedTutorIdsForStudent(studentId);
+  const ids=[...new Set([...bookingIds,...assignedIds])];
+  return ids.map(id=>({id,...user(id)})).filter(t=>t.role==="tutor"&&!t.removed);
+}
 function myTutorsPage(){let ts=studentTutors(currentUser.uid);$("content").innerHTML=`<div class="card"><h2>My Tutors</h2>${ts.length?`<div class="grid">${ts.map(t=>{let bs=list(DATA.bookings).filter(b=>b.studentId===currentUser.uid&&b.tutorId===t.id);return`<div class="card"><h3>${t.name}</h3><p>${t.university||""}</p><p>${(t.courses||[]).join(", ")}</p><button class="whatsapp" onclick="openWhatsApp('${t.whatsapp||""}','Hi, I have a question about my tutoring session on Scheduled.')">Contact Tutor on WhatsApp</button><button onclick="bookWithTutor('${t.id}')">Book a New Session</button><hr><b>Upcoming</b><br>${bs.filter(b=>!b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Past</b><br>${bs.filter(b=>b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}</div>`}).join("")}</div>`:`<p class="muted">No tutors yet. Book a session first.</p>`}</div>`}
 function bookWithTutor(id, course=""){
   preselectTutorId=id;
