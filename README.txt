@@ -1,18 +1,16 @@
-Scheduled v3.8 — Stable Menu + Bug Fix
+Scheduled v4.0 — Built from v3.5 Working Base
 
-Built from stable v3.5.
+Base:
+- v3.5 reports/exports working version.
 
-Fixes:
-- Adds safety error screen instead of blank page.
-- Keeps Browse Tutors working.
-- Adds left-side menu icon.
-- Tabs open from side drawer.
-- Fixes blank-page bug caused by broken studentTutors code.
-
-Adds:
-- Assign tutor(s) when creating/editing students.
-- Assigned tutors appear in student My Tutors.
-- Assigned students appear in tutor My Students.
-- Existing reports/exports preserved.
+Added safely:
+- left menu icon/sidebar
+- assign tutor(s) when creating/editing students
+- assigned tutors appear in student My Tutors
+- assigned students appear in tutor My Students
+- Contact tutor if no suitable booking time
+- Request Access direct stable form
+- Browse Tutors button preserved/fixed
+- safety error screen instead of blank page
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
