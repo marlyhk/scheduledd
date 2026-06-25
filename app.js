@@ -598,7 +598,109 @@ async function sendTutorAnnouncement(){
   tutorAnnouncementsPage();
 }
 
-function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
+
+/* ===== v5.2 tutor schedules sessions for assigned students ===== */
+function assignedStudentsForTutorStrict(tutorId){
+  if(typeof assignedStudentsForTutorSafe==="function")return assignedStudentsForTutorSafe(tutorId);
+  if(typeof assignedStudentsForTutor==="function")return assignedStudentsForTutor(tutorId);
+  return students().filter(s=>Array.isArray(s.assignedTutorIds)&&s.assignedTutorIds.includes(tutorId));
+}
+function tutorSchedulableStudents(){
+  return assignedStudentsForTutorStrict(currentUser.uid);
+}
+function coursesForTutorStudent(studentId){
+  const s=user(studentId);
+  const assigned=Array.isArray(s.assignedCourses)?s.assignedCourses:[];
+  const tutorCourses=Array.isArray(profile.courses)?profile.courses:[];
+  const intersection=assigned.filter(c=>tutorCourses.includes(c));
+  const source=intersection.length?intersection:(assigned.length?assigned:tutorCourses);
+  return [...new Set(source.filter(Boolean))];
+}
+function updateTutorScheduleCourses(){
+  const studentId=$("tssStudent")?.value||"";
+  const courses=coursesForTutorStudent(studentId);
+  if($("tssCourse"))$("tssCourse").innerHTML=courses.length?courses.map(c=>`<option value="${c}">${c}</option>`).join(""):`<option value="">No assigned courses</option>`;
+  updateTutorSchedulePrice();
+}
+function updateTutorSchedulePrice(){
+  if(!$("tssSummary"))return;
+  const duration=Number($("tssDuration")?.value||1);
+  const student=user($("tssStudent")?.value||"");
+  const rate=Number(profile.rate||0);
+  const members=student.type==="group"?(student.members||[]).filter(Boolean).length||1:1;
+  const totalAmount=rate*duration*members;
+  $("tssSummary").innerHTML=`<b>Rate:</b> ${money(rate)}/hour/person<br><b>Students counted:</b> ${members}<br><b>Total:</b> ${money(totalAmount)}<br><span class="muted">Payment can be marked as Paid/Unpaid later.</span>`;
+}
+function tutorScheduleSessionPage(){
+  if(profile.role!=="tutor")return;
+  const ss=tutorSchedulableStudents();
+  $("content").innerHTML=`<div class="card tutor-schedule-form"><h2>Schedule Session</h2>
+    <p class="muted">Create a session yourself for an assigned student or group. This is useful for groups or when the tutor chooses the time directly.</p>
+    ${ss.length?`<div class="row">
+      <label>Student / Group<select id="tssStudent" onchange="updateTutorScheduleCourses()">${ss.map(s=>`<option value="${s.id}">${s.name||""}${s.type==="group"?" (Group)":""}</option>`).join("")}</select></label>
+      <label>Course<select id="tssCourse"></select></label>
+      <label>Date<input id="tssDate" type="date" value="${todayISO()}"></label>
+      <label>Time<input id="tssTime" type="time"></label>
+      <label>Duration<select id="tssDuration" onchange="updateTutorSchedulePrice()"><option value="1">1 hour</option><option value="1.5">1.5 hours</option><option value="2">2 hours</option><option value="2.5">2.5 hours</option><option value="3">3 hours</option></select></label>
+      <label>Location<select id="tssLocation"><option>Online</option><option>On Campus</option><option>Both / To Confirm</option></select></label>
+      <label>Payment Status<select id="tssPayStatus"><option>Unpaid</option><option>Paid</option></select></label>
+      <label>Payment Method<select id="tssPayMethod"><option>Cash</option><option>Whish</option></select></label>
+    </div>
+    <div id="tssSummary" class="contact-help"></div>
+    <button onclick="createTutorScheduledSession()">Create Session</button>`:`<p class="muted">No assigned students yet. Ask admin to assign students/groups to you first.</p>`}
+  </div>
+  <div class="card"><h2>My Assigned Students</h2>${ss.length?ss.map(s=>`<div class="timeline-item"><b>${s.name||""}</b> <span class="badge-soft">${s.type||"individual"}</span><br><span class="muted">${s.email||""}</span><br><b>Assigned Courses:</b> ${Array.isArray(s.assignedCourses)&&s.assignedCourses.length?s.assignedCourses.join(", "):"None"}</div>`).join(""):"<p class='muted'>No assigned students.</p>"}</div>`;
+  updateTutorScheduleCourses();
+}
+async function createTutorScheduledSession(){
+  const studentId=$("tssStudent")?.value;
+  const course=$("tssCourse")?.value;
+  const date=$("tssDate")?.value;
+  const start=$("tssTime")?.value;
+  const duration=Number($("tssDuration")?.value||1);
+  const location=$("tssLocation")?.value||"Online";
+  const paymentStatus=$("tssPayStatus")?.value||"Unpaid";
+  const paymentMethod=$("tssPayMethod")?.value||"Cash";
+  if(!studentId||!course||!date||!start||!duration)return alert("Please fill student, course, date, time, and duration.");
+  if(!assignedStudentsForTutorStrict(currentUser.uid).some(s=>s.id===studentId)){
+    return alert("You can only schedule sessions for students assigned to you.");
+  }
+  if(typeof candidateWorks==="function" && !candidateWorks(currentUser.uid,studentId,date,start,duration)){
+    if(!confirm("This time seems to conflict with another session. Create it anyway?"))return;
+  }
+  const student=user(studentId);
+  const members=student.type==="group"?(student.members||[]).filter(Boolean).length||1:1;
+  const amount=Number(profile.rate||0)*duration*members;
+  const payments=[{name:student.name||"Student",amount,paid:paymentStatus==="Paid",method:paymentMethod,paymentDate:paymentStatus==="Paid"?todayISO():""}];
+  const booking={
+    tutorId:currentUser.uid,
+    studentId,
+    course,
+    date,
+    start,
+    duration,
+    location,
+    paymentMethod,
+    payments,
+    status:"confirmed",
+    done:false,
+    createdAt:Date.now(),
+    createdBy:currentUser.uid,
+    createdByRole:"tutor",
+    tutorScheduled:true
+  };
+  await db.ref("bookings").push(booking);
+  if(typeof createNotification==="function"){
+    await createNotification("student","New Session Scheduled",`${profile.name||"Your tutor"} scheduled ${course} on ${date} at ${typeof formatTime12==="function"?formatTime12(start):start}.`,studentId);
+  }else{
+    await db.ref("notifications").push({to:"student",userId:studentId,title:"New Session Scheduled",message:`${profile.name||"Your tutor"} scheduled ${course} on ${date} at ${start}.`,createdAt:Date.now(),read:false});
+  }
+  await loadData();
+  alert("Session created successfully.");
+  tutorScheduleSessionPage();
+}
+
+function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 async function openTab(tab,btn){closeMenu();await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:tutorAnnouncementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}

@@ -1,12 +1,17 @@
-Scheduled v5.1 — Motivation Banner + Tutor Announcements
+Scheduled v5.3 Verified
 
-Built from v5.0 when available, otherwise the latest final ZIP.
+Verification completed:
+- index.html exists
+- styles.css exists
+- app.js exists
+- JavaScript syntax check passed with node --check
+- Core functions found:
+  login, renderTabs, openTab, submitAccessRequest, browsePublicTutors, adminStudents, bookingPage, tutorScheduleSessionPage, createTutorScheduledSession, motivationBannerSettingsPage, tutorAnnouncementsPage
+- All logo assets found.
 
-Adds:
-- Admin can manage the moving motivation banner phrases.
-- Student dashboard banner uses admin-added phrases when available.
-- Tutors can send announcements only to assigned students.
-- Assigned-student announcements appear only for selected students.
-- Notifications are created for selected students.
-
-Upload all files to GitHub and commit. Vercel redeploys automatically.
+Hardening included:
+- blank-page error fallback
+- Request Access button stability
+- Browse Tutors button check
+- tutor Schedule Session route check
+- cleanup of previous broken JS fragments
