@@ -149,3 +149,5 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}.small{font-size:13
 }
 
 .file-note{font-size:12px;color:var(--muted);margin-top:6px}
+
+.profile-preview{width:90px;height:90px;border-radius:24px;object-fit:cover;border:1px solid var(--border);background:var(--blue2)}
