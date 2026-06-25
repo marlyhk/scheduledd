@@ -1,17 +1,11 @@
-Scheduled v5.3 Verified
+Scheduled v5.4 — Stable Rollback
 
-Verification completed:
-- index.html exists
-- styles.css exists
-- app.js exists
-- JavaScript syntax check passed with node --check
-- Core functions found:
-  login, renderTabs, openTab, submitAccessRequest, browsePublicTutors, adminStudents, bookingPage, tutorScheduleSessionPage, createTutorScheduledSession, motivationBannerSettingsPage, tutorAnnouncementsPage
-- All logo assets found.
+Built directly from the last stable v4.2 ZIP.
 
-Hardening included:
-- blank-page error fallback
-- Request Access button stability
-- Browse Tutors button check
-- tutor Schedule Session route check
-- cleanup of previous broken JS fragments
+Purpose:
+- Remove unstable v5 additions that caused website errors.
+- Keep the existing working features from v4.2.
+- Add only a small safety error screen.
+
+Next step:
+- Re-add dashboards/announcements/tutor scheduling gradually after confirming this version opens correctly.

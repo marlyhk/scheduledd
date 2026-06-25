@@ -1,4 +1,32 @@
 
+/* ScheduledSafeError v5.4 */
+window.addEventListener("error", function(e){
+  try{
+    const splash=document.getElementById("splash");
+    const app=document.getElementById("app");
+    if(splash)splash.classList.add("hidden");
+    if(app)app.classList.remove("hidden");
+    const target=document.getElementById("content")||document.getElementById("loginPage")||app;
+    if(target){
+      target.innerHTML=`<div class="error-card"><h2>Website error</h2><p class="muted">${String(e.message||"Unknown error")}</p><button onclick="location.reload()">Reload</button></div>`;
+    }
+  }catch(_){}
+});
+window.addEventListener("unhandledrejection", function(e){
+  try{
+    const splash=document.getElementById("splash");
+    const app=document.getElementById("app");
+    if(splash)splash.classList.add("hidden");
+    if(app)app.classList.remove("hidden");
+    const target=document.getElementById("content")||document.getElementById("loginPage")||app;
+    const msg=String((e.reason&&e.reason.message)||e.reason||"Unknown error");
+    if(target){
+      target.innerHTML=`<div class="error-card"><h2>Website error</h2><p class="muted">${msg}</p><button onclick="location.reload()">Reload</button></div>`;
+    }
+  }catch(_){}
+});
+
+
 window.addEventListener("error", function(e){
   try{
     const splash=document.getElementById("splash");
@@ -96,7 +124,7 @@ const ADMIN_WHATSAPP="96176174738";
 const SITE_URL="https://scheduledeu.vercel.app/";
 const $=id=>document.getElementById(id);
 const money=n=>"$"+Number(n||0).toFixed(Number.isInteger(Number(n))?0:2);
-let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{},motivationQuotes:{},announcements:{},notifications:{},reviews:{}};
+let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{}};
 let preselectTutorId=null;
 
 setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")},800);
@@ -136,10 +164,27 @@ function toggleRequestAccess(){
   }
 }
 
-async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const phone=($("reqPhone")?.value||"").trim();const university=($("reqUniversity")?.value||"").trim();const courses=($("reqCourses")?.value||"").trim();const message=($("reqMessage")?.value||"").trim();if(!name||!email||!phone||!university||!courses){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}await db.ref("accessRequests").push({name,email,phone,university,courses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqUniversity","reqCourses","reqMessage"].forEach(id=>{if($(id))$(id).value=""});notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
+async function submitAccessRequest(){
+  try{
+    const name=($("reqName")?.value||"").trim();
+    const email=($("reqEmail")?.value||"").trim();
+    const phone=($("reqPhone")?.value||"").trim();
+    const university=($("reqUniversity")?.value||"").trim();
+    const courses=($("reqCourses")?.value||"").trim();
+    const message=($("reqMessage")?.value||"").trim();
+    if(!name||!email||!phone||!university||!courses){
+      return notice("Please fill full name, email, phone number, university, and course(s) needed.");
+    }
+    await db.ref("accessRequests").push({name,email,phone,university,courses,message,status:"pending",createdAt:Date.now()});
+    ["reqName","reqEmail","reqPhone","reqUniversity","reqCourses","reqMessage"].forEach(id=>{if($(id))$(id).value=""});
+    notice("Access request submitted. We will contact you after review.");
+  }catch(e){
+    notice(e.message || "Could not submit request. Please try again.");
+  }
+}
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
-async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{},motivationQuotes:v.motivationQuotes||{},announcements:v.announcements||{},notifications:v.notifications||{},reviews:v.reviews||{}}}
+async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{}}}
 auth.onAuthStateChanged(async u=>{
   if(!u)return;
   currentUser=u;
@@ -176,7 +221,7 @@ function total(b){return(b.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0)}
 function paid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>p.paid).reduce((s,p)=>s+Number(p.amount||0),0)}
 function unpaid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>!p.paid).reduce((s,p)=>s+Number(p.amount||0),0)}
 function badge(p){return`<span class="badge ${p?'paid':'unpaid'}">${p?'Paid':'Unpaid'}</span>`}
-function method(l){return String(l||"").toLowerCase().includes("online")?"Whish":"Cash"}
+function method(l){return(l||"").toLowerCase().includes("online")?"Whish":"Cash"}
 function allCourseNames(){let names=[];tutors().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));return[...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b))}
 function allUniversityNames(){let names=tutors().map(t=>t.university).filter(Boolean);return[...new Set(names)].sort((a,b)=>a.localeCompare(b))}
 function tutorsForCourse(course){return tutors().filter(t=>(t.courses||[]).includes(course))}
@@ -504,204 +549,8 @@ function assignedCourseNames(studentId){
   return assignedCoursesForStudent(studentId).join(", ");
 }
 
-
-const MOTIVATION_QUOTES=["Small progress is still progress — show up today.","Your future self is built by what you do now.","One focused session can change your whole week.","Start, and motivation follows.","Study smart, ask questions, keep moving.","Consistency beats intensity.","You are closer than you think. Keep going."];
-function todayISO(){return localISODate(new Date())}function currentMonth(){return new Date().toISOString().slice(0,7)}function isToday(date){return date===todayISO()}function thisMonthBookings(bs){const m=currentMonth();return bs.filter(b=>(b.date||"").startsWith(m))}function upcomingBookingsForUser(){const t=todayISO();return myBookings().filter(b=>!b.done&&(b.date||"")>=t).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.start||"").localeCompare(b.start||""))}function totalHours(bs){return bs.reduce((s,b)=>s+Number(b.duration||0),0)}function nextBooking(){const u=upcomingBookingsForUser();return u.length?u[0]:null}function randomMotivation(){const quotes=motivationQuotes();return quotes[Math.floor(Math.random()*quotes.length)]||"Keep going — you are doing better than you think.";}
-function getNotificationsForRole(){return list(DATA.notifications||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).filter(n=>n.to==="everyone"||n.to===profile.role||n.userId===currentUser.uid)}async function createNotification(to,title,message,userId=""){await db.ref("notifications").push({to,title,message,userId,createdAt:Date.now(),read:false})}
-
-function getAnnouncementsForRole(){
-  return list(DATA.announcements||{}).filter(a=>{
-    if(a.audience==="everyone")return true;
-    if(a.audience===profile.role)return true;
-    if(a.audience==="assignedStudents" && Array.isArray(a.recipientIds) && a.recipientIds.includes(currentUser.uid))return true;
-    if(a.userId===currentUser.uid)return true;
-    if(a.university && profile.university && a.university===profile.university)return true;
-    return false;
-  }).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-}
-
-function randomMotivation(){const quotes=motivationQuotes();return quotes[Math.floor(Math.random()*quotes.length)]||"Keep going — you are doing better than you think.";}
-async function addMotivationQuote(){
-  const text=($("motivationText")?.value||"").trim();
-  if(!text)return alert("Write a motivation phrase first.");
-  await db.ref("motivationQuotes").push({text,createdAt:Date.now(),createdBy:currentUser.uid});
-  await loadData();
-  motivationBannerSettingsPage();
-}
-async function deleteMotivationQuote(id){
-  if(!confirm("Delete this motivation phrase?"))return;
-  await db.ref("motivationQuotes/"+id).remove();
-  await loadData();
-  motivationBannerSettingsPage();
-}
-function motivationBannerSettingsPage(){
-  const quotes=list(DATA.motivationQuotes||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  $("content").innerHTML=`<div class="card"><h2>Motivation Banner</h2>
-    <p class="muted">These phrases appear as the moving banner inside student dashboards. If no custom phrases are added, Scheduled uses default motivational phrases.</p>
-    <textarea id="motivationText" placeholder="Write a new motivation phrase..."></textarea>
-    <button onclick="addMotivationQuote()">Add Phrase</button>
-    <hr>
-    <h3>Current Custom Phrases</h3>
-    ${quotes.length?quotes.map(q=>`<span class="banner-pill">${q.text}<button class="ghost" onclick="deleteMotivationQuote('${q.id}')">×</button></span>`).join(""):"<p class='muted'>No custom phrases yet. Default phrases are being used.</p>"}
-  </div>`;
-}
-function assignedStudentsForTutorSafe(tutorId){
-  if(typeof assignedStudentsForTutor==="function")return assignedStudentsForTutor(tutorId);
-  return students().filter(s=>Array.isArray(s.assignedTutorIds)&&s.assignedTutorIds.includes(tutorId));
-}
-function tutorAssignedStudentIds(){
-  return assignedStudentsForTutorSafe(currentUser.uid).map(s=>s.id);
-}
-function tutorAnnouncementsPage(){
-  if(profile.role==="admin")return announcementsPage();
-  if(profile.role!=="tutor")return announcementsPage();
-
-  const assigned=assignedStudentsForTutorSafe(currentUser.uid);
-  const own=list(DATA.announcements||{}).filter(a=>a.createdBy===currentUser.uid).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-
-  $("content").innerHTML=`<div class="card"><h2>Announcements to My Students</h2>
-    <p class="muted">Send announcements only to students assigned to you. Admin announcements still appear separately.</p>
-    <div class="row"><input id="tutorAnnTitle" placeholder="Announcement title"></div>
-    <textarea id="tutorAnnMessage" placeholder="Message to your assigned students"></textarea>
-    <h3>Recipients</h3>
-    <div class="assigned-student-list">
-      ${assigned.length?assigned.map(s=>`<label class="check"><input type="checkbox" class="annStudent" value="${s.id}" checked>${s.name||""} <span class="muted">(${s.email||""})</span></label>`).join(""):"<p class='muted'>No assigned students yet.</p>"}
-    </div>
-    <button onclick="sendTutorAnnouncement()">Send Announcement</button>
-  </div>
-  <div class="card"><h2>Sent Announcements</h2>
-    ${own.length?own.map(a=>`<div class="announcement-card"><b>${a.title||""}</b><p>${a.message||""}</p><span class="muted">${new Date(a.createdAt||Date.now()).toLocaleString()}</span></div>`).join(""):"<p class='muted'>No announcements sent yet.</p>"}
-  </div>`;
-}
-async function sendTutorAnnouncement(){
-  const title=($("tutorAnnTitle")?.value||"").trim();
-  const message=($("tutorAnnMessage")?.value||"").trim();
-  const recipientIds=[...document.querySelectorAll(".annStudent:checked")].map(x=>x.value);
-  if(!title||!message)return alert("Please fill title and message.");
-  if(!recipientIds.length)return alert("Choose at least one assigned student.");
-  await db.ref("announcements").push({
-    title,message,
-    audience:"assignedStudents",
-    recipientIds,
-    createdBy:currentUser.uid,
-    creatorRole:"tutor",
-    createdAt:Date.now()
-  });
-  for(const id of recipientIds){
-    if(typeof createNotification==="function"){
-      await createNotification("student",title,message,id);
-    }else{
-      await db.ref("notifications").push({to:"student",userId:id,title,message,createdAt:Date.now(),read:false});
-    }
-  }
-  await loadData();
-  tutorAnnouncementsPage();
-}
-
-
-/* ===== v5.2 tutor schedules sessions for assigned students ===== */
-function assignedStudentsForTutorStrict(tutorId){
-  if(typeof assignedStudentsForTutorSafe==="function")return assignedStudentsForTutorSafe(tutorId);
-  if(typeof assignedStudentsForTutor==="function")return assignedStudentsForTutor(tutorId);
-  return students().filter(s=>Array.isArray(s.assignedTutorIds)&&s.assignedTutorIds.includes(tutorId));
-}
-function tutorSchedulableStudents(){
-  return assignedStudentsForTutorStrict(currentUser.uid);
-}
-function coursesForTutorStudent(studentId){
-  const s=user(studentId);
-  const assigned=Array.isArray(s.assignedCourses)?s.assignedCourses:[];
-  const tutorCourses=Array.isArray(profile.courses)?profile.courses:[];
-  const intersection=assigned.filter(c=>tutorCourses.includes(c));
-  const source=intersection.length?intersection:(assigned.length?assigned:tutorCourses);
-  return [...new Set(source.filter(Boolean))];
-}
-function updateTutorScheduleCourses(){
-  const studentId=$("tssStudent")?.value||"";
-  const courses=coursesForTutorStudent(studentId);
-  if($("tssCourse"))$("tssCourse").innerHTML=courses.length?courses.map(c=>`<option value="${c}">${c}</option>`).join(""):`<option value="">No assigned courses</option>`;
-  updateTutorSchedulePrice();
-}
-function updateTutorSchedulePrice(){
-  if(!$("tssSummary"))return;
-  const duration=Number($("tssDuration")?.value||1);
-  const student=user($("tssStudent")?.value||"");
-  const rate=Number(profile.rate||0);
-  const members=student.type==="group"?(student.members||[]).filter(Boolean).length||1:1;
-  const totalAmount=rate*duration*members;
-  $("tssSummary").innerHTML=`<b>Rate:</b> ${money(rate)}/hour/person<br><b>Students counted:</b> ${members}<br><b>Total:</b> ${money(totalAmount)}<br><span class="muted">Payment can be marked as Paid/Unpaid later.</span>`;
-}
-function tutorScheduleSessionPage(){
-  if(profile.role!=="tutor")return;
-  const ss=tutorSchedulableStudents();
-  $("content").innerHTML=`<div class="card tutor-schedule-form"><h2>Schedule Session</h2>
-    <p class="muted">Create a session yourself for an assigned student or group. This is useful for groups or when the tutor chooses the time directly.</p>
-    ${ss.length?`<div class="row">
-      <label>Student / Group<select id="tssStudent" onchange="updateTutorScheduleCourses()">${ss.map(s=>`<option value="${s.id}">${s.name||""}${s.type==="group"?" (Group)":""}</option>`).join("")}</select></label>
-      <label>Course<select id="tssCourse"></select></label>
-      <label>Date<input id="tssDate" type="date" value="${todayISO()}"></label>
-      <label>Time<input id="tssTime" type="time"></label>
-      <label>Duration<select id="tssDuration" onchange="updateTutorSchedulePrice()"><option value="1">1 hour</option><option value="1.5">1.5 hours</option><option value="2">2 hours</option><option value="2.5">2.5 hours</option><option value="3">3 hours</option></select></label>
-      <label>Location<select id="tssLocation"><option>Online</option><option>On Campus</option><option>Both / To Confirm</option></select></label>
-      <label>Payment Status<select id="tssPayStatus"><option>Unpaid</option><option>Paid</option></select></label>
-      <label>Payment Method<select id="tssPayMethod"><option>Cash</option><option>Whish</option></select></label>
-    </div>
-    <div id="tssSummary" class="contact-help"></div>
-    <button onclick="createTutorScheduledSession()">Create Session</button>`:`<p class="muted">No assigned students yet. Ask admin to assign students/groups to you first.</p>`}
-  </div>
-  <div class="card"><h2>My Assigned Students</h2>${ss.length?ss.map(s=>`<div class="timeline-item"><b>${s.name||""}</b> <span class="badge-soft">${s.type||"individual"}</span><br><span class="muted">${s.email||""}</span><br><b>Assigned Courses:</b> ${Array.isArray(s.assignedCourses)&&s.assignedCourses.length?s.assignedCourses.join(", "):"None"}</div>`).join(""):"<p class='muted'>No assigned students.</p>"}</div>`;
-  updateTutorScheduleCourses();
-}
-async function createTutorScheduledSession(){
-  const studentId=$("tssStudent")?.value;
-  const course=$("tssCourse")?.value;
-  const date=$("tssDate")?.value;
-  const start=$("tssTime")?.value;
-  const duration=Number($("tssDuration")?.value||1);
-  const location=$("tssLocation")?.value||"Online";
-  const paymentStatus=$("tssPayStatus")?.value||"Unpaid";
-  const paymentMethod=$("tssPayMethod")?.value||"Cash";
-  if(!studentId||!course||!date||!start||!duration)return alert("Please fill student, course, date, time, and duration.");
-  if(!assignedStudentsForTutorStrict(currentUser.uid).some(s=>s.id===studentId)){
-    return alert("You can only schedule sessions for students assigned to you.");
-  }
-  if(typeof candidateWorks==="function" && !candidateWorks(currentUser.uid,studentId,date,start,duration)){
-    if(!confirm("This time seems to conflict with another session. Create it anyway?"))return;
-  }
-  const student=user(studentId);
-  const members=student.type==="group"?(student.members||[]).filter(Boolean).length||1:1;
-  const amount=Number(profile.rate||0)*duration*members;
-  const payments=[{name:student.name||"Student",amount,paid:paymentStatus==="Paid",method:paymentMethod,paymentDate:paymentStatus==="Paid"?todayISO():""}];
-  const booking={
-    tutorId:currentUser.uid,
-    studentId,
-    course,
-    date,
-    start,
-    duration,
-    location,
-    paymentMethod,
-    payments,
-    status:"confirmed",
-    done:false,
-    createdAt:Date.now(),
-    createdBy:currentUser.uid,
-    createdByRole:"tutor",
-    tutorScheduled:true
-  };
-  await db.ref("bookings").push(booking);
-  if(typeof createNotification==="function"){
-    await createNotification("student","New Session Scheduled",`${profile.name||"Your tutor"} scheduled ${course} on ${date} at ${typeof formatTime12==="function"?formatTime12(start):start}.`,studentId);
-  }else{
-    await db.ref("notifications").push({to:"student",userId:studentId,title:"New Session Scheduled",message:`${profile.name||"Your tutor"} scheduled ${course} on ${date} at ${start}.`,createdAt:Date.now(),read:false});
-  }
-  await loadData();
-  alert("Session created successfully.");
-  tutorScheduleSessionPage();
-}
-
-function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
-async function openTab(tab,btn){closeMenu();await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:tutorAnnouncementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
+function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Tutor Reports","Documents","Export"]:profile.role==="tutor"?["Schedule","Calendar","Availability","My Students","Financial","Documents","Profile"]:["Book","All Tutors","My Tutors","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
+async function openTab(tab,btn){closeMenu();await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),"Tutor Reports":adminTutorReportsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Profile:profilePage,Book:bookingPage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}
 
@@ -939,7 +788,7 @@ function tempPass(){return"Scheduled-"+Math.floor(1000+Math.random()*9000)}
 async function approveAccessRequest(id){const r=DATA.accessRequests[id];if(!r)return alert("Request not found.");const password=tempPass();try{let c=await secondaryAuth.createUserWithEmailAndPassword(r.email,password);await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name:r.name,email:r.email,phone:r.phone,university:r.university||"",role:"student",type:"individual",requestedCourses:r.courses,createdBy:currentUser.uid,createdFromAccessRequest:id,createdAt:Date.now()});await db.ref("accessRequests/"+id).update({status:"approved",approvedAt:Date.now(),createdStudentUid:c.user.uid});await secondaryAuth.signOut();await loadData();openWhatsApp(r.phone,`Hi ${r.name}, your Scheduled access request has been approved.\n\nLogin link: ${SITE_URL}\nEmail: ${r.email}\nTemporary password: ${password}\n\nYou can now log in and book your tutoring sessions.`);accessRequestsPage()}catch(e){alert(e.message)}}
 async function rejectAccessRequest(id){if(!confirm("Reject this access request?"))return;await db.ref("accessRequests/"+id).update({status:"rejected",rejectedAt:Date.now()});await loadData();accessRequestsPage()}
 
-function bookingRows(bs,edit){return bs.length?`<table class="table"><tr><th>Date</th><th>Time</th><th>Course</th><th>Tutor</th><th>Student/Group</th><th>Details</th><th>Payments</th><th>Notes</th><th>Actions</th></tr>${bs.map(b=>`<tr><td>${b.date}</td><td>${formatTime12(b.start)}</td><td>${b.course}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${b.duration}h • ${b.format||"Individual"} ${b.groupSize||1}<br>${b.location}<br>${b.paymentMethod}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${money(total(b))}</td><td>${(b.payments||[]).map((p,i)=>`${p.name}: ${money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">Toggle</button>`:""}`).join("<br>")}</td><td>${b.notes||""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td><td>${edit?`<button onclick="editBooking('${b.id}')">Edit</button><button onclick="markBookingPayment('${b.id}')">Mark Paid</button><button onclick="markDone('${b.id}')">Mark Done</button><button class="danger" onclick="deleteBooking('${b.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No sessions yet.</p>`}
+function bookingRows(bs,edit){return bs.length?`<table class="table"><tr><th>Date</th><th>Time</th><th>Course</th><th>Tutor</th><th>Student/Group</th><th>Details</th><th>Payments</th><th>Notes</th><th>Actions</th></tr>${bs.map(b=>`<tr><td>${b.date}</td><td>${formatTime12(b.start)}</td><td>${b.course}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${b.duration}h • ${b.format||"Individual"} ${b.groupSize||1}<br>${b.location}<br>${b.paymentMethod}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${money(total(b))}</td><td>${(b.payments||[]).map((p,i)=>`${p.name}: ${money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">Toggle</button>`:""}`).join("<br>")}</td><td>${b.notes||""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td><td>${edit?`<button onclick="editBooking('${b.id}')">Edit</button><button onclick="markDone('${b.id}')">Mark Done</button><button class="danger" onclick="deleteBooking('${b.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No sessions yet.</p>`}
 function bookingsPage(edit){let bs=myBookings();$("content").innerHTML=`<div class="card"><h2>Upcoming Sessions</h2>${bookingRows(bs.filter(b=>!b.done),edit&&profile.role!=="student")}</div><div class="card"><h2>Past Sessions</h2>${bookingRows(bs.filter(b=>b.done),edit&&profile.role!=="student")}</div>`}
 async function togglePayment(id,i){let b=DATA.bookings[id];b.payments[i].paid=!b.payments[i].paid;await db.ref(`bookings/${id}/payments`).set(b.payments);await loadData();bookingsPage(true)}
 async function editNotes(id){let b=DATA.bookings[id];let n=prompt("Session notes:",b.notes||"");if(n!==null){await db.ref(`bookings/${id}/notes`).set(n);await loadData();bookingsPage(true)}}

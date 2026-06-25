@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v5-3-verified",
-  "version": "5.3.0",
+  "name": "scheduled-v5-4-stable-rollback-from-v42",
+  "version": "5.4.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg public/"
