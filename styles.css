@@ -151,10 +151,11 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}.small{font-size:13
 .file-note{font-size:12px;color:var(--muted);margin-top:6px}
 
 
-/* v2.8 public tutor profiles */
+/* v2.9 stable separated public profiles */
 .profile-preview{width:90px;height:90px;border-radius:24px;object-fit:cover;border:1px solid var(--border);background:var(--blue2)}
 .tutor-avatar{width:86px;height:86px;border-radius:24px;object-fit:cover;background:var(--blue2);display:block;margin-bottom:10px;border:1px solid var(--border)}
 .tutor-avatar-lg{width:120px;height:120px;border-radius:30px;object-fit:cover;background:var(--blue2);border:1px solid var(--border)}
 .tutor-card{cursor:pointer;transition:.15s transform,.15s box-shadow}
 .tutor-card:hover{transform:translateY(-2px);box-shadow:0 18px 45px rgba(31,42,55,.10)}
 .tutor-meta{color:var(--muted);font-size:14px;line-height:1.45}
+.admin-note{font-size:13px;color:var(--muted);background:var(--blue2);padding:12px;border-radius:16px;margin:10px 0}

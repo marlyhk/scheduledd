@@ -1,17 +1,18 @@
-Scheduled v2.8 — Blank Fix + Separate Public Profiles
+Scheduled v2.9 — Stable Separated Profiles
 
-Built from the stable v2.6 base.
+Use this instead of v2.7/v2.8 if pages were blank.
 
-Fixes:
-- Pages opening blank after v2.7
-
-Adds safely:
-- Separate Tutor Profiles tab for public Browse Tutors
-- Public Browse Tutors page
-- Logged-in student All Tutors tab
-- Public tutor profiles are separate from real tutor login accounts
-- Public profile can optionally link to a tutor account
+Important separation:
+- Tutors tab = real tutor login accounts used for bookings/availability
+- Tutor Profiles tab = public Browse Tutors profiles only
+- Public profiles do NOT create login accounts
+- Public profiles do NOT affect booking unless linked to a real tutor account
 - Public Book Now -> Request Access
-- Logged-in Book Now -> booking if linked account exists
+- Logged-in Book Now -> real booking only if linked
+
+Deleted account recovery:
+- If Firebase Auth email still exists but Scheduled profile was deleted, create the tutor/student again with the same email.
+- The app creates a pending profile and links it on next login.
+- If password is unknown, reset it from Firebase Authentication > Users.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.

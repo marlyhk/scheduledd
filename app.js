@@ -167,111 +167,151 @@ async function applyPendingProfileIfAny(u){
   return {...pending,uid:u.uid,email:u.email};
 }
 
-function tutorCard(t,inside=false){
-  return `<div class="card tutor-card" onclick="${inside?`showLoggedTutorDetails('${t.id}')`:`showPublicTutorDetails('${t.id}')`}">
-    <img class="tutor-avatar" src="${tutorPhoto(t)}" onerror="this.src='scheduled-icon.jpeg'">
-    <h3>${t.name||""}</h3>
-    <div class="tutor-meta">${t.university||"University not specified"}<br>${(t.courses||[]).join(", ")||"Courses not specified"}</div>
-  </div>`;
-}
-function filteredTutorsForBrowse(){
-  const course=$("browseCourse")?.value||"";
-  const university=$("browseUniversity")?.value||"";
-  return tutors().filter(t=>(!course||(t.courses||[]).includes(course))&&(!university||t.university===university));
-}
-function browseFiltersHTML(publicMode=true){
-  const courses=allCourseNames(),universities=allUniversityNames();
-  return `<div class="row">
-    <select id="browseCourse" onchange="${publicMode?'renderPublicTutorGrid()':'renderLoggedTutorGrid()'}"><option value="">All courses</option>${courses.map(c=>`<option value="${c}">${c}</option>`).join("")}</select>
-    <select id="browseUniversity" onchange="${publicMode?'renderPublicTutorGrid()':'renderLoggedTutorGrid()'}"><option value="">All universities</option>${universities.map(u=>`<option value="${u}">${u}</option>`).join("")}</select>
-  </div>`;
-}
-function browsePublicTutors(){
-  $("loginPage").innerHTML=`<div class="public-tutor-shell"><div class="backline"><button class="ghost" onclick="location.reload()">← Back to Login</button><h1 class="brand-word small-brand">Scheduled Tutors</h1></div><div class="card"><h2>Browse Tutors</h2>${browseFiltersHTML(true)}<div id="publicTutorGrid"></div></div></div>`;
-  renderPublicTutorGrid();
-}
-function renderPublicTutorGrid(){
-  const box=$("publicTutorGrid");
-  if(!box)return;
-  const ts=filteredTutorsForBrowse();
-  box.innerHTML=ts.length?`<div class="grid">${ts.map(t=>tutorCard(t,false)).join("")}</div>`:`<p class="muted">No tutors found.</p>`;
-}
-function showPublicTutorDetails(id){
-  const t=user(id);
-  $("loginPage").innerHTML=`<div class="public-tutor-shell"><button class="ghost" onclick="browsePublicTutors()">← Back to Tutors</button><div class="card"><img class="tutor-avatar-lg" src="${tutorPhoto(t)}" onerror="this.src='scheduled-icon.jpeg'"><h2>${t.name||""}</h2><p><b>University:</b> ${t.university||"Not specified"}</p><p><b>Courses:</b> ${(t.courses||[]).join(", ")||"Not specified"}</p><p><b>Hourly Rate:</b> ${money(t.rate)}/hour/person</p><p><b>Locations:</b> ${(t.locations||[]).join(", ")||"Set by availability"}</p><p>${t.description||"No description yet."}</p><button onclick="location.reload();setTimeout(()=>toggleRequestAccess(),500)">Book Now / Request Access</button></div></div>`;
-}
-function allTutorsPage(){
-  $("content").innerHTML=`<div class="card"><h2>All Tutors</h2>${browseFiltersHTML(false)}<div id="loggedTutorGrid"></div></div>`;
-  renderLoggedTutorGrid();
-}
-function renderLoggedTutorGrid(){
-  const box=$("loggedTutorGrid");
-  if(!box)return;
-  const ts=filteredTutorsForBrowse();
-  box.innerHTML=ts.length?`<div class="grid">${ts.map(t=>tutorCard(t,true)).join("")}</div>`:`<p class="muted">No tutors found.</p>`;
-}
-function showLoggedTutorDetails(id){
-  const t=user(id);
-  $("content").innerHTML=`<div class="card"><button class="ghost" onclick="allTutorsPage()">← Back to All Tutors</button><hr><img class="tutor-avatar-lg" src="${tutorPhoto(t)}" onerror="this.src='scheduled-icon.jpeg'"><h2>${t.name||""}</h2><p><b>University:</b> ${t.university||"Not specified"}</p><p><b>Courses:</b> ${(t.courses||[]).join(", ")||"Not specified"}</p><p><b>Hourly Rate:</b> ${money(t.rate)}/hour/person</p><p><b>Locations:</b> ${(t.locations||[]).join(", ")||"Set by availability"}</p><p>${t.description||"No description yet."}</p><button onclick="bookWithTutor('${t.id}')">Book Now</button></div>`;
-}
 
-
-function publicTutorProfiles(){
-  return list(DATA.publicTutors||{}).filter(t=>!t.hidden).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+/* ===== v2.9 stable public tutor profiles: separate from real tutor accounts ===== */
+function getPublicProfiles(){
+  return list(DATA.publicTutors||{}).filter(p=>!p.hidden).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
 }
-function publicTutorPhoto(t){return (t&&t.photoUrl)||"scheduled-icon.jpeg"}
-function allPublicCourseNames(){
-  let names=[];
-  publicTutorProfiles().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));
+function publicPhoto(p){return (p&&p.photoUrl)||"scheduled-icon.jpeg"}
+function publicCourses(){
+  let names=[]; getPublicProfiles().forEach(p=>(p.courses||[]).forEach(c=>names.push(c)));
   return [...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 }
-function allPublicUniversityNames(){
-  return [...new Set(publicTutorProfiles().map(t=>t.university).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+function publicUniversities(){
+  return [...new Set(getPublicProfiles().map(p=>p.university).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 }
-function publicFilterHTML(targetFn){
-  const courses=allPublicCourseNames(), universities=allPublicUniversityNames();
+function publicFilterHTML(renderFn){
+  const courses=publicCourses(), universities=publicUniversities();
   return `<div class="row">
-    <select id="publicCourseFilter" onchange="${targetFn}()"><option value="">All courses</option>${courses.map(c=>`<option value="${c}">${c}</option>`).join("")}</select>
-    <select id="publicUniversityFilter" onchange="${targetFn}()"><option value="">All universities</option>${universities.map(u=>`<option value="${u}">${u}</option>`).join("")}</select>
+    <select id="publicCourseFilter" onchange="${renderFn}()"><option value="">All courses</option>${courses.map(c=>`<option value="${c}">${c}</option>`).join("")}</select>
+    <select id="publicUniversityFilter" onchange="${renderFn}()"><option value="">All universities</option>${universities.map(u=>`<option value="${u}">${u}</option>`).join("")}</select>
   </div>`;
 }
-function getFilteredPublicTutors(){
+function filteredPublicProfiles(){
   const course=$("publicCourseFilter")?.value||"";
   const university=$("publicUniversityFilter")?.value||"";
-  return publicTutorProfiles().filter(t=>(!course||(t.courses||[]).includes(course))&&(!university||t.university===university));
+  return getPublicProfiles().filter(p=>(!course||(p.courses||[]).includes(course))&&(!university||p.university===university));
 }
-function publicTutorCard(t,logged=false){
-  return `<div class="card tutor-card" onclick="${logged?`showLoggedPublicTutor('${t.id}')`:`showPublicTutor('${t.id}')`}">
-    <img class="tutor-avatar" src="${publicTutorPhoto(t)}" onerror="this.src='scheduled-icon.jpeg'">
-    <h3>${t.name||""}</h3>
-    <div class="tutor-meta">${t.university||"University not specified"}<br>${(t.courses||[]).join(", ")||"Courses not specified"}</div>
+function publicProfileCard(p,logged){
+  return `<div class="card tutor-card" onclick="${logged?`showLoggedPublicProfile('${p.id}')`:`showPublicProfile('${p.id}')`}">
+    <img class="tutor-avatar" src="${publicPhoto(p)}" onerror="this.src='scheduled-icon.jpeg'">
+    <h3>${p.name||""}</h3>
+    <div class="tutor-meta">${p.university||"University not specified"}<br>${(p.courses||[]).join(", ")||"Courses not specified"}</div>
   </div>`;
 }
 function browsePublicTutors(){
-  $("loginPage").innerHTML=`<div class="login-card" style="width:min(1050px,100%);"><button class="ghost" onclick="location.reload()">← Back to Login</button><div class="brand"><h1 class="brand-word">Scheduled Tutors</h1><p>Browse available tutors.</p></div><div class="card">${publicFilterHTML("renderPublicTutors")}<div id="publicTutorsGrid"></div></div></div>`;
-  renderPublicTutors();
+  $("loginPage").innerHTML=`<div class="login-card" style="width:min(1050px,100%);">
+    <button class="ghost" onclick="location.reload()">← Back to Login</button>
+    <div class="brand"><h1 class="brand-word">Scheduled Tutors</h1><p>Browse available tutors.</p></div>
+    <div class="card">${publicFilterHTML("renderPublicProfiles")}<div id="publicProfilesGrid"></div></div>
+  </div>`;
+  renderPublicProfiles();
 }
-function renderPublicTutors(){
-  const box=$("publicTutorsGrid"); if(!box)return;
-  const ts=getFilteredPublicTutors();
-  box.innerHTML=ts.length?`<div class="grid">${ts.map(t=>publicTutorCard(t,false)).join("")}</div>`:`<p class="muted">No tutors found.</p>`;
+function renderPublicProfiles(){
+  const box=$("publicProfilesGrid"); if(!box)return;
+  const ps=filteredPublicProfiles();
+  box.innerHTML=ps.length?`<div class="grid">${ps.map(p=>publicProfileCard(p,false)).join("")}</div>`:`<p class="muted">No public tutor profiles yet.</p>`;
 }
-function showPublicTutor(id){
-  const t=(DATA.publicTutors||{})[id]; if(!t)return;
-  $("loginPage").innerHTML=`<div class="login-card" style="width:min(760px,100%);"><button class="ghost" onclick="browsePublicTutors()">← Back to Tutors</button><div class="card"><img class="tutor-avatar-lg" src="${publicTutorPhoto(t)}" onerror="this.src='scheduled-icon.jpeg'"><h2>${t.name||""}</h2><p><b>University:</b> ${t.university||"Not specified"}</p><p><b>Courses:</b> ${(t.courses||[]).join(", ")||"Not specified"}</p><p><b>Hourly Rate:</b> ${money(t.rate)}/hour/person</p><p><b>Locations:</b> ${(t.locations||[]).join(", ")||"Set by availability"}</p><p>${t.description||"No description yet."}</p><button onclick="location.reload();setTimeout(()=>toggleRequestAccess(),500)">Book Now / Request Access</button></div></div>`;
+function showPublicProfile(id){
+  const p=(DATA.publicTutors||{})[id]; if(!p)return;
+  $("loginPage").innerHTML=`<div class="login-card" style="width:min(760px,100%);">
+    <button class="ghost" onclick="browsePublicTutors()">← Back to Tutors</button>
+    <div class="card">
+      <img class="tutor-avatar-lg" src="${publicPhoto(p)}" onerror="this.src='scheduled-icon.jpeg'">
+      <h2>${p.name||""}</h2>
+      <p><b>University:</b> ${p.university||"Not specified"}</p>
+      <p><b>Courses:</b> ${(p.courses||[]).join(", ")||"Not specified"}</p>
+      <p><b>Hourly Rate:</b> ${money(p.rate)}/hour/person</p>
+      <p><b>Locations:</b> ${(p.locations||[]).join(", ")||"Set by availability"}</p>
+      <p>${p.description||"No description yet."}</p>
+      <button onclick="location.reload();setTimeout(()=>toggleRequestAccess(),500)">Book Now / Request Access</button>
+    </div>
+  </div>`;
 }
 function allTutorsPage(){
-  $("content").innerHTML=`<div class="card"><h2>All Tutors</h2>${publicFilterHTML("renderLoggedPublicTutors")}<div id="loggedPublicTutorsGrid"></div></div>`;
-  renderLoggedPublicTutors();
+  $("content").innerHTML=`<div class="card"><h2>All Tutors</h2><p class="muted">These are the public tutor profiles. Booking only works when a profile is linked to a real tutor account.</p>${publicFilterHTML("renderLoggedPublicProfiles")}<div id="loggedPublicProfilesGrid"></div></div>`;
+  renderLoggedPublicProfiles();
 }
-function renderLoggedPublicTutors(){
-  const box=$("loggedPublicTutorsGrid"); if(!box)return;
-  const ts=getFilteredPublicTutors();
-  box.innerHTML=ts.length?`<div class="grid">${ts.map(t=>publicTutorCard(t,true)).join("")}</div>`:`<p class="muted">No tutors found.</p>`;
+function renderLoggedPublicProfiles(){
+  const box=$("loggedPublicProfilesGrid"); if(!box)return;
+  const ps=filteredPublicProfiles();
+  box.innerHTML=ps.length?`<div class="grid">${ps.map(p=>publicProfileCard(p,true)).join("")}</div>`:`<p class="muted">No public tutor profiles yet.</p>`;
 }
-function showLoggedPublicTutor(id){
-  const t=(DATA.publicTutors||{})[id]; if(!t)return;
-  $("content").innerHTML=`<div class="card"><button class="ghost" onclick="allTutorsPage()">← Back to All Tutors</button><hr><img class="tutor-avatar-lg" src="${publicTutorPhoto(t)}" onerror="this.src='scheduled-icon.jpeg'"><h2>${t.name||""}</h2><p><b>University:</b> ${t.university||"Not specified"}</p><p><b>Courses:</b> ${(t.courses||[]).join(", ")||"Not specified"}</p><p><b>Hourly Rate:</b> ${money(t.rate)}/hour/person</p><p><b>Locations:</b> ${(t.locations||[]).join(", ")||"Set by availability"}</p><p>${t.description||"No description yet."}</p><button onclick="${t.linkedTutorId?`bookWithTutor('${t.linkedTutorId}')`:`openTab('Book')`}">Book Now</button></div>`;
+function showLoggedPublicProfile(id){
+  const p=(DATA.publicTutors||{})[id]; if(!p)return;
+  const linked=p.linkedTutorId && DATA.users[p.linkedTutorId] && DATA.users[p.linkedTutorId].role==="tutor";
+  $("content").innerHTML=`<div class="card">
+    <button class="ghost" onclick="allTutorsPage()">← Back to All Tutors</button><hr>
+    <img class="tutor-avatar-lg" src="${publicPhoto(p)}" onerror="this.src='scheduled-icon.jpeg'">
+    <h2>${p.name||""}</h2>
+    <p><b>University:</b> ${p.university||"Not specified"}</p>
+    <p><b>Courses:</b> ${(p.courses||[]).join(", ")||"Not specified"}</p>
+    <p><b>Hourly Rate:</b> ${money(p.rate)}/hour/person</p>
+    <p><b>Locations:</b> ${(p.locations||[]).join(", ")||"Set by availability"}</p>
+    <p>${p.description||"No description yet."}</p>
+    ${linked?`<button onclick="bookWithTutor('${p.linkedTutorId}')">Book Now</button>`:`<p class="admin-note">This public profile is not linked to a real tutor account yet. Please book from the Book tab or contact admin.</p><button onclick="openTab('Book')">Go to Booking</button>`}
+  </div>`;
+}
+async function publicProfileImageData(inputId){
+  return await imageFileToDataUrl(inputId);
+}
+function publicTutorProfilesPage(){
+  const ps=list(DATA.publicTutors||{}).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+  $("content").innerHTML=`<div class="card"><h2>Tutor Profiles</h2>
+  <p class="admin-note"><b>Important:</b> This tab is only for the public Browse Tutors page. It does not create login accounts and it does not affect availability unless you link it to a real tutor account.</p>
+  ${ps.length?`<table class="table"><tr><th>Photo</th><th>Name</th><th>University</th><th>Courses</th><th>Rate</th><th>Linked Booking Account</th><th>Actions</th></tr>${ps.map(p=>`<tr><td><img class="profile-preview" src="${publicPhoto(p)}" onerror="this.src='scheduled-icon.jpeg'"></td><td>${p.name||""}</td><td>${p.university||""}</td><td>${(p.courses||[]).join(", ")}</td><td>${money(p.rate)}/h</td><td>${p.linkedTutorId?(user(p.linkedTutorId).name||"Linked"):"Not linked"}</td><td><button onclick="editPublicTutorProfile('${p.id}')">Edit</button><button onclick="editPublicTutorPhoto('${p.id}')">Photo</button><button class="danger" onclick="deletePublicTutorProfile('${p.id}')">Delete</button></td></tr>`).join("")}</table>`:`<p class="muted">No public tutor profiles yet.</p>`}
+  <hr><h3>Add Public Tutor Profile</h3>
+  <div class="row">
+    <input id="pname" placeholder="Tutor name">
+    <input id="puniversity" placeholder="University">
+    <input id="prate" type="number" placeholder="Hourly rate">
+    <select id="plink"><option value="">No linked tutor account</option>${tutors().map(t=>`<option value="${t.id}">${t.name} — ${t.email}</option>`).join("")}</select>
+  </div>
+  <input id="pcourses" placeholder="Courses taught, comma separated">
+  <input id="plocations" placeholder="Locations, comma separated">
+  <label>Profile picture</label><input id="pphotoFile" type="file" accept="image/*">
+  <textarea id="pdesc" placeholder="Description / teaching style"></textarea>
+  <button onclick="addPublicTutorProfile()">Add Public Profile</button></div>`;
+}
+async function addPublicTutorProfile(){
+  const name=$("pname").value.trim(), university=$("puniversity").value.trim(), rate=Number($("prate").value||0), linkedTutorId=$("plink").value;
+  const courses=$("pcourses").value.split(",").map(x=>x.trim()).filter(Boolean);
+  const locations=$("plocations").value.split(",").map(x=>x.trim()).filter(Boolean);
+  const description=$("pdesc").value.trim();
+  const photoUrl=await publicProfileImageData("pphotoFile");
+  if(!name||!university||!courses.length)return alert("Please fill name, university, and courses.");
+  await db.ref("publicTutors").push({name,university,rate,linkedTutorId,courses,locations,description,photoUrl,createdAt:Date.now(),hidden:false});
+  await loadData();publicTutorProfilesPage();
+}
+async function editPublicTutorProfile(id){
+  const p=(DATA.publicTutors||{})[id]; if(!p)return alert("Profile not found.");
+  const name=prompt("Tutor name:",p.name||""); if(name===null)return;
+  const university=prompt("University:",p.university||""); if(university===null)return;
+  const rate=prompt("Hourly rate:",p.rate||0); if(rate===null)return;
+  const coursesText=prompt("Courses, comma separated:",(p.courses||[]).join(", ")); if(coursesText===null)return;
+  const locationsText=prompt("Locations, comma separated:",(p.locations||[]).join(", ")); if(locationsText===null)return;
+  const description=prompt("Description:",p.description||""); if(description===null)return;
+  const linkedTutorId=prompt("Linked real tutor account ID. Leave empty if none:",p.linkedTutorId||""); if(linkedTutorId===null)return;
+  await db.ref("publicTutors/"+id).update({name,university,rate:Number(rate||0),courses:coursesText.split(",").map(x=>x.trim()).filter(Boolean),locations:locationsText.split(",").map(x=>x.trim()).filter(Boolean),description,linkedTutorId,updatedAt:Date.now()});
+  await loadData();publicTutorProfilesPage();
+}
+async function editPublicTutorPhoto(id){
+  const input=document.createElement("input"); input.type="file"; input.accept="image/*";
+  input.onchange=async()=>{ if(!input.files||!input.files[0])return; const data=await imageFileToDataUrlFromInput(input); await db.ref("publicTutors/"+id+"/photoUrl").set(data); await loadData(); publicTutorProfilesPage(); };
+  input.click();
+}
+function imageFileToDataUrlFromInput(input){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=e=>{ const img=new Image(); img.onload=()=>{ const canvas=document.createElement("canvas"); const max=500; let w=img.width,h=img.height; if(w>h&&w>max){h=Math.round(h*max/w);w=max}else if(h>=w&&h>max){w=Math.round(w*max/h);h=max} canvas.width=w;canvas.height=h;canvas.getContext("2d").drawImage(img,0,0,w,h); resolve(canvas.toDataURL("image/jpeg",0.72)); }; img.onerror=()=>resolve(""); img.src=e.target.result; };
+    reader.onerror=()=>resolve("");
+    reader.readAsDataURL(input.files[0]);
+  });
+}
+async function deletePublicTutorProfile(id){
+  if(!confirm("Delete this public profile? This does not delete the real tutor login account."))return;
+  await db.ref("publicTutors/"+id).remove();
+  await loadData();publicTutorProfilesPage();
 }
 
 function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Documents","Export"]:profile.role==="tutor"?["Schedule","Calendar","Availability","My Students","Financial","Documents","Profile"]:["Book","All Tutors","My Tutors","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
@@ -329,51 +369,6 @@ async function deleteTutor(id){
   await loadData();adminTutors();
 }
 function usersTable(a){return a.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Role/Type</th><th>Details</th></tr>${a.map(u=>`<tr><td>${u.name||""}</td><td>${u.email||""}</td><td>${u.role}${u.type?"/"+u.type:""}</td><td>${u.rate?money(u.rate)+"/h/person<br>":""}${u.university?`University: ${u.university}<br>`:""}${u.whatsapp||u.phone||""}<br>${(u.courses||[]).join(", ")}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
-
-function publicTutorProfilesPage(){
-  const ps=list(DATA.publicTutors||{}).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
-  $("content").innerHTML=`<div class="card"><h2>Public Tutor Profiles</h2><p class="muted">This controls the public Browse Tutors page. These profiles are separate from tutor login accounts.</p>
-  ${ps.length?`<table class="table"><tr><th>Photo</th><th>Name</th><th>University</th><th>Courses</th><th>Rate</th><th>Linked Account</th><th>Actions</th></tr>${ps.map(p=>`<tr><td><img class="profile-preview" src="${publicTutorPhoto(p)}" onerror="this.src='scheduled-icon.jpeg'"></td><td>${p.name||""}</td><td>${p.university||""}</td><td>${(p.courses||[]).join(", ")}</td><td>${money(p.rate)}/h</td><td>${p.linkedTutorId?(user(p.linkedTutorId).name||"Linked"):"Not linked"}</td><td><button onclick="editPublicTutorProfile('${p.id}')">Edit</button><button onclick="editPublicTutorPhoto('${p.id}')">Photo</button><button class="danger" onclick="deletePublicTutorProfile('${p.id}')">Delete</button></td></tr>`).join("")}</table>`:`<p class="muted">No public tutor profiles yet.</p>`}
-  <hr><h3>Add Public Tutor Profile</h3>
-  <div class="row"><input id="pname" placeholder="Tutor name"><input id="puniversity" placeholder="University"><input id="prate" type="number" placeholder="Hourly rate"><select id="plink"><option value="">No linked account yet</option>${tutors().map(t=>`<option value="${t.id}">${t.name} — ${t.email}</option>`).join("")}</select></div>
-  <input id="pcourses" placeholder="Courses taught, comma separated"><input id="plocations" placeholder="Locations, comma separated">
-  <label>Profile picture</label><input id="pphotoFile" type="file" accept="image/*">
-  <textarea id="pdesc" placeholder="Description / teaching style"></textarea>
-  <button onclick="addPublicTutorProfile()">Add Public Profile</button></div>`;
-}
-async function addPublicTutorProfile(){
-  const name=$("pname").value.trim(),university=$("puniversity").value.trim(),rate=Number($("prate").value||0),linkedTutorId=$("plink").value;
-  const courses=$("pcourses").value.split(",").map(x=>x.trim()).filter(Boolean);
-  const locations=$("plocations").value.split(",").map(x=>x.trim()).filter(Boolean);
-  const description=$("pdesc").value.trim();
-  const photoUrl=await imageFileToDataUrl("pphotoFile");
-  if(!name||!university||!courses.length)return alert("Please fill name, university, and courses.");
-  await db.ref("publicTutors").push({name,university,rate,linkedTutorId,courses,locations,description,photoUrl,createdAt:Date.now(),hidden:false});
-  await loadData();publicTutorProfilesPage();
-}
-async function editPublicTutorProfile(id){
-  const p=(DATA.publicTutors||{})[id]; if(!p)return alert("Profile not found.");
-  const name=prompt("Tutor name:",p.name||""); if(name===null)return;
-  const university=prompt("University:",p.university||""); if(university===null)return;
-  const rate=prompt("Hourly rate:",p.rate||0); if(rate===null)return;
-  const coursesText=prompt("Courses, comma separated:",(p.courses||[]).join(", ")); if(coursesText===null)return;
-  const locationsText=prompt("Locations, comma separated:",(p.locations||[]).join(", ")); if(locationsText===null)return;
-  const description=prompt("Description:",p.description||""); if(description===null)return;
-  const linkedTutorId=prompt("Linked tutor account ID. Leave empty if none:",p.linkedTutorId||""); if(linkedTutorId===null)return;
-  await db.ref("publicTutors/"+id).update({name,university,rate:Number(rate||0),courses:coursesText.split(",").map(x=>x.trim()).filter(Boolean),locations:locationsText.split(",").map(x=>x.trim()).filter(Boolean),description,linkedTutorId,updatedAt:Date.now()});
-  await loadData();publicTutorProfilesPage();
-}
-async function editPublicTutorPhoto(id){
-  const input=document.createElement("input"); input.type="file"; input.accept="image/*";
-  input.onchange=async()=>{ if(!input.files||!input.files[0])return; const reader=new FileReader(); reader.onload=e=>{ const img=new Image(); img.onload=async()=>{ const canvas=document.createElement("canvas"); const max=500; let w=img.width,h=img.height; if(w>h&&w>max){h=Math.round(h*max/w);w=max}else if(h>=w&&h>max){w=Math.round(w*max/h);h=max} canvas.width=w;canvas.height=h; canvas.getContext("2d").drawImage(img,0,0,w,h); await db.ref("publicTutors/"+id+"/photoUrl").set(canvas.toDataURL("image/jpeg",0.72)); await loadData();publicTutorProfilesPage(); }; img.src=e.target.result; }; reader.readAsDataURL(input.files[0]); };
-  input.click();
-}
-async function deletePublicTutorProfile(id){
-  if(!confirm("Delete this public tutor profile? This does not delete the tutor login account."))return;
-  await db.ref("publicTutors/"+id).remove();
-  await loadData();publicTutorProfilesPage();
-}
-
 function adminStudents(){
   const visible=profile.role==="admin"?students():students().filter(s=>studentTutors(s.id).some(t=>t.id===currentUser.uid));
   $("content").innerHTML=`<div class="card"><h2>${profile.role==="admin"?"Students / Groups":"My Students / Groups"}</h2>
