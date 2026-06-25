@@ -498,6 +498,29 @@ function assignedTutorNames(studentId){
   return assignedTutorIdsForStudent(studentId).map(id=>user(id).name).filter(Boolean).join(", ");
 }
 
+
+function allAssignableCourses(){
+  let names=[];
+  tutors().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));
+  list(DATA.courses||{}).forEach(c=>{if(c.name)names.push(c.name)});
+  return [...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+}
+function assignedCoursesForStudent(studentId){
+  const s=user(studentId);
+  return Array.isArray(s.assignedCourses)?s.assignedCourses:[];
+}
+function courseCheckboxes(className="assignedCourse"){
+  const cs=allAssignableCourses();
+  if(!cs.length)return "<p class='muted'>No courses available yet. Add courses first.</p>";
+  return cs.map(c=>`<label class="check"><input type="checkbox" class="${className}" value="${c}">${c}</label>`).join("");
+}
+function selectedCourses(className="assignedCourse"){
+  return [...document.querySelectorAll("."+className+":checked")].map(x=>x.value);
+}
+function assignedCourseNames(studentId){
+  return assignedCoursesForStudent(studentId).join(", ");
+}
+
 function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Tutor Reports","Documents","Export"]:profile.role==="tutor"?["Schedule","Calendar","Availability","My Students","Financial","Documents","Profile"]:["Book","All Tutors","My Tutors","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 async function openTab(tab,btn){closeMenu();await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),"Tutor Reports":adminTutorReportsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Profile:profilePage,Book:bookingPage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
 
@@ -575,7 +598,7 @@ function adminStudents(){
     : students().filter(s=>studentTutors(s.id).some(t=>t.id===currentUser.uid)||assignedTutorIdsForStudent(s.id).includes(currentUser.uid));
 
   $("content").innerHTML=`<div class="card"><h2>${profile.role==="admin"?"Students / Groups":"My Students / Groups"}</h2>
-  ${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Type</th><th>Assigned Tutors</th><th>Actions</th></tr>${visible.map(s=>`<tr><td>${s.name||""}</td><td>${s.email||""}</td><td>${s.phone||""}</td><td>${s.university||""}</td><td>${s.type||"individual"}</td><td class="assigned-list">${assignedTutorNames(s.id)||"None"}</td><td>${profile.role==="admin"?`<button onclick="editStudent('${s.id}')">Edit</button><button onclick="editStudentTutors('${s.id}')">Assign Tutors</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
+  ${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Type</th><th>Assigned Tutors</th><th>Assigned Courses</th><th>Actions</th></tr>${visible.map(s=>`<tr><td>${s.name||""}</td><td>${s.email||""}</td><td>${s.phone||""}</td><td>${s.university||""}</td><td>${s.type||"individual"}</td><td class="assigned-list">${assignedTutorNames(s.id)||"None"}</td><td class="course-list">${assignedCourseNames(s.id)||"None"}</td><td>${profile.role==="admin"?`<button onclick="editStudent('${s.id}')">Edit</button><button onclick="editStudentTutors('${s.id}')">Assign Tutors</button><button onclick="editStudentCourses('${s.id}')">Assign Courses</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
 
   <hr><h3>Create Student or Group Account</h3>
   <div class="row">
@@ -589,7 +612,7 @@ function adminStudents(){
   <input id="smembers" placeholder="Group members comma separated">
   <label>Assign Tutor(s)</label>
   <p class="muted small">New tutors automatically appear here after you create them.</p>
-  <div class="checkbox-grid">${tutorCheckboxes("assignedTutor")}</div>
+  <div class="checkbox-grid">${tutorCheckboxes("assignedTutor")}</div><label>Assign Course(s)</label><p class="muted small">New courses automatically appear here after you add them.</p><div class="checkbox-grid">${courseCheckboxes("assignedCourse")}</div>
   <button onclick="createAccount('student')">Create Student/Group</button></div>`;
 }
 async function editStudent(id){
@@ -628,6 +651,36 @@ async function saveStudentTutorAssignments(id){
   const assignedTutorIds=[...document.querySelectorAll(".editAssignedTutor:checked")].map(x=>x.value);
   await db.ref("users/"+id+"/assignedTutorIds").set(assignedTutorIds);
   const modal=document.getElementById("assignTutorModal");
+  if(modal)modal.remove();
+  await loadData();
+  adminStudents();
+}
+
+
+function editStudentCourses(id){
+  const s=DATA.users[id];
+  if(!s)return alert("Student not found.");
+  const current=assignedCoursesForStudent(id);
+  const modal=document.createElement("div");
+  modal.className="assign-modal";
+  modal.id="assignCourseModal";
+  modal.innerHTML=`<div class="assign-modal-box">
+    <div class="assign-modal-head">
+      <h2>Assign Courses</h2>
+      <button class="ghost" onclick="document.getElementById('assignCourseModal').remove()">Close</button>
+    </div>
+    <p class="muted">${s.name||"Student"} — choose one or more courses.</p>
+    <div class="checkbox-grid">
+      ${allAssignableCourses().length?allAssignableCourses().map(c=>`<label class="check"><input type="checkbox" class="editAssignedCourse" value="${c}" ${current.includes(c)?"checked":""}>${c}</label>`).join(""):"<p class='muted'>No courses available yet. Add courses first.</p>"}
+    </div>
+    <button onclick="saveStudentCourseAssignments('${id}')">Save Assigned Courses</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function saveStudentCourseAssignments(id){
+  const assignedCourses=[...document.querySelectorAll(".editAssignedCourse:checked")].map(x=>x.value);
+  await db.ref("users/"+id+"/assignedCourses").set(assignedCourses);
+  const modal=document.getElementById("assignCourseModal");
   if(modal)modal.remove();
   await loadData();
   adminStudents();

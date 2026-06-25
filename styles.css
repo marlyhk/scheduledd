@@ -201,3 +201,7 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}.small{font-size:13
   box-shadow:0 30px 80px rgba(0,0,0,.18);
 }
 .assign-modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center}
+
+
+/* v4.2 assign courses */
+.course-list{font-size:13px;color:var(--muted);line-height:1.5}

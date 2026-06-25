@@ -1,10 +1,12 @@
-Scheduled v4.1 — Checkbox Assign Tutors
+Scheduled v4.2 — Assign Courses to Students
 
-Built from v4.0.
+Built from v4.1.
 
-Changes:
-- Create Student keeps tutor assignment checkboxes.
-- Existing students/groups now use a clickable checkbox modal for Assign Tutors.
-- New tutors automatically appear in both create-student and assign-existing-student options.
+Adds:
+- Assign Course(s) checkboxes in Create Student form.
+- Assign Courses button for existing students/groups.
+- Existing students/groups use clickable course checkboxes.
+- New courses automatically appear in assignment options.
+- New tutors' courses automatically appear too.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
