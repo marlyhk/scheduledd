@@ -1,15 +1,12 @@
-Scheduled v6.3 — Drawn Real Logo Intro
+Scheduled v6.4 — Student Dashboard Banner Refinement
 
-Built from v6.2.
+Built from v6.3.
 
-Fix:
-- Restores the v6.1 drawing-style animation.
-- Draws a custom SVG matching the actual Scheduled logo shape.
-- Rounded calendar outline draws itself.
-- Top calendar tabs draw in.
-- Dark navy checkmark draws/slides in.
-- Folded corner animates in.
-- Scheduled wordmark and tagline fade in after the icon.
-- Removed the picture-only intro.
+Changes:
+- Student motivation banner changes each login/session.
+- Today's Focus moved outside and under the motivation card.
+- Removed "Here is your learning overview."
+- Replaced simple "Hi, name" with a more polished time-based greeting.
+- Keeps the v6.3 drawn real-logo intro.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.

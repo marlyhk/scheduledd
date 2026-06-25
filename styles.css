@@ -867,3 +867,44 @@ button:hover{
   76%{opacity:.72;transform:scale(1.08)}
   100%{opacity:.28;transform:scale(1.12)}
 }
+
+
+/* v6.4 refined student dashboard banner */
+.student-welcome-line{
+  font-size:clamp(26px,4vw,42px);
+  line-height:1.05;
+  letter-spacing:-.04em;
+  font-weight:950;
+  margin:0;
+}
+.student-welcome-sub{
+  margin-top:8px;
+  color:var(--muted);
+  font-weight:750;
+}
+.daily-focus-outside{
+  margin:14px 0 18px;
+  border-radius:26px;
+  background:rgba(255,255,255,.82);
+  border:1px solid var(--border);
+  box-shadow:0 12px 35px rgba(31,42,55,.06);
+  padding:16px 18px;
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+}
+.daily-focus-outside .focus-icon{
+  width:44px;
+  height:44px;
+  border-radius:18px;
+  background:var(--blue2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:22px;
+  flex:0 0 auto;
+}
+.daily-focus-outside b{
+  display:block;
+  margin-bottom:3px;
+}
