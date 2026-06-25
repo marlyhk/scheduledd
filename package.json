@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-availability-fix",
-  "version": "2.4.0",
+  "name": "scheduled-full-v2-5",
+  "version": "2.5.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg public/"

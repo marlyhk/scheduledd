@@ -1,11 +1,17 @@
-Scheduled v2.4 — Availability Fix
+Scheduled v2.5 Full ZIP
 
-Fixes:
-- Student booking calendar now detects tutor availability correctly
-- Supports new course-specific availability
-- Supports older/general availability already saved in Firebase
-- Course matching is normalized, so small capitalization/spacing differences do not hide availability
-- Uses local dates to avoid timezone date shifting
-- Tutor availability page uses latest tutor course list
+Includes:
+- v2.4 availability fix
+- Compact Apple-style booking calendar
+- Red strike only on no-availability/no-slot dates
+- Request Access includes University
+- Become a Tutor wording
+- Public Browse Tutors page
+- Public tutor details with Book Now → Request Access
+- Student All Tutors tab
+- Logged-in tutor details with Book Now → booking flow
+- AM/PM time display for students and session displays
+- Bigger splash/login logo and aligned inside logo
+- Tutor profile fields: photo URL and description
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
