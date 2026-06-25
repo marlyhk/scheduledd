@@ -1,12 +1,13 @@
-Scheduled v6.4 — Student Dashboard Banner Refinement
+Scheduled v6.5 — Menu Bar Fix
 
-Built from v6.3.
+Built from v6.4.
 
-Changes:
-- Student motivation banner changes each login/session.
-- Today's Focus moved outside and under the motivation card.
-- Removed "Here is your learning overview."
-- Replaced simple "Hi, name" with a more polished time-based greeting.
-- Keeps the v6.3 drawn real-logo intro.
+Fixes:
+- Sidebar/menu scrolls properly.
+- Menu tabs are clickable for admin, tutor, and student accounts.
+- Backdrop no longer blocks the sidebar buttons.
+- Body stops scrolling behind the open menu.
+- Menu button stays clickable.
+- Works better on mobile using 100dvh and touch scrolling.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.

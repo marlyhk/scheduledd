@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v6-4-student-dashboard-banner-refine",
-  "version": "6.4.0",
+  "name": "scheduled-v6-5-menu-bar-fix",
+  "version": "6.5.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"
