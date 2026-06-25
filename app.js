@@ -818,7 +818,7 @@ function scheduledTodayBanner(){
 function renderStudentInspoBanner(){
   const b=scheduledTodayBanner();
   return `<div class="inspo-card inspo-theme-${b.theme||"focus"}">
-    <div class="inspo-topline"><span>${scheduledBannerMode()==="exam"?"Exam Mode":"Scheduled Motivation"}</span><span>Screenshot-worthy ✨</span></div>
+    <div class="inspo-topline"><span>${scheduledBannerMode()==="exam"?"Exam Mode":" "}</span><span></span></div>
     <div class="inspo-icon">${b.icon||"✨"}</div>
     <div class="inspo-quote">${b.text||""}</div>
     <div class="inspo-sub">${b.sub||"Keep going."}</div>
@@ -831,7 +831,7 @@ function bannerPreviewCard(){
   const theme=$("motivationTheme")?.value||"focus";
   const sub=($("motivationSub")?.value||"Small steps still count.").trim();
   return `<div class="banner-preview-wrap"><div class="inspo-card inspo-theme-${theme}">
-    <div class="inspo-topline"><span>Scheduled Motivation</span><span>Preview ✨</span></div>
+    <div class="inspo-topline"><span></span><span></span></div>
     <div class="inspo-icon">${icon}</div>
     <div class="inspo-quote">${text}</div>
     <div class="inspo-sub">${sub}</div>
