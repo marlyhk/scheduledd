@@ -1,9 +1,5 @@
-Scheduled v3.2 — Public Profiles Show Fix
+Scheduled v3.3 — Book Now Flow Fix
 
-Fix:
-- Public Browse Tutors reloads Firebase data before showing profiles.
-- Logged-in All Tutors reloads Firebase data before showing profiles.
-- New public profiles are saved as visible and should appear immediately.
-- Browse Tutors includes fallback support for older tutor public-style data if publicTutors is empty.
+Public Book Now opens Request Access directly. Logged-in student Book Now opens booking with linked tutor preselected.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.

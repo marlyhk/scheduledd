@@ -247,6 +247,25 @@ function publicProfileCard(p,logged){
     <div class="tutor-meta">${p.university||"University not specified"}<br>${(p.courses||[]).join(", ")||"Courses not specified"}</div>
   </div>`;
 }
+
+function showPublicRequestAccess(prefillCourses=""){
+  $("loginPage").innerHTML=`<div class="login-card">
+    <button class="ghost" onclick="browsePublicTutors()">← Back to Tutors</button>
+    <div class="brand">
+      <img src="scheduled-icon.jpeg" alt="Scheduled" onerror="this.style.display='none'">
+      <h1 class="brand-word">Request Access</h1>
+      <p>Submit your details so admin can create your Scheduled account.</p>
+    </div>
+    <div id="notice" class="notice hidden"></div>
+    <label>Full Name</label><input id="reqName" placeholder="Full name">
+    <label>Email Address</label><input id="reqEmail" type="email" placeholder="Email address">
+    <label>Phone Number</label><input id="reqPhone" placeholder="Phone number">
+    <label>University</label><input id="reqUniversity" placeholder="University">
+    <label>Course(s) Needed</label><input id="reqCourses" placeholder="Course(s) needed" value="${prefillCourses}">
+    <label>Message</label><textarea id="reqMessage" placeholder="Message (optional)"></textarea>
+    <button onclick="submitAccessRequest()">Submit Request</button>
+  </div>`;
+}
 async function browsePublicTutors(){
   await loadData();
   $("loginPage").innerHTML=`<div class="login-card" style="width:min(1050px,100%);">
@@ -262,7 +281,9 @@ function renderPublicProfiles(){
   box.innerHTML=ps.length?`<div class="grid">${ps.map(p=>publicProfileCard(p,false)).join("")}</div>`:`<p class="muted">No public tutor profiles yet.</p>`;
 }
 function showPublicProfile(id){
-  const p=(DATA.publicTutors||{})[id]; if(!p)return;
+  const p=(DATA.publicTutors||{})[id]; 
+  if(!p)return;
+  const prefill=(p.courses||[]).join(", ").replace(/'/g,"\\'");
   $("loginPage").innerHTML=`<div class="login-card" style="width:min(760px,100%);">
     <button class="ghost" onclick="browsePublicTutors()">← Back to Tutors</button>
     <div class="card">
@@ -273,7 +294,7 @@ function showPublicProfile(id){
       <p><b>Hourly Rate:</b> ${money(p.rate)}/hour/person</p>
       <p><b>Locations:</b> ${(p.locations||[]).join(", ")||"Set by availability"}</p>
       <p>${p.description||"No description yet."}</p>
-      <button onclick="location.reload();setTimeout(()=>toggleRequestAccess(),500)">Book Now / Request Access</button>
+      <button onclick="showPublicRequestAccess('${prefill}')">Book Now / Request Access</button>
     </div>
   </div>`;
 }
@@ -288,8 +309,10 @@ function renderLoggedPublicProfiles(){
   box.innerHTML=ps.length?`<div class="grid">${ps.map(p=>publicProfileCard(p,true)).join("")}</div>`:`<p class="muted">No public tutor profiles yet.</p>`;
 }
 function showLoggedPublicProfile(id){
-  const p=(DATA.publicTutors||{})[id]; if(!p)return;
+  const p=(DATA.publicTutors||{})[id]; 
+  if(!p)return;
   const linked=p.linkedTutorId && DATA.users[p.linkedTutorId] && DATA.users[p.linkedTutorId].role==="tutor";
+  const firstCourse=((p.courses||[])[0]||"").replace(/'/g,"\\'");
   $("content").innerHTML=`<div class="card">
     <button class="ghost" onclick="allTutorsPage()">← Back to All Tutors</button><hr>
     <img class="tutor-avatar-lg" src="${publicPhoto(p)}" onerror="this.src='scheduled-icon.jpeg'">
@@ -299,7 +322,7 @@ function showLoggedPublicProfile(id){
     <p><b>Hourly Rate:</b> ${money(p.rate)}/hour/person</p>
     <p><b>Locations:</b> ${(p.locations||[]).join(", ")||"Set by availability"}</p>
     <p>${p.description||"No description yet."}</p>
-    ${linked?`<button onclick="bookWithTutor('${p.linkedTutorId}')">Book Now</button>`:`<p class="admin-note">This public profile is not linked to a real tutor account yet. Please book from the Book tab or contact admin.</p><button onclick="openTab('Book')">Go to Booking</button>`}
+    ${linked?`<button onclick="bookWithTutor('${p.linkedTutorId}','${firstCourse}')">Book Now</button>`:`<p class="admin-note">This tutor profile is not linked to a booking account yet. Please use the Book tab or contact admin.</p><button onclick="openTab('Book')">Go to Booking</button>`}
   </div>`;
 }
 async function publicProfileImageData(inputId){
@@ -551,15 +574,30 @@ function moveMonth(delta){let now=new Date(),y=Number(localStorage.getItem("calY
 function dailyView(date){let bs=myBookings().filter(b=>b.date===date).sort((a,b)=>(a.start||"").localeCompare(b.start||""));$("content").innerHTML=`<div class="card"><button class="ghost" onclick="calendarPage()">Back to Calendar</button><h2>Daily Schedule — ${date}</h2>${bs.map(b=>`<div class="schedule-item"><b>${formatTime12(b.start)}</b> • ${b.course}<br>${profile.role==="student"?user(b.tutorId).name:user(b.studentId).name}<br>${b.duration}h • ${b.location}<br>${paymentSummary(b)}</div>`).join("")}</div>`}
 
 function bookingPage(){const courses=allCourseNames(),universities=allUniversityNames();$("content").innerHTML=`<div class="card"><h2>Book a Session</h2><label>1. Choose Course</label><select id="bcourseFirst" onchange="updateTutorListForCourse()"><option value="">Select a course</option>${courses.map(c=>`<option value="${c}">${c}</option>`).join("")}</select><label>2. Choose University</label><select id="buniversity" onchange="updateTutorListForCourse()"><option value="">All universities</option>${universities.map(u=>`<option value="${u}">${u}</option>`).join("")}</select><div id="courseTutorList"></div><div id="bookingDetails" class="hidden"><hr><label>3. Selected Tutor</label><select id="bt" onchange="updateBooking()"></select><div id="bookingCalendar"></div><div class="row"><div><label>4. Date</label><input id="bd" type="date" onchange="updateSlots()"></div><div><label>5. Duration</label><select id="bdu" onchange="updateSlots()"><option value="1">1 hour</option><option value="1.5">1h 30min</option><option value="2">2 hours</option><option value="2.5">2h 30min</option><option value="3">3 hours</option></select></div><div><label>6. Available Time</label><select id="bs" onchange="updateBookingLocations();updatePrice()"></select></div></div><label>Session Format</label><div class="row"><select id="bf" onchange="updatePrice()"><option>Individual</option><option>Group</option></select><select id="bg" onchange="updatePrice()"><option value="1">1 student</option><option value="2">2 students</option><option value="3">3 students</option><option value="4">4 students</option><option value="5">5 students</option></select></div><label>Session Type</label><div class="checkbox-grid">${["Course & Formulas","Book Exercises","Previous Exams","Other"].map(x=>`<label class="check"><input type="checkbox" class="stype" value="${x}">${x}</label>`).join("")}</div><label>Location</label><select id="bl" onchange="updatePrice()"></select><div id="price" class="card small"></div><button onclick="confirmBooking()">Confirm Booking + WhatsApp</button></div></div>`
+
   if(preselectTutorId){
     const pt=user(preselectTutorId);
-    const firstCourse=(pt.courses||[])[0]||"";
-    if(firstCourse){$("bcourseFirst").value=firstCourse;}
+    const wantedCourse=window.preselectCourse||"";
+    const courseToUse=(pt.courses||[]).includes(wantedCourse)?wantedCourse:((pt.courses||[])[0]||"");
+    if(courseToUse){$("bcourseFirst").value=courseToUse;}
     if(pt.university){$("buniversity").value=pt.university;}
     updateTutorListForCourse();
   }
+}function updateTutorListForCourse(){
+  const course=$("bcourseFirst").value,university=$("buniversity").value,listBox=$("courseTutorList"),details=$("bookingDetails");
+  if(!course){listBox.innerHTML="";details.classList.add("hidden");return}
+  let ts=tutorsForCourseAndUniversity(course,university);
+  if(!ts.length){listBox.innerHTML=`<div class="card"><p class="muted">No tutors available.</p></div>`;details.classList.add("hidden");return}
+  listBox.innerHTML=`<hr><h3>Available Tutors</h3><div class="grid">${ts.map(t=>`<div class="card"><h3>${t.name}</h3><p><b>University:</b> ${t.university||"Not specified"}</p><p><b>Rate:</b> ${money(t.rate)}/hour/person</p><button onclick="selectTutorForBooking('${t.id}')">Choose ${t.name}</button></div>`).join("")}</div>`;
+  $("bt").innerHTML=ts.map(t=>`<option value="${t.id}">${t.name}</option>`).join("");
+  details.classList.remove("hidden");
+  if(preselectTutorId && ts.some(t=>t.id===preselectTutorId)){
+    $("bt").value=preselectTutorId;
+    preselectTutorId=null;
+    window.preselectCourse="";
+  }
+  updateBooking();
 }
-function updateTutorListForCourse(){const course=$("bcourseFirst").value,university=$("buniversity").value,listBox=$("courseTutorList"),details=$("bookingDetails");if(!course){listBox.innerHTML="";details.classList.add("hidden");return}let ts=tutorsForCourseAndUniversity(course,university);if(!ts.length){listBox.innerHTML=`<div class="card"><p class="muted">No tutors available.</p></div>`;details.classList.add("hidden");return}listBox.innerHTML=`<hr><h3>Available Tutors</h3><div class="grid">${ts.map(t=>`<div class="card"><h3>${t.name}</h3><p><b>University:</b> ${t.university||"Not specified"}</p><p><b>Rate:</b> ${money(t.rate)}/hour/person</p><button onclick="selectTutorForBooking('${t.id}')">Choose ${t.name}</button></div>`).join("")}</div>`;$("bt").innerHTML=ts.map(t=>`<option value="${t.id}">${t.name}</option>`).join("");details.classList.remove("hidden");if(preselectTutorId&&ts.some(t=>t.id===preselectTutorId)){$("bt").value=preselectTutorId;preselectTutorId=null}updateBooking()}
 function selectTutorForBooking(id){$("bt").value=id;updateBooking();$("bookingDetails").scrollIntoView({behavior:"smooth",block:"start"})}
 function renderBookingCalendar(){
   if(!$("bt")||!$("bt").value||!$("bcourseFirst").value)return;
@@ -617,7 +655,11 @@ async function confirmBooking(){if(!$("bcourseFirst").value)return alert("Choose
 function showBookingModal(t){const div=document.createElement("div");div.className="modal";div.innerHTML=`<div class="modal-box"><h2>🎉 Booking Confirmed!</h2><p>Your tutoring session has been successfully booked.</p><p><b>Important:</b> If you need to reschedule, cancel, or have any questions, please contact your tutor directly via WhatsApp.</p><p><b>Tutor:</b> ${t.name}<br><b>WhatsApp:</b> ${t.whatsapp||""}</p><button class="whatsapp" onclick="openWhatsApp('${t.whatsapp||""}','Hi, I have a question about my tutoring session on Scheduled.')">Contact Tutor on WhatsApp</button><button onclick="document.body.removeChild(this.closest('.modal'));openTab('My Sessions')">Go to My Sessions</button></div>`;document.body.appendChild(div)}
 
 function myTutorsPage(){let ts=studentTutors(currentUser.uid);$("content").innerHTML=`<div class="card"><h2>My Tutors</h2>${ts.length?`<div class="grid">${ts.map(t=>{let bs=list(DATA.bookings).filter(b=>b.studentId===currentUser.uid&&b.tutorId===t.id);return`<div class="card"><h3>${t.name}</h3><p>${t.university||""}</p><p>${(t.courses||[]).join(", ")}</p><button class="whatsapp" onclick="openWhatsApp('${t.whatsapp||""}','Hi, I have a question about my tutoring session on Scheduled.')">Contact Tutor on WhatsApp</button><button onclick="bookWithTutor('${t.id}')">Book a New Session</button><hr><b>Upcoming</b><br>${bs.filter(b=>!b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Past</b><br>${bs.filter(b=>b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}</div>`}).join("")}</div>`:`<p class="muted">No tutors yet. Book a session first.</p>`}</div>`}
-function bookWithTutor(id){preselectTutorId=id;openTab("Book")}
+function bookWithTutor(id, course=""){
+  preselectTutorId=id;
+  window.preselectCourse=course||"";
+  openTab("Book");
+}
 function myStudentsPage(){let ids=[...new Set(list(DATA.bookings).filter(b=>b.tutorId===currentUser.uid).map(b=>b.studentId))];let ss=ids.map(id=>({id,...user(id)})).filter(s=>s.role==="student");$("content").innerHTML=`<div class="card"><h2>My Students</h2>${ss.length?`<div class="grid">${ss.map(s=>{let bs=list(DATA.bookings).filter(b=>b.tutorId===currentUser.uid&&b.studentId===s.id);return`<div class="card"><h3>${s.name}</h3><p>${s.email||""}<br>${s.phone||""}</p><b>Upcoming</b><br>${bs.filter(b=>!b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Past</b><br>${bs.filter(b=>b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Unpaid:</b> ${money(unpaid(bs))}</div>`}).join("")}</div>`:`<p class="muted">No students yet. Students appear here after booking with you.</p>`}</div>`}
 
 function financialPage(){let b=myBookings(),month=new Date().toISOString().slice(0,7),mb=b.filter(x=>(x.date||"").startsWith(month));$("content").innerHTML=`<div class="grid"><div class="card"><h3>Total Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Total Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>This Month Paid</h3><h1>${money(paid(mb))}</h1></div><div class="card"><h3>This Month Unpaid</h3><h1>${money(unpaid(mb))}</h1></div></div><div class="card"><h2>Financial Details</h2>${bookingRows(b,true)}</div>`}
