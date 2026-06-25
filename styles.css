@@ -214,10 +214,9 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}.small{font-size:13
 .timeline-item{border-left:4px solid var(--blue);padding:10px 14px;margin:10px 0;background:#fff;border-radius:0 16px 16px 0;border-top:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border)}.announcement-card,.session-note-box{border:1px solid var(--border);border-radius:18px;padding:14px;background:#fff;margin:10px 0}.emergency-badge{background:#FFEFC7;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;display:inline-block}.profile-section{background:#fff;border:1px solid var(--border);border-radius:22px;padding:16px;margin-bottom:14px}.contact-help{background:var(--blue2);border:1px solid var(--border);border-radius:18px;padding:14px;margin-top:12px}.error-card{max-width:720px;margin:28px auto;background:#fff;border:1px solid var(--red);border-radius:24px;padding:20px;box-shadow:0 16px 45px rgba(31,42,55,.12)}
 
 
-/* v5.5 post-v5.0 requests */
-.banner-editor-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+/* v5.6 stable additions from v5.0 */
 .banner-pill{background:var(--blue2);border:1px solid var(--border);border-radius:999px;padding:8px 12px;display:inline-flex;gap:8px;align-items:center;margin:4px}
 .assigned-student-list{max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:18px;padding:12px;background:#fff}
-.tutor-schedule-form .row{align-items:end}
 .badge-soft{display:inline-block;background:var(--blue2);border:1px solid var(--border);border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;margin:3px}
-.error-card{max-width:720px;margin:28px auto;background:#fff;border:1px solid #ef4444;border-radius:24px;padding:20px;box-shadow:0 16px 45px rgba(31,42,55,.12)}
+.tutor-schedule-form label{display:block}
+.tutor-schedule-form select,.tutor-schedule-form input{width:100%}
