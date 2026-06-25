@@ -1,13 +1,14 @@
-Scheduled v6.5 — Menu Bar Fix
+Scheduled v6.6 — Reliable Menu Fix
 
-Built from v6.4.
+Built from v6.5.
 
 Fixes:
-- Sidebar/menu scrolls properly.
-- Menu tabs are clickable for admin, tutor, and student accounts.
-- Backdrop no longer blocks the sidebar buttons.
-- Body stops scrolling behind the open menu.
-- Menu button stays clickable.
-- Works better on mobile using 100dvh and touch scrolling.
+- Replaced the sidebar menu with a simpler reliable system.
+- Menu has a visible close button.
+- Menu scrolls with 100dvh and touch scrolling.
+- Backdrop is below menu and cannot block tab buttons.
+- Tab buttons are recreated with type=button and data-tab.
+- Menu closes after tab click without swallowing the click.
+- Works for admin, tutor, and student role tab lists.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.

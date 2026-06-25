@@ -34,33 +34,7 @@ window.addEventListener("unhandledrejection", function(e){
   }catch(_){}
 });
 
-function toggleMenu(){
-  const tabs=document.getElementById("tabs");
-  if(!tabs)return;
-  const willOpen=!tabs.classList.contains("open");
-  tabs.classList.toggle("open",willOpen);
-  document.body.classList.toggle("menu-open",willOpen);
 
-  let backdrop=document.getElementById("menuBackdrop");
-  if(willOpen){
-    if(!backdrop){
-      backdrop=document.createElement("div");
-      backdrop.id="menuBackdrop";
-      backdrop.className="menu-backdrop";
-      backdrop.addEventListener("click",closeMenu);
-      document.body.appendChild(backdrop);
-    }
-  }else{
-    if(backdrop)backdrop.remove();
-  }
-}
-function closeMenu(){
-  const tabs=document.getElementById("tabs");
-  if(tabs)tabs.classList.remove("open");
-  document.body.classList.remove("menu-open");
-  const backdrop=document.getElementById("menuBackdrop");
-  if(backdrop)backdrop.remove();
-}
 
 function openRequestAccessForm(prefillCourses=""){
   $("loginPage").innerHTML=`<div class="login-card">
@@ -926,28 +900,69 @@ function renderDailyFocusOutside(){
   </div>`;
 }
 
-function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
-async function openTab(tab,btn){if(typeof closeMenu==="function")closeMenu();await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:tutorAnnouncementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
 
-function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}
-
-function adminTutors(){
-  const ts=tutors();
-  $("content").innerHTML=`<div class="card"><h2>Booking Tutor Accounts</h2>
-  <p class="admin-note"><b>This tab creates real booking tutor accounts.</b> If the email already exists in Firebase, Scheduled prepares the tutor profile by email and links it automatically when they log in with that same email/password. Public profile photos/descriptions are separate in Tutor Profiles.</p>
-  ${ts.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>University</th><th>Rate</th><th>WhatsApp</th><th>Courses</th><th>Actions</th></tr>${ts.map(t=>`<tr><td>${t.name||""}</td><td>${t.email||""}</td><td>${t.university||""}</td><td>${money(t.rate)}/h/person</td><td>${t.whatsapp||""}</td><td>${(t.courses||[]).join(", ")}</td><td><button onclick="editTutor('${t.id}')">Edit</button><button class="danger" onclick="deleteTutor('${t.id}')">Remove Access</button></td></tr>`).join("")}</table>`:`<p class="muted">No booking tutor accounts yet.</p>`}
-  <hr><h3>Create Booking Tutor Account</h3>
-  <div class="row">
-    <input id="tn" placeholder="Full name">
-    <input id="te" type="email" placeholder="Email">
-    <input id="tp" placeholder="Temporary password">
-    <input id="tw" placeholder="WhatsApp e.g. 96176174738">
-    <input id="tr" type="number" placeholder="Hourly rate">
-    <input id="tuiv" placeholder="University e.g. University of Balamand">
-  </div>
-  <input id="tl" placeholder="General locations: Online, On Campus (Koura Campus)">
-  <button onclick="createAccount('tutor')">Create / Link Booking Tutor</button></div>`;
+function toggleMenu(e){
+  if(e){
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const tabs=document.getElementById("tabs");
+  if(!tabs)return;
+  const opening=!tabs.classList.contains("open");
+  setMenuOpen(opening);
 }
+function setMenuOpen(opening){
+  const tabs=document.getElementById("tabs");
+  if(!tabs)return;
+  tabs.classList.toggle("open",!!opening);
+  document.body.classList.toggle("menu-open",!!opening);
+
+  let closeBtn=document.getElementById("menuCloseBtn");
+  if(opening && !closeBtn){
+    closeBtn=document.createElement("button");
+    closeBtn.id="menuCloseBtn";
+    closeBtn.className="menu-close";
+    closeBtn.type="button";
+    closeBtn.innerHTML="×";
+    closeBtn.onclick=function(ev){closeMenu(ev)};
+    tabs.insertBefore(closeBtn,tabs.firstChild);
+  }
+
+  let backdrop=document.getElementById("menuBackdrop");
+  if(opening){
+    if(!backdrop){
+      backdrop=document.createElement("div");
+      backdrop.id="menuBackdrop";
+      backdrop.className="menu-backdrop";
+      backdrop.onclick=function(ev){closeMenu(ev)};
+      document.body.appendChild(backdrop);
+    }
+  }else{
+    if(backdrop)backdrop.remove();
+  }
+}
+function closeMenu(e){
+  if(e){
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  setMenuOpen(false);
+}
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape")closeMenu(e);
+});
+
+
+function renderTabs(){
+  let tabs=[];
+  if(profile.role==="admin")tabs=["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"];
+  else if(profile.role==="tutor")tabs=["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"];
+  else tabs=["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];
+  const box=$("tabs");
+  if(!box)return;
+  box.innerHTML=tabs.map(t=>`<button type="button" data-tab="${t}" onclick="openTab('${t}',this)">${t}</button>`).join("");
+}
+
 async function editTutor(id){
   const t=DATA.users[id];if(!t)return alert("Tutor not found.");
   const name=prompt("Tutor full name:",t.name||"");if(name===null)return;
