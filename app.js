@@ -7,7 +7,7 @@ const ADMIN_WHATSAPP="96176174738";
 const SITE_URL="https://scheduledeu.vercel.app/";
 const $=id=>document.getElementById(id);
 const money=n=>"$"+Number(n||0).toFixed(Number.isInteger(Number(n))?0:2);
-let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{}};
+let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{}};
 let preselectTutorId=null;
 
 setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")},800);
@@ -27,8 +27,24 @@ async function submitAccessRequest(){
 }
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
-async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{}}}
-auth.onAuthStateChanged(async u=>{if(!u)return;currentUser=u;let s=await db.ref("users/"+u.uid).once("value");profile=s.val();if(!profile||profile.removed){notice("Account exists but no Scheduled profile was found.");await auth.signOut();return}await loadData();$("loginPage").classList.add("hidden");$("dashboard").classList.remove("hidden");$("roleLabel").textContent=`${profile.name} • ${profile.role.toUpperCase()}`;renderTabs()});
+async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{}}}
+auth.onAuthStateChanged(async u=>{
+  if(!u)return;
+  currentUser=u;
+  let s=await db.ref("users/"+u.uid).once("value");
+  profile=s.val();
+  if(!profile){profile=await applyPendingProfileIfAny(u)}
+  if(!profile||profile.removed){
+    notice("This account does not have access to Scheduled.");
+    await auth.signOut();
+    return;
+  }
+  await loadData();
+  $("loginPage").classList.add("hidden");
+  $("dashboard").classList.remove("hidden");
+  $("roleLabel").textContent=`${profile.name} • ${profile.role.toUpperCase()}`;
+  renderTabs();
+});
 async function login(){try{await auth.signInWithEmailAndPassword($("loginEmail").value.trim(),$("loginPassword").value.trim())}catch(e){notice(e.message)}}
 async function logout(){await auth.signOut();location.reload()}
 
@@ -116,6 +132,41 @@ function paymentSummary(b){return(b.payments||[]).map((p,i)=>`${p.name}: ${money
 function studentTutors(studentId){let ids=[...new Set(list(DATA.bookings).filter(b=>b.studentId===studentId).map(b=>b.tutorId))];return ids.map(id=>({id,...user(id)})).filter(t=>t.role==="tutor"&&!t.removed)}
 
 
+
+function imageFileToDataUrl(fileInputId){
+  return new Promise(resolve=>{
+    const input=$(fileInputId);
+    if(!input||!input.files||!input.files[0])return resolve("");
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement("canvas");
+        const max=500;let w=img.width,h=img.height;
+        if(w>h&&w>max){h=Math.round(h*max/w);w=max}
+        else if(h>=w&&h>max){w=Math.round(w*max/h);h=max}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL("image/jpeg",0.72));
+      };
+      img.onerror=()=>resolve("");
+      img.src=e.target.result;
+    };
+    reader.onerror=()=>resolve("");
+    reader.readAsDataURL(input.files[0]);
+  });
+}
+function pendingKey(email){return safe(String(email||"").toLowerCase().trim())}
+async function applyPendingProfileIfAny(u){
+  const key=pendingKey(u.email);
+  const snap=await db.ref("pendingProfiles/"+key).once("value");
+  const pending=snap.val();
+  if(!pending)return null;
+  await db.ref("users/"+u.uid).set({...pending,uid:u.uid,email:u.email,linkedAt:Date.now()});
+  await db.ref("pendingProfiles/"+key).remove();
+  return {...pending,uid:u.uid,email:u.email};
+}
+
 function tutorCard(t,inside=false){
   return `<div class="card tutor-card" onclick="${inside?`showLoggedTutorDetails('${t.id}')`:`showPublicTutorDetails('${t.id}')`}">
     <img class="tutor-avatar" src="${tutorPhoto(t)}" onerror="this.src='scheduled-icon.jpeg'">
@@ -169,7 +220,7 @@ async function openTab(tab,btn){await loadData();document.querySelectorAll(".tab
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}
 
-function adminTutors(){const ts=tutors();$("content").innerHTML=`<div class="card"><h2>Tutors</h2>${ts.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>University</th><th>Rate</th><th>WhatsApp</th><th>Courses</th><th>Actions</th></tr>${ts.map(t=>`<tr><td>${t.name||""}</td><td>${t.email||""}</td><td>${t.university||""}</td><td>${money(t.rate)}/h/person</td><td>${t.whatsapp||""}</td><td>${(t.courses||[]).join(", ")}</td><td><button onclick="editTutor('${t.id}')">Edit</button><button class="danger" onclick="deleteTutor('${t.id}')">Remove</button></td></tr>`).join("")}</table>`:`<p class="muted">No tutors yet.</p>`}<hr><h3>Create Tutor</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"><input id="tuiv" placeholder="University e.g. University of Balamand"></div><input id="tl" placeholder="General locations: Online, On Campus (Koura Campus)"><input id="tphoto" placeholder="Profile picture URL (optional)"><textarea id="tdesc" placeholder="Tutor description / teaching style"></textarea><button onclick="createAccount('tutor')">Create Tutor</button></div>`}
+function adminTutors(){const ts=tutors();$("content").innerHTML=`<div class="card"><h2>Tutors</h2>${ts.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>University</th><th>Rate</th><th>WhatsApp</th><th>Courses</th><th>Actions</th></tr>${ts.map(t=>`<tr><td>${t.name||""}</td><td>${t.email||""}</td><td>${t.university||""}</td><td>${money(t.rate)}/h/person</td><td>${t.whatsapp||""}</td><td>${(t.courses||[]).join(", ")}</td><td><button onclick="editTutor('${t.id}')">Edit</button><button onclick="editTutorPhoto('${t.id}')">Photo</button><button class="danger" onclick="deleteTutor('${t.id}')">Remove</button></td></tr>`).join("")}</table>`:`<p class="muted">No tutors yet.</p>`}<hr><h3>Create Tutor</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"><input id="tuiv" placeholder="University e.g. University of Balamand"></div><input id="tl" placeholder="General locations: Online, On Campus (Koura Campus)"><label>Profile picture</label><input id="tphotoFile" type="file" accept="image/*"><p class="file-note">Upload from files/photos.</p><textarea id="tdesc" placeholder="Tutor description / teaching style"></textarea><button onclick="createAccount('tutor')">Create Tutor</button></div>`}
 async function editTutor(id){
   const t=DATA.users[id];if(!t)return alert("Tutor not found.");
   const name=prompt("Tutor full name:",t.name||"");if(name===null)return;
@@ -185,12 +236,102 @@ async function editTutor(id){
   for(const c of courses){await db.ref("courses/"+safe(c)).set({name:c})}
   await loadData();adminTutors();
 }
-async function deleteTutor(id){const t=DATA.users[id];if(!t)return alert("Tutor not found.");if(!confirm(`Remove tutor ${t.name}?`))return;await db.ref("users/"+id).update({role:"removedTutor",removed:true,removedAt:Date.now()});await loadData();adminTutors()}
 
+async function editTutorPhoto(id){
+  const input=document.createElement("input");
+  input.type="file";input.accept="image/*";
+  input.onchange=async()=>{
+    if(!input.files||!input.files[0])return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=async()=>{
+        const canvas=document.createElement("canvas");
+        const max=500;let w=img.width,h=img.height;
+        if(w>h&&w>max){h=Math.round(h*max/w);w=max}
+        else if(h>=w&&h>max){w=Math.round(w*max/h);h=max}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        await db.ref("users/"+id+"/photoUrl").set(canvas.toDataURL("image/jpeg",0.72));
+        await loadData();adminTutors();
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(input.files[0]);
+  };
+  input.click();
+}
+async function deleteTutor(id){
+  const t=DATA.users[id];if(!t)return alert("Tutor not found.");
+  if(!confirm(`Delete tutor ${t.name} from Scheduled? They will no longer be able to access the website. To delete the Firebase Auth email too, also remove it in Firebase Authentication > Users.`))return;
+  await db.ref("users/"+id).remove();
+  const av=list(DATA.availability).filter(a=>a.tutorId===id);
+  for(const a of av){await db.ref("availability/"+a.id).remove()}
+  await loadData();adminTutors();
+}
 function usersTable(a){return a.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Role/Type</th><th>Details</th></tr>${a.map(u=>`<tr><td>${u.name||""}</td><td>${u.email||""}</td><td>${u.role}${u.type?"/"+u.type:""}</td><td>${u.rate?money(u.rate)+"/h/person<br>":""}${u.university?`University: ${u.university}<br>`:""}${u.whatsapp||u.phone||""}<br>${(u.courses||[]).join(", ")}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
-function adminStudents(){const visible=profile.role==="admin"?students():students().filter(s=>studentTutors(s.id).some(t=>t.id===currentUser.uid));$("content").innerHTML=`<div class="card"><h2>${profile.role==="admin"?"Students / Groups":"My Students / Groups"}</h2>${usersTable(visible)}<hr><h3>Create Student or Group Account</h3><div class="row"><input id="sn" placeholder="Name"><input id="se" type="email" placeholder="Email"><input id="sp" placeholder="Password"><input id="sphone" placeholder="Phone"><select id="stype"><option>individual</option><option>group</option></select></div><input id="smembers" placeholder="Group members comma separated"><button onclick="createAccount('student')">Create Student/Group</button></div>`}
-async function createAccount(role){try{let name,email,password,extra={},phoneForWa="";if(role==="tutor"){if(profile.role!=="admin")return alert("Only admin can create tutor accounts.");name=$("tn").value;email=$("te").value;password=$("tp").value;phoneForWa=$("tw").value;extra={whatsapp:$("tw").value,rate:Number($("tr").value||15),university:$("tuiv").value.trim(),photoUrl:($("tphoto")?.value||"").trim(),description:($("tdesc")?.value||"").trim(),locations:$("tl").value.split(",").map(x=>x.trim()).filter(Boolean),courses:[]}}else{name=$("sn").value;email=$("se").value;password=$("sp").value;phoneForWa=$("sphone").value;extra={phone:$("sphone").value,type:$("stype").value,members:$("smembers").value.split(",").map(x=>x.trim()).filter(Boolean),createdBy:currentUser.uid}}if(!name||!email||!password)return alert("Please fill name, email, and password.");let c=await secondaryAuth.createUserWithEmailAndPassword(email,password);await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name,email,role,createdAt:Date.now(),...extra});await secondaryAuth.signOut();await loadData();openWhatsApp(phoneForWa,`Hi ${name}, your Scheduled account has been created.\n\nLogin link: ${SITE_URL}\nEmail: ${email}\nTemporary password: ${password}\n\nPlease change your password after logging in.`);role==="tutor"?adminTutors():adminStudents()}catch(e){alert(e.message)}}
+function adminStudents(){
+  const visible=profile.role==="admin"?students():students().filter(s=>studentTutors(s.id).some(t=>t.id===currentUser.uid));
+  $("content").innerHTML=`<div class="card"><h2>${profile.role==="admin"?"Students / Groups":"My Students / Groups"}</h2>
+  ${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Type</th><th>Actions</th></tr>${visible.map(s=>`<tr><td>${s.name||""}</td><td>${s.email||""}</td><td>${s.phone||""}</td><td>${s.university||""}</td><td>${s.type||"individual"}</td><td>${profile.role==="admin"?`<button onclick="editStudent('${s.id}')">Edit</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
+  <hr><h3>Create Student or Group Account</h3><div class="row"><input id="sn" placeholder="Name"><input id="se" type="email" placeholder="Email"><input id="sp" placeholder="Password"><input id="sphone" placeholder="Phone"><input id="suniversity" placeholder="University"><select id="stype"><option>individual</option><option>group</option></select></div><input id="smembers" placeholder="Group members comma separated"><button onclick="createAccount('student')">Create Student/Group</button></div>`;
+}
+async function editStudent(id){
+  const s=DATA.users[id];if(!s)return alert("Student not found.");
+  const name=prompt("Student name:",s.name||"");if(name===null)return;
+  const phone=prompt("Phone number:",s.phone||"");if(phone===null)return;
+  const university=prompt("University:",s.university||"");if(university===null)return;
+  const type=prompt("Type: individual or group",s.type||"individual");if(type===null)return;
+  const membersText=prompt("Group members comma separated:",(s.members||[]).join(", "));if(membersText===null)return;
+  await db.ref("users/"+id).update({name,phone,university,type,members:membersText.split(",").map(x=>x.trim()).filter(Boolean),updatedAt:Date.now()});
+  await loadData();adminStudents();
+}
+async function deleteStudent(id){
+  const s=DATA.users[id];if(!s)return alert("Student not found.");
+  if(!confirm(`Delete student ${s.name} from Scheduled? They will no longer be able to access the website. To delete the Firebase Auth email too, also remove it in Firebase Authentication > Users.`))return;
+  await db.ref("users/"+id).remove();
+  await loadData();adminStudents();
+}
+async function createAccount(role){
+  try{
+    let name,email,password,extra={},phoneForWa="",profileData={};
+    if(role==="tutor"){
+      if(profile.role!=="admin")return alert("Only admin can create tutor accounts.");
+      name=$("tn").value.trim();email=$("te").value.trim();password=$("tp").value;phoneForWa=$("tw").value;
+      const photoData=await imageFileToDataUrl("tphotoFile");
+      extra={whatsapp:$("tw").value,rate:Number($("tr").value||15),university:$("tuiv").value.trim(),photoUrl:photoData,description:($("tdesc")?.value||"").trim(),locations:$("tl").value.split(",").map(x=>x.trim()).filter(Boolean),courses:[]};
+    }else{
+      name=$("sn").value.trim();email=$("se").value.trim();password=$("sp").value;phoneForWa=$("sphone").value;
+      extra={phone:$("sphone").value,university:($("suniversity")?.value||"").trim(),type:$("stype").value,members:$("smembers").value.split(",").map(x=>x.trim()).filter(Boolean),createdBy:currentUser.uid};
+    }
+    if(!name||!email||!password)return alert("Please fill name, email, and password.");
+    profileData={name,email,role,createdAt:Date.now(),removed:false,...extra};
+    try{
+      let c=await secondaryAuth.createUserWithEmailAndPassword(email,password);
+      await db.ref("users/"+c.user.uid).set({uid:c.user.uid,...profileData});
+      await secondaryAuth.signOut();
+      openWhatsApp(phoneForWa,`Hi ${name}, your Scheduled account has been created.
 
+Login link: ${SITE_URL}
+Email: ${email}
+Temporary password: ${password}
+
+Please change your password after logging in.`);
+    }catch(e){
+      if(String(e.code||"").includes("email-already-in-use")){
+        await db.ref("pendingProfiles/"+pendingKey(email)).set(profileData);
+        openWhatsApp(phoneForWa,`Hi ${name}, your Scheduled profile has been prepared using your existing email.
+
+Login link: ${SITE_URL}
+Email: ${email}
+Use your existing password. When you log in, your Scheduled profile will be linked automatically.`);
+        alert("This email already exists. A pending Scheduled profile was created. When the user logs in with that email, it will link automatically.");
+      }else{throw e}
+    }
+    await loadData();
+    role==="tutor"?adminTutors():adminStudents();
+  }catch(e){alert(e.message)}
+}
 function adminCourses(){$("content").innerHTML=`<div class="card"><h2>Course Management</h2><table class="table"><tr><th>Tutor</th><th>Courses</th></tr>${tutors().map(t=>`<tr><td>${t.name}</td><td>${(t.courses||[]).join(", ")}</td></tr>`).join("")}</table><hr><div class="row"><select id="ct">${tutors().map(t=>`<option value="${t.id}">${t.name}</option>`)}</select><input id="cn" placeholder="Course name exactly: Physics 213"></div><button onclick="assignCourse()">Assign Course</button></div>`}
 async function assignCourse(){let t=user($("ct").value),c=$("cn").value.trim(),cs=Array.from(new Set([...(t.courses||[]),c])).filter(Boolean);await db.ref("users/"+$("ct").value+"/courses").set(cs);await db.ref("courses/"+safe(c)).set({name:c});await loadData();adminCourses()}
 

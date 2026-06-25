@@ -1,17 +1,12 @@
-Scheduled v2.5 Full ZIP
+Scheduled v2.6 — Accounts + Uploads
 
-Includes:
-- v2.4 availability fix
-- Compact Apple-style booking calendar
-- Red strike only on no-availability/no-slot dates
-- Request Access includes University
-- Become a Tutor wording
-- Public Browse Tutors page
-- Public tutor details with Book Now → Request Access
-- Student All Tutors tab
-- Logged-in tutor details with Book Now → booking flow
-- AM/PM time display for students and session displays
-- Bigger splash/login logo and aligned inside logo
-- Tutor profile fields: photo URL and description
+Adds:
+- Tutor profile picture upload from files/photos, compressed and stored in Realtime Database
+- Admin can update tutor profile photo using a file picker
+- Add tutor even if Firebase Auth email already exists: creates a pending Scheduled profile by email and links it on next login
+- Admin can edit student information
+- Admin can delete students from Scheduled
+- Admin delete tutor/student removes their Scheduled profile so they cannot access the platform
+- Note: full Firebase Authentication email deletion still requires Firebase Console unless backend Admin SDK is added
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.

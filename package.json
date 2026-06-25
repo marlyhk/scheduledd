@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-full-v2-5",
-  "version": "2.5.0",
+  "name": "scheduled-v2-6-accounts-uploads",
+  "version": "2.6.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg public/"
