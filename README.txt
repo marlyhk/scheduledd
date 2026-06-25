@@ -1,11 +1,11 @@
-Scheduled v2.3 — Compact Calendar + Request University
+Scheduled v2.4 — Availability Fix
 
-Includes:
-- Compact Apple-style booking calendar
-- Red strike only on unavailable/no-slot dates
-- Login page card now says Become a Tutor
-- Request Access form now includes University
-- Admin Access Requests table shows University
-- Approved student profile stores University
+Fixes:
+- Student booking calendar now detects tutor availability correctly
+- Supports new course-specific availability
+- Supports older/general availability already saved in Firebase
+- Course matching is normalized, so small capitalization/spacing differences do not hide availability
+- Uses local dates to avoid timezone date shifting
+- Tutor availability page uses latest tutor course list
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
