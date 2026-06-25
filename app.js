@@ -15,7 +15,7 @@ function notice(m){$("notice").textContent=m;$("notice").classList.remove("hidde
 function cleanPhone(p){return String(p||"").replace(/[^\d]/g,"")}
 function openWhatsApp(phone,msg){const p=cleanPhone(phone);if(!p)return alert("No WhatsApp number saved.");window.open(`https://wa.me/${p}?text=${encodeURIComponent(msg)}`,"_blank")}
 function toggleRequestAccess(){$("requestAccess").classList.toggle("hidden")}
-async function submitAccessRequest(){const name=$("reqName").value.trim(),email=$("reqEmail").value.trim(),phone=$("reqPhone").value.trim(),courses=$("reqCourses").value.trim(),message=$("reqMessage").value.trim();if(!name||!email||!phone||!courses)return notice("Please fill full name, email, phone number, and course(s) needed.");try{await db.ref("accessRequests").push({name,email,phone,courses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqCourses","reqMessage"].forEach(id=>$(id).value="");notice("Access request submitted. We will contact you after review.");$("requestAccess").classList.add("hidden")}catch(e){notice(e.message)}}
+async function submitAccessRequest(){const name=$("reqName").value.trim(),email=$("reqEmail").value.trim(),phone=$("reqPhone").value.trim(),university=$("reqUniversity").value.trim(),courses=$("reqCourses").value.trim(),message=$("reqMessage").value.trim();if(!name||!email||!phone||!university||!courses)return notice("Please fill full name, email, phone number, university, and course(s) needed.");try{await db.ref("accessRequests").push({name,email,phone,university,courses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqUniversity","reqCourses","reqMessage"].forEach(id=>$(id).value="");notice("Access request submitted. We will contact you after review.");$("requestAccess").classList.add("hidden")}catch(e){notice(e.message)}}
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
 async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{}}}
@@ -67,9 +67,9 @@ async function createAccount(role){try{let name,email,password,extra={},phoneFor
 function adminCourses(){$("content").innerHTML=`<div class="card"><h2>Course Management</h2><table class="table"><tr><th>Tutor</th><th>Courses</th></tr>${tutors().map(t=>`<tr><td>${t.name}</td><td>${(t.courses||[]).join(", ")}</td></tr>`).join("")}</table><hr><div class="row"><select id="ct">${tutors().map(t=>`<option value="${t.id}">${t.name}</option>`)}</select><input id="cn" placeholder="Course name exactly: Physics 213"></div><button onclick="assignCourse()">Assign Course</button></div>`}
 async function assignCourse(){let t=user($("ct").value),c=$("cn").value.trim(),cs=Array.from(new Set([...(t.courses||[]),c])).filter(Boolean);await db.ref("users/"+$("ct").value+"/courses").set(cs);await db.ref("courses/"+safe(c)).set({name:c});await loadData();adminCourses()}
 
-function accessRequestsPage(){const requests=list(DATA.accessRequests).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));$("content").innerHTML=`<div class="card"><h2>Access Requests</h2>${requests.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>Courses</th><th>Message</th><th>Status</th><th>Actions</th></tr>${requests.map(r=>`<tr><td>${r.name||""}</td><td>${r.email||""}</td><td>${r.phone||""}</td><td>${r.courses||""}</td><td>${r.message||""}</td><td>${r.status||"pending"}</td><td>${(r.status||"pending")==="pending"?`<button onclick="approveAccessRequest('${r.id}')">Approve</button><button class="danger" onclick="rejectAccessRequest('${r.id}')">Reject</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No access requests yet.</p>`}</div>`}
+function accessRequestsPage(){const requests=list(DATA.accessRequests).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));$("content").innerHTML=`<div class="card"><h2>Access Requests</h2>${requests.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Courses</th><th>Message</th><th>Status</th><th>Actions</th></tr>${requests.map(r=>`<tr><td>${r.name||""}</td><td>${r.email||""}</td><td>${r.phone||""}</td><td>${r.university||""}</td><td>${r.courses||""}</td><td>${r.message||""}</td><td>${r.status||"pending"}</td><td>${(r.status||"pending")==="pending"?`<button onclick="approveAccessRequest('${r.id}')">Approve</button><button class="danger" onclick="rejectAccessRequest('${r.id}')">Reject</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No access requests yet.</p>`}</div>`}
 function tempPass(){return"Scheduled-"+Math.floor(1000+Math.random()*9000)}
-async function approveAccessRequest(id){const r=DATA.accessRequests[id];if(!r)return alert("Request not found.");const password=tempPass();try{let c=await secondaryAuth.createUserWithEmailAndPassword(r.email,password);await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name:r.name,email:r.email,phone:r.phone,role:"student",type:"individual",requestedCourses:r.courses,createdBy:currentUser.uid,createdFromAccessRequest:id,createdAt:Date.now()});await db.ref("accessRequests/"+id).update({status:"approved",approvedAt:Date.now(),createdStudentUid:c.user.uid});await secondaryAuth.signOut();await loadData();openWhatsApp(r.phone,`Hi ${r.name}, your Scheduled access request has been approved.\n\nLogin link: ${SITE_URL}\nEmail: ${r.email}\nTemporary password: ${password}\n\nYou can now log in and book your tutoring sessions.`);accessRequestsPage()}catch(e){alert(e.message)}}
+async function approveAccessRequest(id){const r=DATA.accessRequests[id];if(!r)return alert("Request not found.");const password=tempPass();try{let c=await secondaryAuth.createUserWithEmailAndPassword(r.email,password);await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name:r.name,email:r.email,phone:r.phone,university:r.university||"",role:"student",type:"individual",requestedCourses:r.courses,createdBy:currentUser.uid,createdFromAccessRequest:id,createdAt:Date.now()});await db.ref("accessRequests/"+id).update({status:"approved",approvedAt:Date.now(),createdStudentUid:c.user.uid});await secondaryAuth.signOut();await loadData();openWhatsApp(r.phone,`Hi ${r.name}, your Scheduled access request has been approved.\n\nLogin link: ${SITE_URL}\nEmail: ${r.email}\nTemporary password: ${password}\n\nYou can now log in and book your tutoring sessions.`);accessRequestsPage()}catch(e){alert(e.message)}}
 async function rejectAccessRequest(id){if(!confirm("Reject this access request?"))return;await db.ref("accessRequests/"+id).update({status:"rejected",rejectedAt:Date.now()});await loadData();accessRequestsPage()}
 
 function bookingRows(bs,edit){return bs.length?`<table class="table"><tr><th>Date</th><th>Time</th><th>Course</th><th>Tutor</th><th>Student/Group</th><th>Details</th><th>Payments</th><th>Notes</th><th>Actions</th></tr>${bs.map(b=>`<tr><td>${b.date}</td><td>${b.start}</td><td>${b.course}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${b.duration}h • ${b.format||"Individual"} ${b.groupSize||1}<br>${b.location}<br>${b.paymentMethod}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${money(total(b))}</td><td>${(b.payments||[]).map((p,i)=>`${p.name}: ${money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">Toggle</button>`:""}`).join("<br>")}</td><td>${b.notes||""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td><td>${edit?`<button onclick="editBooking('${b.id}')">Edit</button><button onclick="markDone('${b.id}')">Mark Done</button><button class="danger" onclick="deleteBooking('${b.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No sessions yet.</p>`}
@@ -98,8 +98,51 @@ function dailyView(date){let bs=myBookings().filter(b=>b.date===date).sort((a,b)
 function bookingPage(){const courses=allCourseNames(),universities=allUniversityNames();$("content").innerHTML=`<div class="card"><h2>Book a Session</h2><label>1. Choose Course</label><select id="bcourseFirst" onchange="updateTutorListForCourse()"><option value="">Select a course</option>${courses.map(c=>`<option value="${c}">${c}</option>`).join("")}</select><label>2. Choose University</label><select id="buniversity" onchange="updateTutorListForCourse()"><option value="">All universities</option>${universities.map(u=>`<option value="${u}">${u}</option>`).join("")}</select><div id="courseTutorList"></div><div id="bookingDetails" class="hidden"><hr><label>3. Selected Tutor</label><select id="bt" onchange="updateBooking()"></select><div id="bookingCalendar"></div><div class="row"><div><label>4. Date</label><input id="bd" type="date" onchange="updateSlots()"></div><div><label>5. Duration</label><select id="bdu" onchange="updateSlots()"><option value="1">1 hour</option><option value="1.5">1h 30min</option><option value="2">2 hours</option><option value="2.5">2h 30min</option><option value="3">3 hours</option></select></div><div><label>6. Available Time</label><select id="bs" onchange="updateBookingLocations();updatePrice()"></select></div></div><label>Session Format</label><div class="row"><select id="bf" onchange="updatePrice()"><option>Individual</option><option>Group</option></select><select id="bg" onchange="updatePrice()"><option value="1">1 student</option><option value="2">2 students</option><option value="3">3 students</option><option value="4">4 students</option><option value="5">5 students</option></select></div><label>Session Type</label><div class="checkbox-grid">${["Course & Formulas","Book Exercises","Previous Exams","Other"].map(x=>`<label class="check"><input type="checkbox" class="stype" value="${x}">${x}</label>`).join("")}</div><label>Location</label><select id="bl" onchange="updatePrice()"></select><div id="price" class="card small"></div><button onclick="confirmBooking()">Confirm Booking + WhatsApp</button></div></div>`}
 function updateTutorListForCourse(){const course=$("bcourseFirst").value,university=$("buniversity").value,listBox=$("courseTutorList"),details=$("bookingDetails");if(!course){listBox.innerHTML="";details.classList.add("hidden");return}let ts=tutorsForCourseAndUniversity(course,university);if(!ts.length){listBox.innerHTML=`<div class="card"><p class="muted">No tutors available.</p></div>`;details.classList.add("hidden");return}listBox.innerHTML=`<hr><h3>Available Tutors</h3><div class="grid">${ts.map(t=>`<div class="card"><h3>${t.name}</h3><p><b>University:</b> ${t.university||"Not specified"}</p><p><b>Rate:</b> ${money(t.rate)}/hour/person</p><button onclick="selectTutorForBooking('${t.id}')">Choose ${t.name}</button></div>`).join("")}</div>`;$("bt").innerHTML=ts.map(t=>`<option value="${t.id}">${t.name}</option>`).join("");details.classList.remove("hidden");if(preselectTutorId&&ts.some(t=>t.id===preselectTutorId)){$("bt").value=preselectTutorId;preselectTutorId=null}updateBooking()}
 function selectTutorForBooking(id){$("bt").value=id;updateBooking();$("bookingDetails").scrollIntoView({behavior:"smooth",block:"start"})}
-function renderBookingCalendar(){if(!$("bt")||!$("bt").value||!$("bcourseFirst").value)return;let now=new Date(),year=now.getFullYear(),month=now.getMonth(),days=monthDays(year,month);$("bookingCalendar").innerHTML=`<label>Available Dates</label><div class="calendar-grid">${days.map(d=>{let available=dayHasAvailable($("bt").value,d.date,$("bcourseFirst").value);return`<div class="day-card ${available?'':'not-available'}" onclick="${available?`chooseBookingDate('${d.date}')`:''}"><h4>${d.weekday} ${d.day}</h4></div>`}).join("")}</div>`}
-function chooseBookingDate(date){$("bd").value=date;updateSlots()}
+function renderBookingCalendar(){
+  if(!$("bt")||!$("bt").value||!$("bcourseFirst").value)return;
+  let now=new Date();
+  let year=Number(localStorage.getItem("bookYear")||now.getFullYear());
+  let month=Number(localStorage.getItem("bookMonth")||now.getMonth());
+  let first=new Date(year,month,1);
+  let last=new Date(year,month+1,0);
+  let startPad=first.getDay(); // Sunday = 0
+  let cells=[];
+  for(let i=0;i<startPad;i++)cells.push({empty:true});
+  for(let d=1;d<=last.getDate();d++){
+    let dt=new Date(year,month,d);
+    let iso=dt.toISOString().slice(0,10);
+    let available=dayHasAvailable($("bt").value,iso,$("bcourseFirst").value);
+    cells.push({date:iso,day:d,available});
+  }
+  while(cells.length%7!==0)cells.push({empty:true});
+  const title=first.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+  $("bookingCalendar").innerHTML=`<div class="booking-calendar-wrap">
+    <div class="booking-calendar-head">
+      <button class="ghost" onclick="moveBookingMonth(-1)">‹</button>
+      <div class="booking-calendar-title">${title}</div>
+      <button class="ghost" onclick="moveBookingMonth(1)">›</button>
+    </div>
+    <div class="booking-calendar-weekdays"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div>
+    <div class="booking-calendar-grid">
+      ${cells.map(c=>{
+        if(c.empty)return `<div class="booking-date empty"></div>`;
+        const selected=$("bd").value===c.date;
+        return `<div class="booking-date ${c.available?'available':'not-available'} ${selected?'selected':''}" onclick="${c.available?`chooseBookingDate('${c.date}')`:''}">${c.day}</div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+function moveBookingMonth(delta){
+  let now=new Date();
+  let y=Number(localStorage.getItem("bookYear")||now.getFullYear());
+  let m=Number(localStorage.getItem("bookMonth")||now.getMonth());
+  let d=new Date(y,m+delta,1);
+  localStorage.setItem("bookYear",d.getFullYear());
+  localStorage.setItem("bookMonth",d.getMonth());
+  renderBookingCalendar();
+}
+
+function chooseBookingDate(date){$("bd").value=date;renderBookingCalendar();updateSlots()}
 function updateBooking(){if(!$("bt")||!$("bt").value)return;renderBookingCalendar();updateSlots();updatePrice()}
 function updateSlots(){if(!$("bt")||!$("bt").value)return;let slots=generateSlots($("bt").value,$("bd").value,$("bdu").value,$("bcourseFirst").value);$("bs").innerHTML=slots.length?slots.map(s=>`<option>${s}</option>`).join(""):`<option value="">No available slots</option>`;updateBookingLocations();updatePrice()}
 function updateBookingLocations(){if(!$("bt")||!$("bt").value||!$("bs"))return;let locs=slotLocationOptions($("bt").value,$("bd").value,$("bs").value,$("bdu").value,$("bcourseFirst").value);$("bl").innerHTML=locs.length?locs.map(l=>`<option>${l}</option>`).join(""):`<option value="">No location available</option>`}

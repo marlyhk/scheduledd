@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-final-fixed",
-  "version": "2.1.0",
+  "name": "scheduled-compact-calendar-request-university",
+  "version": "2.3.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg public/"

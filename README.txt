@@ -1,26 +1,11 @@
-Scheduled Final Fixed v2.1
+Scheduled v2.3 — Compact Calendar + Request University
+
+Includes:
+- Compact Apple-style booking calendar
+- Red strike only on unavailable/no-slot dates
+- Login page card now says Become a Tutor
+- Request Access form now includes University
+- Admin Access Requests table shows University
+- Approved student profile stores University
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
-
-Important Firebase rules:
-{
-  "rules": {
-    "accessRequests": {
-      ".read": "auth != null",
-      ".write": true
-    },
-    ".read": "auth != null",
-    ".write": "auth != null"
-  }
-}
-
-Fixed:
-- My Students tab opens
-- My Tutors tab opens
-- Tutor availability is shown/used in booking
-- Unavailable/no-slot calendar days are slashed
-- Course-specific availability
-- Global blocking across tutor courses
-- Hidden 15-minute buffer without student-facing text
-- Booking confirmation modal
-- WhatsApp credentials and booking confirmations
