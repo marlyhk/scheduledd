@@ -202,7 +202,23 @@ async function applyPendingProfileIfAny(u){
 
 /* ===== v2.9 stable public tutor profiles: separate from real tutor accounts ===== */
 function getPublicProfiles(){
-  return list(DATA.publicTutors||{}).filter(p=>!p.hidden).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+  const publicList=list(DATA.publicTutors||{}).filter(p=>!p.hidden);
+
+  // Fallback: if no public profiles were created yet, show tutor accounts that have public-style info.
+  // This prevents Browse Tutors from appearing empty if data was added in the older Tutors system.
+  if(publicList.length)return publicList.sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+
+  return tutors().filter(t=>!t.hiddenPublic).map(t=>({
+    id:t.id,
+    name:t.name,
+    university:t.university,
+    courses:t.courses||[],
+    rate:t.rate,
+    locations:t.locations||[],
+    description:t.description||"",
+    photoUrl:t.photoUrl||"",
+    linkedTutorId:t.id
+  })).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
 }
 function publicPhoto(p){return (p&&p.photoUrl)||"scheduled-icon.jpeg"}
 function publicCourses(){
@@ -231,7 +247,8 @@ function publicProfileCard(p,logged){
     <div class="tutor-meta">${p.university||"University not specified"}<br>${(p.courses||[]).join(", ")||"Courses not specified"}</div>
   </div>`;
 }
-function browsePublicTutors(){
+async function browsePublicTutors(){
+  await loadData();
   $("loginPage").innerHTML=`<div class="login-card" style="width:min(1050px,100%);">
     <button class="ghost" onclick="location.reload()">← Back to Login</button>
     <div class="brand"><h1 class="brand-word">Scheduled Tutors</h1><p>Browse available tutors.</p></div>
@@ -260,7 +277,8 @@ function showPublicProfile(id){
     </div>
   </div>`;
 }
-function allTutorsPage(){
+async function allTutorsPage(){
+  await loadData();
   $("content").innerHTML=`<div class="card"><h2>All Tutors</h2><p class="muted">These are the public tutor profiles. Booking only works when a profile is linked to a real tutor account.</p>${publicFilterHTML("renderLoggedPublicProfiles")}<div id="loggedPublicProfilesGrid"></div></div>`;
   renderLoggedPublicProfiles();
 }
@@ -312,8 +330,10 @@ async function addPublicTutorProfile(){
   const description=$("pdesc").value.trim();
   const photoUrl=await publicProfileImageData("pphotoFile");
   if(!name||!university||!courses.length)return alert("Please fill name, university, and courses.");
-  await db.ref("publicTutors").push({name,university,rate,linkedTutorId,courses,locations,description,photoUrl,createdAt:Date.now(),hidden:false});
-  await loadData();publicTutorProfilesPage();
+  await db.ref("publicTutors").push({name,university,rate,linkedTutorId,courses,locations,description,photoUrl,createdAt:Date.now(),hidden:false,visible:true});
+  await loadData();
+  alert("Public tutor profile added. It will now appear in Browse Tutors.");
+  publicTutorProfilesPage();
 }
 async function editPublicTutorProfile(id){
   const p=(DATA.publicTutors||{})[id]; if(!p)return alert("Profile not found.");

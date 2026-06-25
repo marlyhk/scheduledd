@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v3-1-existing-email-tutor-fix",
-  "version": "3.1.0",
+  "name": "scheduled-v3-2-public-profiles-show-fix",
+  "version": "3.2.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg public/"
