@@ -726,7 +726,7 @@ async function createTutorScheduledSession(){
   });
   await v56NotifyStudent(studentId,"New Session Scheduled",`${profile.name||"Your tutor"} scheduled ${course} on ${date} at ${typeof formatTime12==="function"?formatTime12(start):start}.`);
   await loadData();
-  alert("Session created successfully.");
+  showToast("✓ Session created successfully.","The student has been notified.");
   tutorScheduleSessionPage();
 }
 
@@ -817,11 +817,14 @@ function scheduledTodayBanner(){
 }
 function renderStudentInspoBanner(){
   const b=scheduledTodayBanner();
-  return `<div class="inspo-card inspo-theme-${b.theme||"focus"}">
-    <div class="inspo-topline"><span>${scheduledBannerMode()==="exam"?"Exam Mode":" "}</span><span></span></div>
+  return `<div class="inspo-card inspo-theme-${b.theme||"focus"}" onmousemove="this.style.setProperty('--mx',event.offsetX+'px')">
+    <span class="floaty f1"></span><span class="floaty f2"></span><span class="floaty f3"></span>
+    <span class="sparkle s1">✦</span><span class="sparkle s2">✧</span><span class="sparkle s3">✦</span>
+    <div class="inspo-topline"><span></span><span></span></div>
     <div class="inspo-icon">${b.icon||"✨"}</div>
     <div class="inspo-quote">${b.text||""}</div>
     <div class="inspo-sub">${b.sub||"Keep going."}</div>
+    <div class="daily-focus"><b>Today's Focus</b>${scheduledDailyFocus()}</div>
     <div class="inspo-brand">Scheduled</div>
   </div>`;
 }
@@ -831,10 +834,13 @@ function bannerPreviewCard(){
   const theme=$("motivationTheme")?.value||"focus";
   const sub=($("motivationSub")?.value||"Small steps still count.").trim();
   return `<div class="banner-preview-wrap"><div class="inspo-card inspo-theme-${theme}">
+    <span class="floaty f1"></span><span class="floaty f2"></span><span class="floaty f3"></span>
+    <span class="sparkle s1">✦</span><span class="sparkle s2">✧</span><span class="sparkle s3">✦</span>
     <div class="inspo-topline"><span></span><span></span></div>
     <div class="inspo-icon">${icon}</div>
     <div class="inspo-quote">${text}</div>
     <div class="inspo-sub">${sub}</div>
+    <div class="daily-focus"><b>Today's Focus</b>Complete one focused study task today.</div>
     <div class="inspo-brand">Scheduled</div>
   </div></div>`;
 }
@@ -846,6 +852,25 @@ async function saveBannerSettings(){
   await db.ref("bannerSettings").set({examMode:$("examMode")?.checked||false,updatedAt:Date.now(),updatedBy:currentUser.uid});
   await loadData();
   motivationBannerSettingsPage();
+}
+
+
+/* ===== v6.0 premium motion helpers ===== */
+function showToast(title,message=""){
+  const old=document.querySelector(".toast");
+  if(old)old.remove();
+  const t=document.createElement("div");
+  t.className="toast";
+  t.innerHTML=`<b>${title}</b>${message?`<br><span class="muted">${message}</span>`:""}`;
+  document.body.appendChild(t);
+  setTimeout(()=>{try{t.remove()}catch(e){}},4200);
+}
+function scheduledDailyFocus(){
+  const nb=typeof nextBooking==="function"?nextBooking():null;
+  if(nb){
+    return `Attend your ${nb.course||"session"} session at ${typeof formatTime12==="function"?formatTime12(nb.start):nb.start}.`;
+  }
+  return "Complete one focused study task today.";
 }
 
 function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}

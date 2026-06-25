@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v5-8-aesthetic-student-banners",
-  "version": "5.8.0",
+  "name": "scheduled-v6-0-premium-animations",
+  "version": "6.0.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg public/"
