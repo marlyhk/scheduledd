@@ -1,4 +1,16 @@
 
+/* ScheduledSplashV61 */
+window.addEventListener("load", function(){
+  setTimeout(function(){
+    try{
+      const splash=document.getElementById("splash");
+      const app=document.getElementById("app");
+      if(app)app.classList.remove("hidden");
+      if(splash)splash.classList.add("hidden");
+    }catch(e){}
+  }, 4100);
+});
+
 window.addEventListener("error", function(e){
   try{
     const splash=document.getElementById("splash");
@@ -99,7 +111,7 @@ const money=n=>"$"+Number(n||0).toFixed(Number.isInteger(Number(n))?0:2);
 let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{}};
 let preselectTutorId=null;
 
-setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")},800);
+setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")}, 3900);
 function notice(m){$("notice").textContent=m;$("notice").classList.remove("hidden")}
 function cleanPhone(p){return String(p||"").replace(/[^\d]/g,"")}
 function openWhatsApp(phone,msg){const p=cleanPhone(phone);if(!p)return alert("No WhatsApp number saved.");window.open(`https://wa.me/${p}?text=${encodeURIComponent(msg)}`,"_blank")}

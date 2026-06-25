@@ -507,3 +507,119 @@ button:hover{
   from{transform:translateY(0)}
   to{transform:translateY(-6px)}
 }
+
+
+/* v6.1 slow polished brand intro */
+#splash{
+  position:fixed;
+  inset:0;
+  z-index:999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(183,225,250,.34), transparent 28%),
+    linear-gradient(180deg,#ffffff 0%,#f6fbff 100%) !important;
+  overflow:hidden;
+  transition:opacity .75s ease, visibility .75s ease;
+}
+#splash.hidden{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+#splash:before,
+#splash:after{
+  content:none !important;
+}
+.splash-animation{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+}
+.splash-calendar{
+  width:190px;
+  height:190px;
+  transform:translateY(-8px);
+  filter:drop-shadow(0 22px 36px rgba(31,42,55,.12));
+}
+.splash-calendar *{
+  fill:none;
+  stroke:#69B1DC;
+  stroke-width:6;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.calendar-outline{
+  stroke-dasharray:360;
+  stroke-dashoffset:360;
+  animation:drawCalendar 1.15s cubic-bezier(.22,1,.36,1) .25s forwards;
+}
+.calendar-top{
+  stroke-dasharray:70;
+  stroke-dashoffset:70;
+  animation:drawLine .55s cubic-bezier(.22,1,.36,1) 1.05s forwards;
+}
+.calendar-check{
+  stroke:#22C55E;
+  stroke-width:8;
+  stroke-dasharray:92;
+  stroke-dashoffset:92;
+  animation:drawCheck .72s cubic-bezier(.22,1,.36,1) 1.55s forwards;
+}
+.calendar-fold{
+  fill:rgba(183,225,250,.38);
+  stroke:#69B1DC;
+  opacity:0;
+  transform-origin:101px 34px;
+  animation:foldIn .65s cubic-bezier(.22,1,.36,1) 2.15s forwards;
+}
+#splash img{
+  position:relative;
+  z-index:2;
+  width:min(170px,42vw);
+  height:auto;
+  opacity:0;
+  transform:translateY(48px) scale(.92);
+  animation:realLogoReveal 1.25s cubic-bezier(.22,1,.36,1) 2.55s forwards !important;
+  filter:drop-shadow(0 18px 35px rgba(31,42,55,.14));
+}
+#splash .splash-word,
+#splash .brand-word{
+  opacity:0;
+  animation:wordFadeIn .7s ease 3.25s forwards;
+}
+@keyframes drawCalendar{
+  to{stroke-dashoffset:0}
+}
+@keyframes drawLine{
+  to{stroke-dashoffset:0}
+}
+@keyframes drawCheck{
+  0%{stroke-dashoffset:92;transform:translateX(-10px)}
+  100%{stroke-dashoffset:0;transform:translateX(0)}
+}
+@keyframes foldIn{
+  0%{opacity:0;transform:rotateX(-85deg) translateY(-8px)}
+  100%{opacity:1;transform:rotateX(0) translateY(0)}
+}
+@keyframes realLogoReveal{
+  0%{opacity:0;transform:translateY(48px) scale(.92)}
+  65%{opacity:1;transform:translateY(48px) scale(1.04)}
+  100%{opacity:1;transform:translateY(48px) scale(1)}
+}
+@keyframes wordFadeIn{
+  from{opacity:0;transform:translateY(8px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+#app{
+  animation:appFadeIn .7s ease both;
+}
+@keyframes appFadeIn{
+  from{opacity:0}
+  to{opacity:1}
+}

@@ -1,16 +1,13 @@
-Scheduled v6.0 — Premium Animations
+Scheduled v6.1 — Slower Logo Intro
 
-Built from v5.8.1.
+Built from v6.0.
 
-Adds:
-- Aesthetic animated student inspiration cards.
-- Floating particles, sparkles, animated gradients, glass icon, hover motion.
-- Daily Focus section under the quote.
-- Polished splash animation with calendar/checkmark motion effect.
-- Button/card micro-interactions.
-- Toast notifications.
-- Skeleton/empty-state styling utilities.
-
-Core booking/account logic preserved.
+Fix:
+- Startup animation is slower and more visible.
+- Calendar outline actually draws itself using SVG stroke animation.
+- Checkmark draws/slides in.
+- Corner fold animates.
+- Logo fades/scales in after the icon animation.
+- Splash stays for about 4.1 seconds so the animation can be seen.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.

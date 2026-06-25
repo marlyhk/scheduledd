@@ -11,7 +11,16 @@
 </head>
 <body>
   <div id="splash" class="splash">
-    <img src="scheduled-splash.jpeg" alt="Scheduled" onerror="this.style.display='none'">
+    
+        <div class="splash-animation" aria-hidden="true">
+          <svg class="splash-calendar" viewBox="0 0 160 160">
+            <rect class="calendar-outline" x="38" y="34" width="84" height="92" rx="18" ry="18"></rect>
+            <path class="calendar-top" d="M52 56 H108"></path>
+            <path class="calendar-check" d="M58 88 L74 104 L105 72"></path>
+            <path class="calendar-fold" d="M101 34 L122 55 L101 55 Z"></path>
+          </svg>
+        </div>
+        <img src="scheduled-splash.jpeg" alt="Scheduled" onerror="this.style.display='none'">
   </div>
 
   <main id="app" class="app hidden">
