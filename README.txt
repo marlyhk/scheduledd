@@ -1,12 +1,17 @@
-Scheduled v2.7 — Separate Public Tutor Profiles
+Scheduled v2.8 — Blank Fix + Separate Public Profiles
 
-Adds:
-- Public Browse Tutors profiles are separate from tutor login accounts
-- Admin tab: Tutor Profiles
-- Add/edit/delete public tutor profiles
-- Upload public tutor profile picture from files/photos
-- Public profile can optionally link to a real tutor account
+Built from the stable v2.6 base.
+
+Fixes:
+- Pages opening blank after v2.7
+
+Adds safely:
+- Separate Tutor Profiles tab for public Browse Tutors
+- Public Browse Tutors page
+- Logged-in student All Tutors tab
+- Public tutor profiles are separate from real tutor login accounts
+- Public profile can optionally link to a tutor account
 - Public Book Now -> Request Access
-- Logged-in student All Tutors -> public profiles; Book Now uses linked tutor account when available
+- Logged-in Book Now -> booking if linked account exists
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
