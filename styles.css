@@ -163,3 +163,5 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}.small{font-size:13
 .login-card > .ghost:first-child{margin-bottom:12px}
 
 .report-total{font-size:22px;font-weight:900;color:var(--navy)}.report-sub{font-size:13px;color:var(--muted)}
+
+.assigned-list{font-size:13px;color:var(--muted);line-height:1.5}
