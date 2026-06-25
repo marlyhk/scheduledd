@@ -588,6 +588,7 @@ function adminStudents(){
   </div>
   <input id="smembers" placeholder="Group members comma separated">
   <label>Assign Tutor(s)</label>
+  <p class="muted small">New tutors automatically appear here after you create them.</p>
   <div class="checkbox-grid">${tutorCheckboxes("assignedTutor")}</div>
   <button onclick="createAccount('student')">Create Student/Group</button></div>`;
 }
@@ -602,15 +603,34 @@ async function editStudent(id){
   await loadData();adminStudents();
 }
 
-async function editStudentTutors(id){
-  const s=DATA.users[id];if(!s)return alert("Student not found.");
-  const tutorList=tutors().map(t=>`${t.id} = ${t.name}`).join("\\n");
-  const currentAssigned=assignedTutorIdsForStudent(id).join(", ");
-  const assignedText=prompt(`Assigned tutor IDs, comma separated.\\n\\nAvailable tutors:\\n${tutorList}`,currentAssigned);
-  if(assignedText===null)return;
-  const assignedTutorIds=assignedText.split(",").map(x=>x.trim()).filter(Boolean);
+
+function editStudentTutors(id){
+  const s=DATA.users[id];
+  if(!s)return alert("Student not found.");
+  const current=assignedTutorIdsForStudent(id);
+  const modal=document.createElement("div");
+  modal.className="assign-modal";
+  modal.id="assignTutorModal";
+  modal.innerHTML=`<div class="assign-modal-box">
+    <div class="assign-modal-head">
+      <h2>Assign Tutors</h2>
+      <button class="ghost" onclick="document.getElementById('assignTutorModal').remove()">Close</button>
+    </div>
+    <p class="muted">${s.name||"Student"} — choose one or more tutors.</p>
+    <div class="checkbox-grid">
+      ${tutors().length?tutors().map(t=>`<label class="check"><input type="checkbox" class="editAssignedTutor" value="${t.id}" ${current.includes(t.id)?"checked":""}>${t.name}</label>`).join(""):"<p class='muted'>No tutors available yet.</p>"}
+    </div>
+    <button onclick="saveStudentTutorAssignments('${id}')">Save Assigned Tutors</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function saveStudentTutorAssignments(id){
+  const assignedTutorIds=[...document.querySelectorAll(".editAssignedTutor:checked")].map(x=>x.value);
   await db.ref("users/"+id+"/assignedTutorIds").set(assignedTutorIds);
-  await loadData();adminStudents();
+  const modal=document.getElementById("assignTutorModal");
+  if(modal)modal.remove();
+  await loadData();
+  adminStudents();
 }
 
 async function deleteStudent(id){

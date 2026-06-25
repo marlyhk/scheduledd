@@ -188,3 +188,16 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}.small{font-size:13
 .assigned-list{font-size:13px;color:var(--muted);line-height:1.5}
 .error-card{max-width:720px;margin:28px auto;background:#fff;border:1px solid var(--red);border-radius:24px;padding:20px;box-shadow:0 16px 45px rgba(31,42,55,.12)}
 .contact-help{background:var(--blue2);border:1px solid var(--border);border-radius:18px;padding:14px;margin-top:12px}
+
+
+/* v4.1 assign tutors modal */
+.assign-modal{
+  position:fixed;inset:0;background:rgba(31,42,55,.35);
+  display:flex;align-items:center;justify-content:center;padding:18px;z-index:50;
+}
+.assign-modal-box{
+  width:min(560px,100%);max-height:86vh;overflow:auto;
+  background:#fff;border-radius:26px;padding:22px;
+  box-shadow:0 30px 80px rgba(0,0,0,.18);
+}
+.assign-modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center}

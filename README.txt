@@ -1,16 +1,10 @@
-Scheduled v4.0 — Built from v3.5 Working Base
+Scheduled v4.1 — Checkbox Assign Tutors
 
-Base:
-- v3.5 reports/exports working version.
+Built from v4.0.
 
-Added safely:
-- left menu icon/sidebar
-- assign tutor(s) when creating/editing students
-- assigned tutors appear in student My Tutors
-- assigned students appear in tutor My Students
-- Contact tutor if no suitable booking time
-- Request Access direct stable form
-- Browse Tutors button preserved/fixed
-- safety error screen instead of blank page
+Changes:
+- Create Student keeps tutor assignment checkboxes.
+- Existing students/groups now use a clickable checkbox modal for Assign Tutors.
+- New tutors automatically appear in both create-student and assign-existing-student options.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
