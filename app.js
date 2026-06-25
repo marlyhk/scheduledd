@@ -203,12 +203,6 @@ function slotLocationOptions(tutorId,date,time,duration,course){
 function dayHasAvailable(tutorId,date,course){return generateSlots(tutorId,date,1,course).length>0}
 function selectedLocations(prefix=""){const online=$(prefix+"locOnline")?.checked,campus=$(prefix+"locCampus")?.checked,both=$(prefix+"locBoth")?.checked,campusName=($(prefix+"campusName")?.value||"").trim();let locations=[];if(online)locations.push("Online");if(campus){if(!campusName)return{error:"Please specify campus name."};locations.push(`On Campus (${campusName})`)}if(both){if(!campusName)return{error:"Please specify campus name."};locations.push("Online",`On Campus (${campusName})`)}locations=[...new Set(locations)];if(!locations.length)return{error:"Please choose Online, On Campus, or Both."};return{locations,campusName}}
 function paymentSummary(b){return(b.payments||[]).map((p,i)=>`${p.name}: ${money(p.amount)} ${badge(p.paid)}`).join("<br>")}
-function studentTutors(studentId){
-  let bookingIds=list(DATA.bookings).filter(b=>b.studentId===studentId).map(b=>b.tutorId);
-  let assignedIds=assignedTutorIdsForStudent(studentId);
-  let ids=[...new Set([...bookingIds,...assignedIds])];
-  return ids.map(id=>({id,...user(id)})).filter(t=>t.role==="tutor"&&!t.removed);
-}
 function myTutorsPage(){let ts=studentTutors(currentUser.uid);$("content").innerHTML=`<div class="card"><h2>My Tutors</h2>${ts.length?`<div class="grid">${ts.map(t=>{let bs=list(DATA.bookings).filter(b=>b.studentId===currentUser.uid&&b.tutorId===t.id);return`<div class="card"><h3>${t.name}</h3><p>${t.university||""}</p><p>${(t.courses||[]).join(", ")}</p><button class="whatsapp" onclick="openWhatsApp('${t.whatsapp||""}','Hi, I have a question about my tutoring session on Scheduled.')">Contact Tutor on WhatsApp</button><button onclick="bookWithTutor('${t.id}')">Book a New Session</button><hr><b>Upcoming</b><br>${bs.filter(b=>!b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Past</b><br>${bs.filter(b=>b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}</div>`}).join("")}</div>`:`<p class="muted">No tutors yet. Book a session first.</p>`}</div>`}
 function bookWithTutor(id, course=""){
   preselectTutorId=id;
@@ -216,11 +210,20 @@ function bookWithTutor(id, course=""){
   openTab("Book");
 }
 function myStudentsPage(){
-  let bookedIds=list(DATA.bookings).filter(b=>b.tutorId===currentUser.uid).map(b=>b.studentId);
-  let assignedIds=assignedStudentsForTutor(currentUser.uid).map(s=>s.id);
-  let ids=[...new Set([...bookedIds,...assignedIds])];
-  let ss=ids.map(id=>({id,...user(id)})).filter(s=>s.role==="student");
-  $("content").innerHTML=`<div class="card"><h2>My Students</h2>${ss.length?`<div class="grid">${ss.map(s=>{let bs=list(DATA.bookings).filter(b=>b.tutorId===currentUser.uid&&b.studentId===s.id);return`<div class="card"><h3>${s.name}</h3><p>${s.email||""}<br>${s.phone||""}</p><p class="assigned-list">${assignedTutorIdsForStudent(s.id).includes(currentUser.uid)?"Assigned student":"Booked student"}</p><b>Upcoming</b><br>${bs.filter(b=>!b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Past</b><br>${bs.filter(b=>b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Unpaid:</b> ${money(unpaid(bs))}</div>`}).join("")}</div>`:`<p class="muted">No students yet. Students appear here after booking with you or when admin assigns them to you.</p>`}</div>`;
+  const bookedIds=list(DATA.bookings).filter(b=>b.tutorId===currentUser.uid).map(b=>b.studentId);
+  const assignedIds=assignedStudentsForTutor(currentUser.uid).map(s=>s.id);
+  const ids=[...new Set([...bookedIds,...assignedIds])];
+  const ss=ids.map(id=>({id,...user(id)})).filter(s=>s.role==="student");
+
+  $("content").innerHTML=`<div class="card"><h2>My Students</h2>${ss.length?`<div class="grid">${ss.map(s=>{
+    let bs=list(DATA.bookings).filter(b=>b.tutorId===currentUser.uid&&b.studentId===s.id);
+    return `<div class="card"><h3>${s.name}</h3>
+      <p>${s.email||""}<br>${s.phone||""}</p>
+      <p class="assigned-list">${assignedTutorIdsForStudent(s.id).includes(currentUser.uid)?"Assigned student":"Booked student"}</p>
+      <b>Upcoming</b><br>${bs.filter(b=>!b.done).map(b=>`${b.date} • ${b.course} • ${typeof formatTime12==="function"?formatTime12(b.start):b.start}`).join("<br>")||"<span class='muted'>None</span>"}
+      <hr><b>Past</b><br>${bs.filter(b=>b.done).map(b=>`${b.date} • ${b.course} • ${typeof formatTime12==="function"?formatTime12(b.start):b.start}`).join("<br>")||"<span class='muted'>None</span>"}
+      <hr><b>Unpaid:</b> ${money(unpaid(bs))}</div>`;
+  }).join("")}</div>`:`<p class="muted">No students yet. Students appear here after booking with you or when admin assigns them to you.</p>`}</div>`;
 }
 function financialPage(){
   let b=myBookings(),month=new Date().toISOString().slice(0,7),mb=b.filter(x=>(x.date||"").startsWith(month));
