@@ -96,7 +96,7 @@ const ADMIN_WHATSAPP="96176174738";
 const SITE_URL="https://scheduledeu.vercel.app/";
 const $=id=>document.getElementById(id);
 const money=n=>"$"+Number(n||0).toFixed(Number.isInteger(Number(n))?0:2);
-let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{}};
+let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{},motivationQuotes:{},announcements:{},notifications:{},reviews:{}};
 let preselectTutorId=null;
 
 setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")},800);
@@ -139,7 +139,7 @@ function toggleRequestAccess(){
 async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const phone=($("reqPhone")?.value||"").trim();const university=($("reqUniversity")?.value||"").trim();const courses=($("reqCourses")?.value||"").trim();const message=($("reqMessage")?.value||"").trim();if(!name||!email||!phone||!university||!courses){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}await db.ref("accessRequests").push({name,email,phone,university,courses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqUniversity","reqCourses","reqMessage"].forEach(id=>{if($(id))$(id).value=""});notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
-async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{}}}
+async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{},motivationQuotes:v.motivationQuotes||{},announcements:v.announcements||{},notifications:v.notifications||{},reviews:v.reviews||{}}}
 auth.onAuthStateChanged(async u=>{
   if(!u)return;
   currentUser=u;
@@ -506,32 +506,100 @@ function assignedCourseNames(studentId){
 
 
 const MOTIVATION_QUOTES=["Small progress is still progress — show up today.","Your future self is built by what you do now.","One focused session can change your whole week.","Start, and motivation follows.","Study smart, ask questions, keep moving.","Consistency beats intensity.","You are closer than you think. Keep going."];
-function todayISO(){return localISODate(new Date())}function currentMonth(){return new Date().toISOString().slice(0,7)}function isToday(date){return date===todayISO()}function thisMonthBookings(bs){const m=currentMonth();return bs.filter(b=>(b.date||"").startsWith(m))}function upcomingBookingsForUser(){const t=todayISO();return myBookings().filter(b=>!b.done&&(b.date||"")>=t).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.start||"").localeCompare(b.start||""))}function totalHours(bs){return bs.reduce((s,b)=>s+Number(b.duration||0),0)}function nextBooking(){const u=upcomingBookingsForUser();return u.length?u[0]:null}function randomMotivation(){return MOTIVATION_QUOTES[Math.floor(Math.random()*MOTIVATION_QUOTES.length)]}
+function todayISO(){return localISODate(new Date())}function currentMonth(){return new Date().toISOString().slice(0,7)}function isToday(date){return date===todayISO()}function thisMonthBookings(bs){const m=currentMonth();return bs.filter(b=>(b.date||"").startsWith(m))}function upcomingBookingsForUser(){const t=todayISO();return myBookings().filter(b=>!b.done&&(b.date||"")>=t).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.start||"").localeCompare(b.start||""))}function totalHours(bs){return bs.reduce((s,b)=>s+Number(b.duration||0),0)}function nextBooking(){const u=upcomingBookingsForUser();return u.length?u[0]:null}function randomMotivation(){const quotes=motivationQuotes();return quotes[Math.floor(Math.random()*quotes.length)]||"Keep going — you are doing better than you think.";}
 function getNotificationsForRole(){return list(DATA.notifications||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).filter(n=>n.to==="everyone"||n.to===profile.role||n.userId===currentUser.uid)}async function createNotification(to,title,message,userId=""){await db.ref("notifications").push({to,title,message,userId,createdAt:Date.now(),read:false})}
-function getAnnouncementsForRole(){return list(DATA.announcements||{}).filter(a=>a.audience==="everyone"||a.audience===profile.role||(a.university&&profile.university&&a.university===profile.university)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))}
-function getReviewsForTutor(tutorId){return list(DATA.reviews||{}).filter(r=>r.tutorId===tutorId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))}function avgRating(tutorId){const rs=getReviewsForTutor(tutorId);return rs.length?(rs.reduce((s,r)=>s+Number(r.rating||0),0)/rs.length).toFixed(1):"—"}
-function isFavoriteTutor(tutorId){return Array.isArray(profile.favoriteTutorIds)&&profile.favoriteTutorIds.includes(tutorId)}async function toggleFavoriteTutor(tutorId){const current=Array.isArray(profile.favoriteTutorIds)?profile.favoriteTutorIds:[];const next=current.includes(tutorId)?current.filter(id=>id!==tutorId):[...current,tutorId];await db.ref("users/"+currentUser.uid+"/favoriteTutorIds").set(next);await loadData();profile={...profile,...(DATA.users[currentUser.uid]||{})};allTutorsPage()}
-function assignedCourseBadges(studentId){const courses=typeof assignedCoursesForStudent==="function"?assignedCoursesForStudent(studentId):[];return courses.length?courses.join(", "):"None"}
-function markBookingPayment(bookingId){const b=DATA.bookings[bookingId];if(!b)return alert("Booking not found.");const method=prompt("Payment method: Cash or Whish",(b.paymentMethod||"Cash"));if(method===null)return;const cleanMethod=(method.toLowerCase().includes("whish")||method.toLowerCase().includes("wish"))?"Whish":"Cash";const date=prompt("Payment date YYYY-MM-DD:",todayISO());if(date===null)return;const payments=(b.payments||[]).map(p=>({...p,paid:true,method:cleanMethod,paymentDate:date}));db.ref("bookings/"+bookingId).update({paymentMethod:cleanMethod,payments}).then(async()=>{await loadData();bookingsPage(profile.role!=="student")})}
-function calendarLinkForBooking(b){const t=user(b.tutorId),s=user(b.studentId);const title=encodeURIComponent(`Scheduled: ${b.course||"Tutoring"}`);const details=encodeURIComponent(`Course: ${b.course||""}\nTutor: ${t.name||""}\nStudent: ${s.name||""}\nLocation: ${b.location||""}`);const date=(b.date||"").replaceAll("-","");const start=(b.start||"00:00").replace(":","");const dur=Math.round(Number(b.duration||1)*60), sh=Number((b.start||"00:00").split(":")[0]), sm=Number((b.start||"00:00").split(":")[1]||0);const end=sh*60+sm+dur,eh=String(Math.floor(end/60)).padStart(2,"0"),em=String(end%60).padStart(2,"0");return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${date}T${start}00/${date}T${eh}${em}00&details=${details}`}
-function contactSelectedTutorForTime(){const t=user($("bt")?.value);openWhatsApp(t.whatsapp||"","Hi, I couldn't find a time that suits me on Scheduled. Can we arrange a session time?")}
 
+function getAnnouncementsForRole(){
+  return list(DATA.announcements||{}).filter(a=>{
+    if(a.audience==="everyone")return true;
+    if(a.audience===profile.role)return true;
+    if(a.audience==="assignedStudents" && Array.isArray(a.recipientIds) && a.recipientIds.includes(currentUser.uid))return true;
+    if(a.userId===currentUser.uid)return true;
+    if(a.university && profile.university && a.university===profile.university)return true;
+    return false;
+  }).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+}
 
-function dashboardPage(){if(profile.role==="admin")return adminDashboardPage();if(profile.role==="tutor")return tutorDashboardPage();return studentDashboardPage()}
-function studentDashboardPage(){const nb=nextBooking(),my=myBookings(),month=thisMonthBookings(my),quote=randomMotivation();$("content").innerHTML=`<div class="dashboard-hero"><h2>Hi ${profile.name||"there"} 👋</h2><p class="muted">Here is your learning overview.</p><div class="motivation-ticker"><span>${quote}</span></div><div class="quick-actions"><button onclick="openTab('Book')">Book New Session</button><button class="ghost" onclick="emergencySessionsPage()">⚡ Need Help Today?</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Next Session</div><div class="kpi-value">${nb?`${nb.date}<br><span class="small">${formatTime12(nb.start)}</span>`:"None"}</div></div><div class="kpi-card"><div class="kpi-label">Hours This Month</div><div class="kpi-value">${totalHours(month)}</div></div><div class="kpi-card"><div class="kpi-label">Upcoming Sessions</div><div class="kpi-value">${my.filter(b=>!b.done).length}</div></div><div class="kpi-card"><div class="kpi-label">My Tutors</div><div class="kpi-value">${studentTutors(currentUser.uid).length}</div></div></div><div class="grid"><div class="card"><h2>Upcoming Sessions</h2>${upcomingBookingsForUser().slice(0,5).map(b=>`<div class="timeline-item"><b>${b.course}</b><br>${b.date} • ${formatTime12(b.start)}<br>${user(b.tutorId).name||""}<br><a href="${calendarLinkForBooking(b)}" target="_blank">Add to Google Calendar</a></div>`).join("")||"<p class='muted'>No upcoming sessions.</p>"}</div><div class="card"><h2>Assigned Courses</h2><p>${assignedCourseBadges(currentUser.uid)}</p><hr><h2>Announcements</h2>${getAnnouncementsForRole().slice(0,3).map(a=>`<div class="announcement-card"><b>${a.title||""}</b><p>${a.message||""}</p></div>`).join("")||"<p class='muted'>No announcements yet.</p>"}</div></div>`}
-function tutorDashboardPage(){const b=myBookings(),today=b.filter(x=>isToday(x.date)&&!x.done),month=thisMonthBookings(b);$("content").innerHTML=`<div class="dashboard-hero"><h2>Welcome back, ${profile.name||"Tutor"} 👋</h2><p class="muted">Your tutoring business overview.</p><div class="quick-actions"><button onclick="openTab('Availability')">Add Availability</button><button class="ghost" onclick="openTab('Calendar')">Open Calendar</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Today's Sessions</div><div class="kpi-value">${today.length}</div></div><div class="kpi-card"><div class="kpi-label">Hours This Month</div><div class="kpi-value">${totalHours(month)}</div></div><div class="kpi-card"><div class="kpi-label">This Month Earnings</div><div class="kpi-value">${money(month.reduce((s,b)=>s+total(b),0))}</div></div><div class="kpi-card"><div class="kpi-label">Average Rating</div><div class="kpi-value">${avgRating(currentUser.uid)}</div></div></div><div class="grid"><div class="card"><h2>Today</h2>${today.map(b=>`<div class="timeline-item"><b>${formatTime12(b.start)} • ${b.course}</b><br>${user(b.studentId).name||""}<br>${b.location||""}</div>`).join("")||"<p class='muted'>No sessions today.</p>"}</div><div class="card"><h2>Pending Payments</h2>${b.filter(x=>unpaid([x])>0).slice(0,6).map(x=>`<div class="timeline-item">${x.date} • ${user(x.studentId).name||""}<br>${money(unpaid([x]))} unpaid<br><button onclick="markBookingPayment('${x.id}')">Mark as Paid</button></div>`).join("")||"<p class='muted'>No pending payments.</p>"}</div></div>`}
-function adminDashboardPage(){const bs=list(DATA.bookings),today=bs.filter(b=>isToday(b.date)),month=thisMonthBookings(bs),req=list(DATA.accessRequests).filter(r=>(r.status||"pending")==="pending");$("content").innerHTML=`<div class="dashboard-hero"><h2>Scheduled Admin Dashboard</h2><p class="muted">Everything important in one place.</p><div class="quick-actions"><button onclick="openTab('Students')">Add Student</button><button onclick="openTab('Tutors')">Add Tutor</button><button class="ghost" onclick="openTab('Announcements')">Send Announcement</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Students</div><div class="kpi-value">${students().length}</div></div><div class="kpi-card"><div class="kpi-label">Tutors</div><div class="kpi-value">${tutors().length}</div></div><div class="kpi-card"><div class="kpi-label">Sessions Today</div><div class="kpi-value">${today.length}</div></div><div class="kpi-card"><div class="kpi-label">Revenue This Month</div><div class="kpi-value">${money(month.reduce((s,b)=>s+total(b),0))}</div></div><div class="kpi-card"><div class="kpi-label">Pending Requests</div><div class="kpi-value">${req.length}</div></div><div class="kpi-card"><div class="kpi-label">Unpaid</div><div class="kpi-value">${money(unpaid(bs))}</div></div></div>`}
-function announcementsPage(){if(profile.role==="admin"){$("content").innerHTML=`<div class="card"><h2>Announcements</h2><div class="row"><input id="annTitle" placeholder="Title"><select id="annAudience"><option value="everyone">Everyone</option><option value="student">Students</option><option value="tutor">Tutors</option></select></div><textarea id="annMessage" placeholder="Announcement message"></textarea><button onclick="sendAnnouncement()">Send Announcement</button></div><div class="card"><h2>Previous Announcements</h2>${list(DATA.announcements||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(a=>`<div class="announcement-card"><b>${a.title}</b><p>${a.message}</p><span class="muted">${a.audience}</span></div>`).join("")||"<p class='muted'>None yet.</p>"}</div>`}else{$("content").innerHTML=`<div class="card"><h2>Announcements</h2>${getAnnouncementsForRole().map(a=>`<div class="announcement-card"><b>${a.title}</b><p>${a.message}</p></div>`).join("")||"<p class='muted'>No announcements yet.</p>"}</div>`}}
-async function sendAnnouncement(){const title=$("annTitle").value.trim(),message=$("annMessage").value.trim(),audience=$("annAudience").value;if(!title||!message)return alert("Fill title and message.");await db.ref("announcements").push({title,message,audience,createdAt:Date.now(),createdBy:currentUser.uid});await createNotification(audience,title,message);await loadData();announcementsPage()}
-function statsPage(){const b=myBookings();if(profile.role==="student"){$("content").innerHTML=`<div class="card"><h2>My Statistics</h2><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Total Hours Studied</div><div class="kpi-value">${totalHours(b)}</div></div><div class="kpi-card"><div class="kpi-label">Sessions Completed</div><div class="kpi-value">${b.filter(x=>x.done).length}</div></div><div class="kpi-card"><div class="kpi-label">Upcoming Sessions</div><div class="kpi-value">${b.filter(x=>!x.done).length}</div></div><div class="kpi-card"><div class="kpi-label">Number of Tutors</div><div class="kpi-value">${studentTutors(currentUser.uid).length}</div></div></div></div>`}else{$("content").innerHTML=`<div class="card"><h2>Tutor Statistics</h2><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Total Students</div><div class="kpi-value">${[...new Set(b.map(x=>x.studentId))].length}</div></div><div class="kpi-card"><div class="kpi-label">Total Sessions</div><div class="kpi-value">${b.length}</div></div><div class="kpi-card"><div class="kpi-label">Hours Taught</div><div class="kpi-value">${totalHours(b)}</div></div><div class="kpi-card"><div class="kpi-label">Average Rating</div><div class="kpi-value">${avgRating(currentUser.uid)}</div></div></div></div>`}}
-function reviewsPage(){if(profile.role==="tutor"){const rs=getReviewsForTutor(currentUser.uid);$("content").innerHTML=`<div class="card"><h2>My Reviews</h2><div class="kpi-card"><div class="kpi-label">Average Rating</div><div class="kpi-value">${avgRating(currentUser.uid)}</div></div>${rs.map(r=>`<div class="timeline-item"><b>${"★".repeat(Number(r.rating||0))}${"☆".repeat(5-Number(r.rating||0))}</b><p>${r.text||""}</p></div>`).join("")||"<p class='muted'>No reviews yet.</p>"}</div>`}else{const completed=myBookings().filter(b=>b.done);$("content").innerHTML=`<div class="card"><h2>Leave a Review</h2>${completed.map(b=>`<div class="timeline-item"><b>${user(b.tutorId).name||""} • ${b.course}</b><br>${b.date}<br><button onclick="reviewBooking('${b.id}')">Review</button></div>`).join("")||"<p class='muted'>No completed sessions yet.</p>"}</div>`}}
-async function reviewBooking(id){const b=DATA.bookings[id];if(!b)return;const rating=Number(prompt("Rating from 1 to 5:","5")||0);if(!rating||rating<1||rating>5)return alert("Rating must be 1 to 5.");const text=prompt("Written review:","")||"";await db.ref("reviews").push({bookingId:id,tutorId:b.tutorId,studentId:currentUser.uid,course:b.course,rating,text,createdAt:Date.now()});await createNotification("tutor","New Review",`You received a ${rating}-star review.`,b.tutorId);await loadData();reviewsPage()}
-function favoritesPage(){const ids=Array.isArray(profile.favoriteTutorIds)?profile.favoriteTutorIds:[],favs=ids.map(id=>({id,...user(id)})).filter(t=>t.role==="tutor");$("content").innerHTML=`<div class="card"><h2>Favorite Tutors</h2>${favs.length?`<div class="grid">${favs.map(t=>`<div class="card"><h3>${t.name}</h3><p>${t.university||""}<br>${(t.courses||[]).join(", ")}</p><button onclick="bookWithTutor('${t.id}')">Book Now</button><button class="ghost" onclick="toggleFavoriteTutor('${t.id}')">Remove Favorite</button></div>`).join("")}</div>`:"<p class='muted'>No favorite tutors yet.</p>"}</div>`}
-function emergencySessionsPage(){const today=todayISO();const available=tutors().filter(t=>(t.courses||[]).some(c=>dayHasAvailable(t.id,today,c)));$("content").innerHTML=`<div class="card"><h2>⚡ Emergency Sessions Today</h2><p class="muted">Tutors with availability today.</p>${available.length?`<div class="grid">${available.map(t=>`<div class="card"><span class="emergency-badge">Available today</span><h3>${t.name}</h3><p>${t.university||""}<br>${(t.courses||[]).join(", ")}</p><button onclick="bookWithTutor('${t.id}')">Book Now</button></div>`).join("")}</div>`:"<p class='muted'>No emergency slots available today.</p>"}</div>`}
-function studentProfilePage(){$("content").innerHTML=`<div class="profile-section"><h2>Student Profile</h2><p><b>Name:</b> ${profile.name||""}</p><p><b>Email:</b> ${profile.email||""}</p><p><b>Phone:</b> ${profile.phone||""}</p><p><b>University:</b> ${profile.university||""}</p><p><b>Major:</b> ${profile.major||"Not specified"}</p><p><b>Year:</b> ${profile.year||"Not specified"}</p><p><b>Assigned Courses:</b> ${assignedCourseBadges(currentUser.uid)}</p><p><b>Assigned Tutors:</b> ${assignedTutorNames(currentUser.uid)||"None"}</p></div>`}
+function randomMotivation(){const quotes=motivationQuotes();return quotes[Math.floor(Math.random()*quotes.length)]||"Keep going — you are doing better than you think.";}
+async function addMotivationQuote(){
+  const text=($("motivationText")?.value||"").trim();
+  if(!text)return alert("Write a motivation phrase first.");
+  await db.ref("motivationQuotes").push({text,createdAt:Date.now(),createdBy:currentUser.uid});
+  await loadData();
+  motivationBannerSettingsPage();
+}
+async function deleteMotivationQuote(id){
+  if(!confirm("Delete this motivation phrase?"))return;
+  await db.ref("motivationQuotes/"+id).remove();
+  await loadData();
+  motivationBannerSettingsPage();
+}
+function motivationBannerSettingsPage(){
+  const quotes=list(DATA.motivationQuotes||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  $("content").innerHTML=`<div class="card"><h2>Motivation Banner</h2>
+    <p class="muted">These phrases appear as the moving banner inside student dashboards. If no custom phrases are added, Scheduled uses default motivational phrases.</p>
+    <textarea id="motivationText" placeholder="Write a new motivation phrase..."></textarea>
+    <button onclick="addMotivationQuote()">Add Phrase</button>
+    <hr>
+    <h3>Current Custom Phrases</h3>
+    ${quotes.length?quotes.map(q=>`<span class="banner-pill">${q.text}<button class="ghost" onclick="deleteMotivationQuote('${q.id}')">×</button></span>`).join(""):"<p class='muted'>No custom phrases yet. Default phrases are being used.</p>"}
+  </div>`;
+}
+function assignedStudentsForTutorSafe(tutorId){
+  if(typeof assignedStudentsForTutor==="function")return assignedStudentsForTutor(tutorId);
+  return students().filter(s=>Array.isArray(s.assignedTutorIds)&&s.assignedTutorIds.includes(tutorId));
+}
+function tutorAssignedStudentIds(){
+  return assignedStudentsForTutorSafe(currentUser.uid).map(s=>s.id);
+}
+function tutorAnnouncementsPage(){
+  if(profile.role==="admin")return announcementsPage();
+  if(profile.role!=="tutor")return announcementsPage();
 
-function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
-async function openTab(tab,btn){closeMenu();await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:announcementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
+  const assigned=assignedStudentsForTutorSafe(currentUser.uid);
+  const own=list(DATA.announcements||{}).filter(a=>a.createdBy===currentUser.uid).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+
+  $("content").innerHTML=`<div class="card"><h2>Announcements to My Students</h2>
+    <p class="muted">Send announcements only to students assigned to you. Admin announcements still appear separately.</p>
+    <div class="row"><input id="tutorAnnTitle" placeholder="Announcement title"></div>
+    <textarea id="tutorAnnMessage" placeholder="Message to your assigned students"></textarea>
+    <h3>Recipients</h3>
+    <div class="assigned-student-list">
+      ${assigned.length?assigned.map(s=>`<label class="check"><input type="checkbox" class="annStudent" value="${s.id}" checked>${s.name||""} <span class="muted">(${s.email||""})</span></label>`).join(""):"<p class='muted'>No assigned students yet.</p>"}
+    </div>
+    <button onclick="sendTutorAnnouncement()">Send Announcement</button>
+  </div>
+  <div class="card"><h2>Sent Announcements</h2>
+    ${own.length?own.map(a=>`<div class="announcement-card"><b>${a.title||""}</b><p>${a.message||""}</p><span class="muted">${new Date(a.createdAt||Date.now()).toLocaleString()}</span></div>`).join(""):"<p class='muted'>No announcements sent yet.</p>"}
+  </div>`;
+}
+async function sendTutorAnnouncement(){
+  const title=($("tutorAnnTitle")?.value||"").trim();
+  const message=($("tutorAnnMessage")?.value||"").trim();
+  const recipientIds=[...document.querySelectorAll(".annStudent:checked")].map(x=>x.value);
+  if(!title||!message)return alert("Please fill title and message.");
+  if(!recipientIds.length)return alert("Choose at least one assigned student.");
+  await db.ref("announcements").push({
+    title,message,
+    audience:"assignedStudents",
+    recipientIds,
+    createdBy:currentUser.uid,
+    creatorRole:"tutor",
+    createdAt:Date.now()
+  });
+  for(const id of recipientIds){
+    if(typeof createNotification==="function"){
+      await createNotification("student",title,message,id);
+    }else{
+      await db.ref("notifications").push({to:"student",userId:id,title,message,createdAt:Date.now(),read:false});
+    }
+  }
+  await loadData();
+  tutorAnnouncementsPage();
+}
+
+function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
+async function openTab(tab,btn){closeMenu();await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:tutorAnnouncementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}
 
