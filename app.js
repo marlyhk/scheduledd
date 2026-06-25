@@ -23,7 +23,7 @@ async function loadData(){const s=await db.ref("/").once("value");const v=s.val(
 auth.onAuthStateChanged(async u=>{if(!u)return;currentUser=u;let s=await db.ref("users/"+u.uid).once("value");profile=s.val();if(!profile){notice("Account exists but no Scheduled profile was found.");await auth.signOut();return}await loadData();$("loginPage").classList.add("hidden");$("dashboard").classList.remove("hidden");$("roleLabel").textContent=`${profile.name} • ${profile.role.toUpperCase()}`;renderTabs()});
 async function login(){try{await auth.signInWithEmailAndPassword($("loginEmail").value.trim(),$("loginPassword").value.trim())}catch(e){notice(e.message)}} async function logout(){await auth.signOut();location.reload()}
 async function createFirstAdmin(){try{let c=await auth.createUserWithEmailAndPassword($("setupEmail").value.trim(),$("setupPassword").value.trim());await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name:$("setupName").value.trim(),email:$("setupEmail").value.trim(),role:"admin",createdAt:Date.now()});notice("Admin created. You are logged in.")}catch(e){notice(e.message)}}
-function list(o){return Object.entries(o||{}).map(([id,v])=>({id,...v}))} function user(id){return DATA.users[id]||{}} function tutors(){return list(DATA.users).filter(u=>u.role==="tutor")} function students(){return list(DATA.users).filter(u=>u.role==="student")} function safe(s){return s.replace(/[.#$/\[\]]/g,"_")}
+function list(o){return Object.entries(o||{}).map(([id,v])=>({id,...v}))} function user(id){return DATA.users[id]||{}} function tutors(){return list(DATA.users).filter(u=>u.role==="tutor" && !u.removed)} function students(){return list(DATA.users).filter(u=>u.role==="student")} function safe(s){return s.replace(/[.#$/\[\]]/g,"_")}
 function myBookings(){let b=list(DATA.bookings);if(profile.role==="admin")return b;if(profile.role==="tutor")return b.filter(x=>x.tutorId===currentUser.uid);return b.filter(x=>x.studentId===currentUser.uid)}
 function total(b){return(b.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0)} function paid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>p.paid).reduce((s,p)=>s+Number(p.amount||0),0)} function unpaid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>!p.paid).reduce((s,p)=>s+Number(p.amount||0),0)} function badge(p){return`<span class="badge ${p?'paid':'unpaid'}">${p?'Paid':'Unpaid'}</span>`} function method(l){return(l||"").toLowerCase().includes("online")?"Whish":"Cash"}
 function renderTabs(){let t=profile.role==="admin"?["Overview","Tutors","Students","Courses","Access Requests","Calendar","Bookings","Documents","Export"]:profile.role==="tutor"?["Schedule","Calendar","Availability","Students","Financial","Documents","Profile"]:["Book","My Sessions","Payments","Documents","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i==0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
@@ -266,7 +266,97 @@ async function rejectAccessRequest(id){
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Firebase is connected. Smart slot blocking and 15-minute buffers are active.</p></div>`}
 function usersTable(a){return a.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Role/Type</th><th>Details</th></tr>${a.map(u=>`<tr><td>${u.name||""}</td><td>${u.email||""}</td><td>${u.role}${u.type?"/"+u.type:""}</td><td>${u.rate?money(u.rate)+"/h/person<br>":""}${u.university?`University: ${u.university}<br>`:""}${u.whatsapp||""}<br>${(u.locations||[]).join(", ")}<br>${(u.courses||[]).join(", ")}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
-function adminTutors(){$("content").innerHTML=`<div class="card"><h2>Tutors</h2>${usersTable(tutors())}<hr><h3>Create Tutor</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"><input id="tuiv" placeholder="University e.g. University of Balamand"></div><input id="tl" placeholder="Locations: Online, On Campus (Koura Campus)"><button onclick="createAccount('tutor')">Create Tutor</button></div>`}
+function adminTutors(){
+  const tutorList=tutors();
+  $("content").innerHTML=`<div class="card"><h2>Tutors</h2>
+  ${tutorList.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>University</th><th>Rate</th><th>WhatsApp</th><th>Courses</th><th>General Locations</th><th>Actions</th></tr>
+  ${tutorList.map(t=>`<tr>
+    <td>${t.name||""}</td>
+    <td>${t.email||""}</td>
+    <td>${t.university||""}</td>
+    <td>${money(t.rate)}/h/person</td>
+    <td>${t.whatsapp||""}</td>
+    <td>${(t.courses||[]).join(", ")}</td>
+    <td>${(t.locations||[]).join(", ")}</td>
+    <td><button onclick="editTutor('${t.id}')">Edit</button><button class="danger" onclick="deleteTutor('${t.id}')">Remove</button></td>
+  </tr>`).join("")}</table>`:`<p class="muted">No tutors yet.</p>`}
+
+  <hr><h3>Create Tutor</h3>
+  <div class="row">
+    <input id="tn" placeholder="Full name">
+    <input id="te" type="email" placeholder="Email">
+    <input id="tp" placeholder="Temporary password">
+    <input id="tw" placeholder="WhatsApp e.g. 96176174738">
+    <input id="tr" type="number" placeholder="Hourly rate">
+    <input id="tuiv" placeholder="University e.g. University of Balamand">
+  </div>
+  <input id="tl" placeholder="General locations: Online, On Campus (Koura Campus)">
+  <button onclick="createAccount('tutor')">Create Tutor</button></div>`
+}
+
+
+async function editTutor(id){
+  const t=DATA.users[id];
+  if(!t)return alert("Tutor not found.");
+
+  const name=prompt("Tutor full name:",t.name||"");
+  if(name===null)return;
+
+  const university=prompt("University:",t.university||"");
+  if(university===null)return;
+
+  const rate=prompt("Hourly rate:",t.rate||15);
+  if(rate===null)return;
+
+  const whatsapp=prompt("WhatsApp number:",t.whatsapp||"");
+  if(whatsapp===null)return;
+
+  const coursesText=prompt("Courses, comma separated:",(t.courses||[]).join(", "));
+  if(coursesText===null)return;
+
+  const locationsText=prompt("General locations, comma separated:",(t.locations||[]).join(", "));
+  if(locationsText===null)return;
+
+  const courses=coursesText.split(",").map(x=>x.trim()).filter(Boolean);
+  const locations=locationsText.split(",").map(x=>x.trim()).filter(Boolean);
+
+  await db.ref("users/"+id).update({
+    name,
+    university,
+    rate:Number(rate||0),
+    whatsapp,
+    courses,
+    locations,
+    updatedAt:Date.now()
+  });
+
+  for(const c of courses){
+    await db.ref("courses/"+safe(c)).set({name:c});
+  }
+
+  await loadData();
+  adminTutors();
+}
+async function deleteTutor(id){
+  const t=DATA.users[id];
+  if(!t)return alert("Tutor not found.");
+  const hasBookings=list(DATA.bookings).some(b=>b.tutorId===id);
+  const message=hasBookings
+    ? `This tutor has existing bookings. Removing them will hide them from login but old bookings may still reference this tutor. Continue removing ${t.name}?`
+    : `Remove tutor ${t.name}?`;
+  if(!confirm(message))return;
+
+  // Soft-delete instead of deleting Auth account/client-side, because deleting Firebase Auth users requires server/admin privileges.
+  await db.ref("users/"+id).update({
+    role:"removedTutor",
+    removed:true,
+    removedAt:Date.now()
+  });
+
+  await loadData();
+  adminTutors();
+}
+
 function adminStudents(){
   const visibleStudents = profile.role==="admin" ? students() : students().filter(s=>s.assignedTutorId===currentUser.uid || s.createdBy===currentUser.uid);
   $("content").innerHTML=`<div class="card"><h2>${profile.role==="admin"?"Students / Groups":"My Students / Groups"}</h2>

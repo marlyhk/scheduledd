@@ -1,5 +1,13 @@
-Scheduled v1.8 — University Filter
+Scheduled v1.9 — Admin Edit Tutors
 
-Adds university field for tutors and lets students filter tutors by university after choosing a course.
+Adds:
+- Admin can edit existing tutor name
+- Admin can edit university
+- Admin can edit hourly rate
+- Admin can edit WhatsApp number
+- Admin can edit courses
+- Admin can edit general locations
+- Admin can remove tutors using soft-delete
+- Removed tutors no longer appear in tutor/course booking lists
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.
