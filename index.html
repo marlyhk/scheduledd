@@ -10,20 +10,42 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 </head>
 <body>
-  <div id="splash" class="splash"><img src="scheduled-splash.jpeg" alt="Scheduled"></div>
+  <div id="splash" class="splash">
+    <img src="scheduled-splash.jpeg" alt="Scheduled" onerror="this.style.display='none'">
+  </div>
+
   <main id="app" class="app hidden">
     <section id="loginPage" class="login-card">
-      <div class="brand"><img src="scheduled-icon.jpeg" alt="Scheduled"><h1 class="brand-word">Scheduled</h1><p>Tutoring, made simple.</p></div>
+      <div class="brand">
+        <img src="scheduled-icon.jpeg" alt="Scheduled" onerror="this.style.display='none'">
+        <h1 class="brand-word">Scheduled</h1>
+        <p>Tutoring, made simple.</p>
+      </div>
+
       <div id="notice" class="notice hidden"></div>
-      <label>Email</label><input id="loginEmail" type="email" placeholder="name@example.com">
-      <label>Password</label><input id="loginPassword" type="password" placeholder="Password">
+
+      <label>Email</label>
+      <input id="loginEmail" type="email" placeholder="name@example.com">
+      <label>Password</label>
+      <input id="loginPassword" type="password" placeholder="Password">
       <button onclick="login()">Log In</button>
-      <p class="hint">Please log in using your assigned email and password.</p>
-      <div class="public-cards"><div class="mini-card"><h3>📚 Need tutoring?</h3><p>Request access to book tutoring sessions with verified tutors.</p><button class="ghost" onclick="toggleRequestAccess()">Request Access</button></div><div class="mini-card"><h3>🎓 Want to teach?</h3><p>Join Scheduled's team of tutors. Every application is reviewed to ensure students receive high-quality academic support.</p><button class="ghost" onclick="becomeTutorWhatsapp()">Become a Tutor</button></div></div>
+
+      <div class="public-cards">
+        <div class="mini-card">
+          <h3>📚 Need tutoring?</h3>
+          <p>Request access to book tutoring sessions with verified tutors.</p>
+          <button class="ghost" onclick="toggleRequestAccess()">Request Access</button>
+        </div>
+        <div class="mini-card">
+          <h3>🎓 Want to teach?</h3>
+          <p>Join Scheduled's team of tutors. Every application is reviewed to ensure students receive high-quality academic support.</p>
+          <button class="ghost" onclick="becomeTutorWhatsapp()">Become a Tutor</button>
+        </div>
+      </div>
+
       <div id="requestAccess" class="hidden setup">
         <hr>
         <h3>Request Access</h3>
-        <p class="hint">Submit your details. Admin will review your request and create your account if approved.</p>
         <input id="reqName" placeholder="Full name">
         <input id="reqEmail" type="email" placeholder="Email address">
         <input id="reqPhone" placeholder="Phone number">
@@ -32,12 +54,23 @@
         <button onclick="submitAccessRequest()">Submit Request</button>
       </div>
     </section>
+
     <section id="dashboard" class="hidden">
-      <header class="topbar"><div class="top-brand"><img src="scheduled-icon.jpeg" alt="Scheduled"><div><h1 class="brand-word small-brand">Scheduled</h1><p id="roleLabel"></p></div></div><button class="ghost" onclick="logout()">Logout</button></header>
+      <header class="topbar">
+        <div class="top-brand">
+          <img src="scheduled-icon.jpeg" alt="Scheduled" onerror="this.style.display='none'">
+          <div>
+            <h1 class="brand-word small-brand">Scheduled</h1>
+            <p id="roleLabel"></p>
+          </div>
+        </div>
+        <button class="ghost" onclick="logout()">Logout</button>
+      </header>
       <nav id="tabs" class="tabs"></nav>
       <section id="content" class="content"></section>
     </section>
   </main>
+
   <script src="app.js"></script>
 </body>
 </html>
