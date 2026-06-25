@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v6-6-reliable-menu-fix",
-  "version": "6.6.0",
+  "name": "scheduled-v6-7-stable-sidebar-rebuild",
+  "version": "6.7.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"

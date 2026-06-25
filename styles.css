@@ -910,189 +910,102 @@ button:hover{
 }
 
 
-/* v6.5 menu/sidebar fix */
+/* v6.7 stable sidebar rebuild */
 html,body{
-  overflow-x:hidden;
+  overflow-x:hidden !important;
+}
+.topbar{
+  position:sticky !important;
+  top:0 !important;
+  z-index:60 !important;
+  backdrop-filter:blur(12px);
 }
 .menu-button{
   position:relative !important;
-  z-index:80 !important;
-  pointer-events:auto !important;
+  z-index:70 !important;
+  width:44px !important;
+  height:44px !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  border-radius:14px !important;
   cursor:pointer !important;
-  flex:0 0 auto;
-}
-.topbar{
-  position:relative;
-  z-index:70;
+  pointer-events:auto !important;
+  touch-action:manipulation !important;
+  flex:0 0 auto !important;
 }
 .tabs{
   position:fixed !important;
   left:0 !important;
   top:0 !important;
-  bottom:0 !important;
+  width:286px !important;
+  height:100vh !important;
   height:100dvh !important;
-  width:min(310px,86vw) !important;
-  max-width:86vw !important;
   background:#fff !important;
   border-right:1px solid var(--border) !important;
-  box-shadow:22px 0 60px rgba(31,42,55,.16) !important;
-  z-index:90 !important;
-  transform:translateX(-105%) !important;
-  transition:transform .22s cubic-bezier(.22,1,.36,1) !important;
+  box-shadow:16px 0 50px rgba(31,42,55,.10) !important;
+  z-index:55 !important;
   display:flex !important;
   flex-direction:column !important;
   align-items:stretch !important;
   gap:8px !important;
-  padding:88px 14px 24px !important;
+  padding:92px 14px 22px !important;
   margin:0 !important;
   overflow-y:auto !important;
   overflow-x:hidden !important;
   -webkit-overflow-scrolling:touch !important;
-  pointer-events:auto !important;
   overscroll-behavior:contain !important;
-}
-.tabs.open{
-  transform:translateX(0) !important;
+  pointer-events:auto !important;
 }
 .tabs button{
-  position:relative !important;
-  z-index:91 !important;
   display:block !important;
   width:100% !important;
   min-height:44px !important;
-  text-align:left !important;
-  margin:0 !important;
   padding:12px 14px !important;
   border-radius:16px !important;
+  margin:0 !important;
+  text-align:left !important;
   white-space:normal !important;
-  pointer-events:auto !important;
   cursor:pointer !important;
+  pointer-events:auto !important;
   touch-action:manipulation !important;
+  flex:0 0 auto !important;
 }
 .tabs button:hover{
   transform:none !important;
 }
-.menu-backdrop{
-  position:fixed !important;
-  inset:0 !important;
-  background:rgba(15,27,51,.28) !important;
-  z-index:85 !important;
-  pointer-events:auto !important;
+.content{
+  margin-left:286px !important;
+  width:calc(100% - 286px) !important;
 }
-body.menu-open{
-  overflow:hidden !important;
+.dashboard{
+  min-height:100vh;
 }
-@media(min-width:900px){
+@media(max-width:860px){
   .tabs{
-    width:300px !important;
+    width:min(310px,86vw) !important;
+    max-width:86vw !important;
+    transform:translateX(-104%) !important;
+    transition:transform .22s cubic-bezier(.22,1,.36,1) !important;
+    box-shadow:22px 0 70px rgba(31,42,55,.18) !important;
+    z-index:90 !important;
+  }
+  .tabs.open{
+    transform:translateX(0) !important;
+  }
+  .content{
+    margin-left:0 !important;
+    width:100% !important;
+  }
+  body.menu-open{
+    overflow:hidden !important;
   }
 }
-
-
-/* v6.6 reliable sidebar menu — final override */
-html, body{
-  overflow-x:hidden !important;
-}
-body.menu-open{
-  overflow:hidden !important;
-}
-#menuButton.menu-button,
-.menu-button{
-  position:relative !important;
-  z-index:10050 !important;
-  pointer-events:auto !important;
-  cursor:pointer !important;
-  width:44px !important;
-  height:44px !important;
-  flex:0 0 44px !important;
-  display:inline-flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  touch-action:manipulation !important;
-  user-select:none !important;
-}
-#tabs.tabs,
-.tabs{
-  position:fixed !important;
-  top:0 !important;
-  left:0 !important;
-  bottom:auto !important;
-  width:min(320px,88vw) !important;
-  height:100vh !important;
-  height:100dvh !important;
-  max-height:100vh !important;
-  background:#ffffff !important;
-  z-index:10040 !important;
-  display:flex !important;
-  flex-direction:column !important;
-  align-items:stretch !important;
-  justify-content:flex-start !important;
-  gap:8px !important;
-  padding:76px 14px 22px !important;
-  margin:0 !important;
-  border-right:1px solid var(--border) !important;
-  box-shadow:22px 0 70px rgba(15,27,51,.18) !important;
-  transform:translate3d(-106%,0,0) !important;
-  transition:transform .24s cubic-bezier(.22,1,.36,1) !important;
-  overflow-y:auto !important;
-  overflow-x:hidden !important;
-  -webkit-overflow-scrolling:touch !important;
-  pointer-events:auto !important;
-  overscroll-behavior:contain !important;
-}
-#tabs.tabs.open,
-.tabs.open{
-  transform:translate3d(0,0,0) !important;
-}
-#tabs .menu-close{
-  display:flex !important;
-  position:sticky !important;
-  top:-62px !important;
-  margin:-58px 0 14px auto !important;
-  z-index:10045 !important;
-  width:42px !important;
-  height:42px !important;
-  align-items:center !important;
-  justify-content:center !important;
-  border-radius:14px !important;
-  background:#fff !important;
-  border:1px solid var(--border) !important;
-  color:var(--navy) !important;
-  font-size:22px !important;
-  cursor:pointer !important;
-}
-#tabs.tabs button:not(.menu-close),
-.tabs button:not(.menu-close){
-  display:block !important;
-  width:100% !important;
-  min-height:46px !important;
-  padding:12px 14px !important;
-  margin:0 !important;
-  border-radius:16px !important;
-  text-align:left !important;
-  white-space:normal !important;
-  pointer-events:auto !important;
-  cursor:pointer !important;
-  touch-action:manipulation !important;
-  position:relative !important;
-  z-index:10041 !important;
-  flex:0 0 auto !important;
-}
-#tabs.tabs button:not(.menu-close):hover,
-.tabs button:not(.menu-close):hover{
-  transform:none !important;
-}
-#menuBackdrop.menu-backdrop,
-.menu-backdrop{
-  position:fixed !important;
-  inset:0 !important;
-  z-index:10030 !important;
-  background:rgba(15,27,51,.30) !important;
-  pointer-events:auto !important;
-}
-@media (min-width:1100px){
-  #tabs.tabs,
+@media(min-width:861px){
   .tabs{
-    width:320px !important;
+    transform:none !important;
+  }
+  .menu-button{
+    display:none !important;
   }
 }
