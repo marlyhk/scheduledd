@@ -1,8 +1,8 @@
 {
-  "name": "scheduled-v6-1-slow-logo-intro",
-  "version": "6.1.0",
+  "name": "scheduled-v6-2-real-logo-intro",
+  "version": "6.2.0",
   "private": true,
   "scripts": {
-    "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg public/"
+    "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"
   }
 }

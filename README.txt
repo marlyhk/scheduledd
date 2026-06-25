@@ -1,13 +1,12 @@
-Scheduled v6.1 — Slower Logo Intro
+Scheduled v6.2 — Real Logo Intro
 
-Built from v6.0.
+Built from v6.1.
 
 Fix:
-- Startup animation is slower and more visible.
-- Calendar outline actually draws itself using SVG stroke animation.
-- Checkmark draws/slides in.
-- Corner fold animates.
-- Logo fades/scales in after the icon animation.
-- Splash stays for about 4.1 seconds so the animation can be seen.
+- Startup animation now uses the actual uploaded Scheduled logo images.
+- First shows the icon-only logo.
+- Then transitions into the full Scheduled logo with tagline.
+- Removed the generic SVG calendar animation.
+- Splash timing set to about 4.4 seconds.
 
 Upload all files to GitHub and commit. Vercel redeploys automatically.

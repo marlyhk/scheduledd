@@ -623,3 +623,83 @@ button:hover{
   from{opacity:0}
   to{opacity:1}
 }
+
+
+/* v6.2 real logo intro — uses actual uploaded Scheduled logo */
+#splash{
+  position:fixed;
+  inset:0;
+  z-index:999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(183,225,250,.30), transparent 26%),
+    linear-gradient(180deg,#ffffff 0%,#f7fbff 100%) !important;
+  overflow:hidden;
+  transition:opacity .75s ease, visibility .75s ease;
+}
+#splash.hidden{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+#splash:before,
+#splash:after,
+.splash-animation,
+.splash-calendar{
+  display:none !important;
+  content:none !important;
+}
+.real-logo-intro{
+  position:relative;
+  width:min(560px,82vw);
+  height:min(560px,82vw);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.real-logo-intro:before{
+  content:"";
+  position:absolute;
+  width:70%;
+  height:70%;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(183,225,250,.35),transparent 62%);
+  animation:brandGlow 3.8s ease-in-out both;
+}
+.intro-icon{
+  position:absolute;
+  width:min(300px,48vw);
+  height:auto;
+  opacity:0;
+  transform:scale(.92) translateY(12px);
+  filter:drop-shadow(0 24px 42px rgba(31,42,55,.13));
+  animation:realIconIntro 2.15s cubic-bezier(.22,1,.36,1) .25s forwards !important;
+}
+.intro-full{
+  position:absolute;
+  width:min(560px,82vw);
+  height:auto;
+  opacity:0;
+  transform:scale(.96) translateY(10px);
+  filter:drop-shadow(0 24px 42px rgba(31,42,55,.10));
+  animation:realFullLogoIntro 1.35s cubic-bezier(.22,1,.36,1) 2.25s forwards !important;
+}
+@keyframes brandGlow{
+  0%{opacity:0;transform:scale(.72)}
+  28%{opacity:1;transform:scale(1)}
+  76%{opacity:.75;transform:scale(1.06)}
+  100%{opacity:.25;transform:scale(1.1)}
+}
+@keyframes realIconIntro{
+  0%{opacity:0;transform:scale(.78) translateY(20px);filter:blur(6px) drop-shadow(0 24px 42px rgba(31,42,55,.10))}
+  22%{opacity:1;transform:scale(1.04) translateY(0);filter:blur(0) drop-shadow(0 24px 42px rgba(31,42,55,.13))}
+  62%{opacity:1;transform:scale(1) translateY(0)}
+  100%{opacity:0;transform:scale(.88) translateY(-12px)}
+}
+@keyframes realFullLogoIntro{
+  0%{opacity:0;transform:scale(.94) translateY(18px);filter:blur(5px) drop-shadow(0 24px 42px rgba(31,42,55,.08))}
+  65%{opacity:1;transform:scale(1.015) translateY(0);filter:blur(0) drop-shadow(0 24px 42px rgba(31,42,55,.10))}
+  100%{opacity:1;transform:scale(1) translateY(0)}
+}
