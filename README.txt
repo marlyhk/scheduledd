@@ -1,11 +1,14 @@
-Scheduled v5.4 — Stable Rollback
+Scheduled v5.5 — Based on v5.0 + Later Requests
 
-Built directly from the last stable v4.2 ZIP.
+Base:
+- Uses v5.0 professional dashboards if available.
 
-Purpose:
-- Remove unstable v5 additions that caused website errors.
-- Keep the existing working features from v4.2.
-- Add only a small safety error screen.
+Added after v5.0:
+- Admin can edit student motivation banner phrases.
+- Tutors can send announcements only to assigned students.
+- Tutors can schedule sessions themselves for assigned students/groups.
+- Tutor-scheduled sessions notify the student.
+- Payment options remain Cash/Whish and Paid/Unpaid.
+- Syntax checked with node --check.
 
-Next step:
-- Re-add dashboards/announcements/tutor scheduling gradually after confirming this version opens correctly.
+Upload all files to GitHub and commit. Vercel redeploys automatically.
