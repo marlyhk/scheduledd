@@ -1,3 +1,28 @@
+
+function emailKey(email){
+  return String(email||"").trim().toLowerCase().replace(/\./g,",");
+}
+function pendingKey(email){return emailKey(email)}
+async function savePreparedProfileByEmail(email, profileData){
+  const key=emailKey(email);
+  await db.ref("pendingProfiles/"+key).set(profileData);
+  await db.ref("profilesByEmail/"+key).set(profileData);
+}
+async function applyPendingProfileIfAny(u){
+  const key=emailKey(u.email);
+  let snap=await db.ref("pendingProfiles/"+key).once("value");
+  let prepared=snap.val();
+  if(!prepared){
+    snap=await db.ref("profilesByEmail/"+key).once("value");
+    prepared=snap.val();
+  }
+  if(!prepared)return null;
+  const linked={...prepared,uid:u.uid,email:u.email,removed:false,linkedAt:Date.now()};
+  await db.ref("users/"+u.uid).set(linked);
+  await db.ref("pendingProfiles/"+key).remove();
+  return linked;
+}
+
 const firebaseConfig={apiKey:"AIzaSyBK-Iu_TKXq7-PjIDOxXvwp2MDYXikQV8Y",authDomain:"scheduled-ed.firebaseapp.com",databaseURL:"https://scheduled-ed-default-rtdb.europe-west1.firebasedatabase.app",projectId:"scheduled-ed",storageBucket:"scheduled-ed.firebasestorage.app",messagingSenderId:"1057147687553",appId:"1:1057147687553:web:2c76219c0b97e2e9b3f380",measurementId:"G-QF774WZ4ER"};
 firebase.initializeApp(firebaseConfig);
 const secondaryApp=firebase.initializeApp(firebaseConfig,"Secondary");
@@ -7,7 +32,7 @@ const ADMIN_WHATSAPP="96176174738";
 const SITE_URL="https://scheduledeu.vercel.app/";
 const $=id=>document.getElementById(id);
 const money=n=>"$"+Number(n||0).toFixed(Number.isInteger(Number(n))?0:2);
-let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{}};
+let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{}};
 let preselectTutorId=null;
 
 setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")},800);
@@ -27,19 +52,26 @@ async function submitAccessRequest(){
 }
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
-async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{}}}
+async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{}}}
 auth.onAuthStateChanged(async u=>{
   if(!u)return;
   currentUser=u;
+
   let s=await db.ref("users/"+u.uid).once("value");
   profile=s.val();
-  if(!profile){profile=await applyPendingProfileIfAny(u)}
+
+  if(!profile){
+    profile=await applyPendingProfileIfAny(u);
+  }
+
   if(!profile||profile.removed){
-    notice("This account does not have access to Scheduled.");
+    notice("This email is not linked to any Scheduled account yet. Ask admin to add this email in Tutors or Students first.");
     await auth.signOut();
     return;
   }
+
   await loadData();
+  profile={...profile,...(DATA.users[u.uid]||{})};
   $("loginPage").classList.add("hidden");
   $("dashboard").classList.remove("hidden");
   $("roleLabel").textContent=`${profile.name} • ${profile.role.toUpperCase()}`;
@@ -259,13 +291,13 @@ function publicTutorProfilesPage(){
   const ps=list(DATA.publicTutors||{}).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
   $("content").innerHTML=`<div class="card"><h2>Tutor Profiles</h2>
   <p class="admin-note"><b>Important:</b> This tab is only for the public Browse Tutors page. It does not create login accounts and it does not affect availability unless you link it to a real tutor account.</p>
-  ${ps.length?`<table class="table"><tr><th>Photo</th><th>Name</th><th>University</th><th>Courses</th><th>Rate</th><th>Linked Booking Account</th><th>Actions</th></tr>${ps.map(p=>`<tr><td><img class="profile-preview" src="${publicPhoto(p)}" onerror="this.src='scheduled-icon.jpeg'"></td><td>${p.name||""}</td><td>${p.university||""}</td><td>${(p.courses||[]).join(", ")}</td><td>${money(p.rate)}/h</td><td>${p.linkedTutorId?(user(p.linkedTutorId).name||"Linked"):"Not linked"}</td><td><button onclick="editPublicTutorProfile('${p.id}')">Edit</button><button onclick="editPublicTutorPhoto('${p.id}')">Photo</button><button class="danger" onclick="deletePublicTutorProfile('${p.id}')">Delete</button></td></tr>`).join("")}</table>`:`<p class="muted">No public tutor profiles yet.</p>`}
+  ${ps.length?`<table class="table"><tr><th>Photo</th><th>Name</th><th>University</th><th>Courses</th><th>Rate</th><th>Linked Booking Tutor</th><th>Actions</th></tr>${ps.map(p=>`<tr><td><img class="profile-preview" src="${publicPhoto(p)}" onerror="this.src='scheduled-icon.jpeg'"></td><td>${p.name||""}</td><td>${p.university||""}</td><td>${(p.courses||[]).join(", ")}</td><td>${money(p.rate)}/h</td><td>${p.linkedTutorId?(user(p.linkedTutorId).name||"Linked"):"Not linked"}</td><td><button onclick="editPublicTutorProfile('${p.id}')">Edit</button><button onclick="editPublicTutorPhoto('${p.id}')">Photo</button><button class="danger" onclick="deletePublicTutorProfile('${p.id}')">Delete</button></td></tr>`).join("")}</table>`:`<p class="muted">No public tutor profiles yet.</p>`}
   <hr><h3>Add Public Tutor Profile</h3>
   <div class="row">
     <input id="pname" placeholder="Tutor name">
     <input id="puniversity" placeholder="University">
     <input id="prate" type="number" placeholder="Hourly rate">
-    <select id="plink"><option value="">No linked tutor account</option>${tutors().map(t=>`<option value="${t.id}">${t.name} — ${t.email}</option>`).join("")}</select>
+    <select id="plink"><option value="">No linked booking tutor account</option>${tutors().map(t=>`<option value="${t.id}">${t.name} — ${t.email}</option>`).join("")}</select>
   </div>
   <input id="pcourses" placeholder="Courses taught, comma separated">
   <input id="plocations" placeholder="Locations, comma separated">
@@ -319,7 +351,23 @@ async function openTab(tab,btn){await loadData();document.querySelectorAll(".tab
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}
 
-function adminTutors(){const ts=tutors();$("content").innerHTML=`<div class="card"><h2>Tutors</h2>${ts.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>University</th><th>Rate</th><th>WhatsApp</th><th>Courses</th><th>Actions</th></tr>${ts.map(t=>`<tr><td>${t.name||""}</td><td>${t.email||""}</td><td>${t.university||""}</td><td>${money(t.rate)}/h/person</td><td>${t.whatsapp||""}</td><td>${(t.courses||[]).join(", ")}</td><td><button onclick="editTutor('${t.id}')">Edit</button><button onclick="editTutorPhoto('${t.id}')">Photo</button><button class="danger" onclick="deleteTutor('${t.id}')">Remove</button></td></tr>`).join("")}</table>`:`<p class="muted">No tutors yet.</p>`}<hr><h3>Create Tutor</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"><input id="tuiv" placeholder="University e.g. University of Balamand"></div><input id="tl" placeholder="General locations: Online, On Campus (Koura Campus)"><label>Profile picture</label><input id="tphotoFile" type="file" accept="image/*"><p class="file-note">Upload from files/photos.</p><textarea id="tdesc" placeholder="Tutor description / teaching style"></textarea><button onclick="createAccount('tutor')">Create Tutor</button></div>`}
+function adminTutors(){
+  const ts=tutors();
+  $("content").innerHTML=`<div class="card"><h2>Booking Tutor Accounts</h2>
+  <p class="admin-note"><b>This tab creates real booking tutor accounts.</b> If the email already exists in Firebase, Scheduled prepares the tutor profile by email and links it automatically when they log in with that same email/password. Public profile photos/descriptions are separate in Tutor Profiles.</p>
+  ${ts.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>University</th><th>Rate</th><th>WhatsApp</th><th>Courses</th><th>Actions</th></tr>${ts.map(t=>`<tr><td>${t.name||""}</td><td>${t.email||""}</td><td>${t.university||""}</td><td>${money(t.rate)}/h/person</td><td>${t.whatsapp||""}</td><td>${(t.courses||[]).join(", ")}</td><td><button onclick="editTutor('${t.id}')">Edit</button><button class="danger" onclick="deleteTutor('${t.id}')">Remove Access</button></td></tr>`).join("")}</table>`:`<p class="muted">No booking tutor accounts yet.</p>`}
+  <hr><h3>Create Booking Tutor Account</h3>
+  <div class="row">
+    <input id="tn" placeholder="Full name">
+    <input id="te" type="email" placeholder="Email">
+    <input id="tp" placeholder="Temporary password">
+    <input id="tw" placeholder="WhatsApp e.g. 96176174738">
+    <input id="tr" type="number" placeholder="Hourly rate">
+    <input id="tuiv" placeholder="University e.g. University of Balamand">
+  </div>
+  <input id="tl" placeholder="General locations: Online, On Campus (Koura Campus)">
+  <button onclick="createAccount('tutor')">Create / Link Booking Tutor</button></div>`;
+}
 async function editTutor(id){
   const t=DATA.users[id];if(!t)return alert("Tutor not found.");
   const name=prompt("Tutor full name:",t.name||"");if(name===null)return;
@@ -394,39 +442,56 @@ async function deleteStudent(id){
 async function createAccount(role){
   try{
     let name,email,password,extra={},phoneForWa="",profileData={};
+
     if(role==="tutor"){
       if(profile.role!=="admin")return alert("Only admin can create tutor accounts.");
-      name=$("tn").value.trim();email=$("te").value.trim();password=$("tp").value;phoneForWa=$("tw").value;
-      const photoData=await imageFileToDataUrl("tphotoFile");
-      extra={whatsapp:$("tw").value,rate:Number($("tr").value||15),university:$("tuiv").value.trim(),photoUrl:photoData,description:($("tdesc")?.value||"").trim(),locations:$("tl").value.split(",").map(x=>x.trim()).filter(Boolean),courses:[]};
+      name=$("tn").value.trim();
+      email=$("te").value.trim();
+      password=$("tp").value;
+      phoneForWa=$("tw").value;
+      extra={
+        whatsapp:$("tw").value,
+        rate:Number($("tr").value||15),
+        university:$("tuiv").value.trim(),
+        locations:$("tl").value.split(",").map(x=>x.trim()).filter(Boolean),
+        courses:[]
+      };
     }else{
-      name=$("sn").value.trim();email=$("se").value.trim();password=$("sp").value;phoneForWa=$("sphone").value;
-      extra={phone:$("sphone").value,university:($("suniversity")?.value||"").trim(),type:$("stype").value,members:$("smembers").value.split(",").map(x=>x.trim()).filter(Boolean),createdBy:currentUser.uid};
+      name=$("sn").value.trim();
+      email=$("se").value.trim();
+      password=$("sp").value;
+      phoneForWa=$("sphone").value;
+      extra={
+        phone:$("sphone").value,
+        university:($("suniversity")?.value||"").trim(),
+        type:$("stype").value,
+        members:$("smembers").value.split(",").map(x=>x.trim()).filter(Boolean),
+        createdBy:currentUser.uid
+      };
     }
+
     if(!name||!email||!password)return alert("Please fill name, email, and password.");
+
     profileData={name,email,role,createdAt:Date.now(),removed:false,...extra};
+
     try{
       let c=await secondaryAuth.createUserWithEmailAndPassword(email,password);
       await db.ref("users/"+c.user.uid).set({uid:c.user.uid,...profileData});
+      await db.ref("profilesByEmail/"+emailKey(email)).set(profileData);
       await secondaryAuth.signOut();
-      openWhatsApp(phoneForWa,`Hi ${name}, your Scheduled account has been created.
 
-Login link: ${SITE_URL}
-Email: ${email}
-Temporary password: ${password}
-
-Please change your password after logging in.`);
+      openWhatsApp(phoneForWa,`Hi ${name}, your Scheduled account has been created.\n\nLogin link: ${SITE_URL}\nEmail: ${email}\nTemporary password: ${password}\n\nPlease change your password after logging in.`);
+      alert(`${role==="tutor"?"Booking tutor":"Student"} account created successfully.`);
     }catch(e){
       if(String(e.code||"").includes("email-already-in-use")){
-        await db.ref("pendingProfiles/"+pendingKey(email)).set(profileData);
-        openWhatsApp(phoneForWa,`Hi ${name}, your Scheduled profile has been prepared using your existing email.
-
-Login link: ${SITE_URL}
-Email: ${email}
-Use your existing password. When you log in, your Scheduled profile will be linked automatically.`);
-        alert("This email already exists. A pending Scheduled profile was created. When the user logs in with that email, it will link automatically.");
-      }else{throw e}
+        await savePreparedProfileByEmail(email, profileData);
+        openWhatsApp(phoneForWa,`Hi ${name}, your Scheduled ${role==="tutor"?"tutor":"student"} profile has been prepared using your existing email.\n\nLogin link: ${SITE_URL}\nEmail: ${email}\nPlease log in using your existing password. Your Scheduled profile will link automatically.\n\nIf you forgot your password, ask admin to send a Firebase password reset.`);
+        alert("This Firebase email already exists. Scheduled prepared the profile by email. When they log in with the same email, access will link automatically.");
+      }else{
+        throw e;
+      }
     }
+
     await loadData();
     role==="tutor"?adminTutors():adminStudents();
   }catch(e){alert(e.message)}

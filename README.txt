@@ -1,18 +1,16 @@
-Scheduled v2.9 — Stable Separated Profiles
+Scheduled v3.1 — Existing Email Tutor Fix
 
-Use this instead of v2.7/v2.8 if pages were blank.
+Fix:
+- Tutors tab keeps original booking-account behavior.
+- If you add a booking tutor with an existing Firebase Auth email, Scheduled stores the tutor profile by email.
+- When that tutor logs in with the same email/password, Scheduled links the profile automatically and gives access.
 
-Important separation:
-- Tutors tab = real tutor login accounts used for bookings/availability
-- Tutor Profiles tab = public Browse Tutors profiles only
-- Public profiles do NOT create login accounts
-- Public profiles do NOT affect booking unless linked to a real tutor account
-- Public Book Now -> Request Access
-- Logged-in Book Now -> real booking only if linked
+Separation:
+- Tutors tab = real booking/login tutor accounts.
+- Tutor Profiles tab = public Browse Tutors only with photo + description.
+- Public profiles do not affect booking unless linked to a real booking tutor account.
 
-Deleted account recovery:
-- If Firebase Auth email still exists but Scheduled profile was deleted, create the tutor/student again with the same email.
-- The app creates a pending profile and links it on next login.
-- If password is unknown, reset it from Firebase Authentication > Users.
-
-Upload all files to GitHub and commit. Vercel redeploys automatically.
+Recovery:
+1. Add the tutor again in Admin > Tutors using the exact same email.
+2. Ask the tutor to log in using that same email/password.
+3. If they forgot the password, reset it in Firebase Authentication > Users.
