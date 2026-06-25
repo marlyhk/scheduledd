@@ -550,6 +550,10 @@ function randomMotivation(){
   return quotes[Math.floor(Math.random()*quotes.length)]||"Keep going — you are doing better than you think.";
 }
 function motivationBannerSettingsPage(){
+  if(!profile || profile.role!=="admin"){
+    $("content").innerHTML=`<div class="card"><h2>Access denied</h2><p class="muted">Only admin can manage the motivation banner.</p></div>`;
+    return;
+  }
   const quotes=v56List(DATA.motivationQuotes||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   $("content").innerHTML=`<div class="card"><h2>Motivation Banner</h2>
     <p class="muted">These phrases appear in the moving banner inside student dashboards. If none are added, default phrases are used.</p>
@@ -560,6 +564,7 @@ function motivationBannerSettingsPage(){
   </div>`;
 }
 async function addMotivationQuote(){
+  if(!profile || profile.role!=="admin")return alert("Only admin can change the motivation banner.");
   const text=($("motivationText")?.value||"").trim();
   if(!text)return alert("Write a motivation phrase first.");
   await db.ref("motivationQuotes").push({text,createdAt:Date.now(),createdBy:currentUser.uid});
@@ -567,6 +572,7 @@ async function addMotivationQuote(){
   motivationBannerSettingsPage();
 }
 async function deleteMotivationQuote(id){
+  if(!profile || profile.role!=="admin")return alert("Only admin can change the motivation banner.");
   if(!confirm("Delete this motivation phrase?"))return;
   await db.ref("motivationQuotes/"+id).remove();
   await loadData();
@@ -692,7 +698,7 @@ async function createTutorScheduledSession(){
   tutorScheduleSessionPage();
 }
 
-function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Motivation Banner","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
+function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 async function openTab(tab,btn){closeMenu();await loadData();document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:tutorAnnouncementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}
