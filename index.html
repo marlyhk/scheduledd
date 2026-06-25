@@ -11,10 +11,64 @@
 </head>
 <body>
   <div id="splash" class="splash">
-        <div class="real-logo-intro" aria-hidden="true">
-          <img class="intro-icon" src="scheduled-icon.jpeg" alt="">
-          <img class="intro-full" src="scheduled-splash.jpeg" alt="Scheduled">
+        <div class="logo-draw-intro" aria-hidden="true">
+          <svg class="scheduled-drawn-logo" viewBox="0 0 320 360" role="img">
+            <defs>
+              <linearGradient id="scheduledBlueStroke" x1="40" y1="45" x2="270" y2="260" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#B7DDFC"/>
+                <stop offset="48%" stop-color="#8EBEF4"/>
+                <stop offset="100%" stop-color="#6EA4E9"/>
+              </linearGradient>
+              <linearGradient id="foldBlue" x1="215" y1="208" x2="288" y2="286" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#EAF4FF"/>
+                <stop offset="48%" stop-color="#A9CBF7"/>
+                <stop offset="100%" stop-color="#6EA4E9"/>
+              </linearGradient>
+              <linearGradient id="foldShade" x1="225" y1="217" x2="260" y2="260" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+                <stop offset="100%" stop-color="#6EA4E9" stop-opacity="0.55"/>
+              </linearGradient>
+              <filter id="softLogoShadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#1F2A37" flood-opacity="0.12"/>
+              </filter>
+            </defs>
+
+            <!-- icon group -->
+            <g class="drawn-icon" filter="url(#softLogoShadow)">
+              <!-- actual logo rounded calendar outline -->
+              <path class="draw-calendar-outline" d="
+                M91 88
+                H229
+                Q265 88 265 124
+                V226
+                Q265 262 229 262
+                H91
+                Q55 262 55 226
+                V124
+                Q55 88 91 88
+                Z" />
+
+              <!-- top binder tabs from real logo -->
+              <path class="draw-calendar-tab tab-left" d="M102 88 V61 Q102 49 114 49 Q126 49 126 61 V88" />
+              <path class="draw-calendar-tab tab-right" d="M205 88 V61 Q205 49 217 49 Q229 49 229 61 V88" />
+
+              <!-- dark checkmark -->
+              <path class="draw-checkmark" d="M119 172 L145 198 L204 137" />
+
+              <!-- fold base + fold curl, animated later -->
+              <path class="draw-fold-base" d="M211 207 H265 V226 Q265 262 229 262 H211 Z" />
+              <path class="draw-fold-curl" d="M211 262 C235 249 253 229 265 207 V226 Q265 262 229 262 Z" />
+              <path class="draw-fold-highlight" d="M211 262 C230 246 245 228 265 207" />
+            </g>
+
+            <!-- wordmark appears after the icon draw -->
+            <g class="drawn-wordmark">
+              <text class="drawn-scheduled-text" x="160" y="325" text-anchor="middle">scheduled</text>
+              <text class="drawn-tagline" x="160" y="350" text-anchor="middle">TUTORING, MADE SIMPLE</text>
+            </g>
+          </svg>
         </div>
+</div>
     </div>
 
   <main id="app" class="app hidden">

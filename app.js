@@ -1,5 +1,5 @@
 
-/* ScheduledSplashV62 real logo */
+/* ScheduledSplashV63 drawn real logo */
 window.addEventListener("load", function(){
   setTimeout(function(){
     try{
@@ -8,7 +8,7 @@ window.addEventListener("load", function(){
       if(app)app.classList.remove("hidden");
       if(splash)splash.classList.add("hidden");
     }catch(e){}
-  }, 4400);
+  }, 5100);
 });
 
 
@@ -112,7 +112,7 @@ const money=n=>"$"+Number(n||0).toFixed(Number.isInteger(Number(n))?0:2);
 let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{}};
 let preselectTutorId=null;
 
-setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")}, 4400);
+setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")}, 5100);
 function notice(m){$("notice").textContent=m;$("notice").classList.remove("hidden")}
 function cleanPhone(p){return String(p||"").replace(/[^\d]/g,"")}
 function openWhatsApp(phone,msg){const p=cleanPhone(phone);if(!p)return alert("No WhatsApp number saved.");window.open(`https://wa.me/${p}?text=${encodeURIComponent(msg)}`,"_blank")}

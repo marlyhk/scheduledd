@@ -703,3 +703,167 @@ button:hover{
   65%{opacity:1;transform:scale(1.015) translateY(0);filter:blur(0) drop-shadow(0 24px 42px rgba(31,42,55,.10))}
   100%{opacity:1;transform:scale(1) translateY(0)}
 }
+
+
+/* v6.3 exact-style drawn Scheduled logo intro */
+#splash{
+  position:fixed;
+  inset:0;
+  z-index:999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(183,225,250,.30), transparent 28%),
+    linear-gradient(180deg,#ffffff 0%,#f7fbff 100%) !important;
+  overflow:hidden;
+  transition:opacity .75s ease, visibility .75s ease;
+}
+#splash.hidden{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+#splash:before,
+#splash:after,
+.splash-animation,
+.splash-calendar,
+.real-logo-intro,
+.intro-icon,
+.intro-full{
+  display:none !important;
+  content:none !important;
+}
+.logo-draw-intro{
+  width:min(620px,88vw);
+  height:min(620px,88vw);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+}
+.logo-draw-intro:before{
+  content:"";
+  position:absolute;
+  width:64%;
+  height:64%;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(183,225,250,.28),transparent 62%);
+  animation:drawnGlow 4.3s ease-in-out both;
+}
+.scheduled-drawn-logo{
+  width:min(620px,88vw);
+  height:auto;
+  overflow:visible;
+}
+.draw-calendar-outline,
+.draw-calendar-tab{
+  fill:none;
+  stroke:url(#scheduledBlueStroke);
+  stroke-width:24;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.draw-calendar-outline{
+  stroke-dasharray:720;
+  stroke-dashoffset:720;
+  animation:drawLogoLine 1.38s cubic-bezier(.22,1,.36,1) .25s forwards;
+}
+.draw-calendar-tab{
+  stroke-dasharray:84;
+  stroke-dashoffset:84;
+}
+.tab-left{animation:drawLogoLine .48s cubic-bezier(.22,1,.36,1) 1.18s forwards}
+.tab-right{animation:drawLogoLine .48s cubic-bezier(.22,1,.36,1) 1.34s forwards}
+.draw-checkmark{
+  fill:none;
+  stroke:#17243A;
+  stroke-width:19;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  stroke-dasharray:125;
+  stroke-dashoffset:125;
+  animation:drawCheckExact .72s cubic-bezier(.22,1,.36,1) 1.78s forwards;
+}
+.draw-fold-base{
+  fill:url(#foldShade);
+  opacity:0;
+  transform-origin:211px 262px;
+  animation:foldBaseIn .55s cubic-bezier(.22,1,.36,1) 2.34s forwards;
+}
+.draw-fold-curl{
+  fill:url(#foldBlue);
+  opacity:0;
+  transform-origin:211px 262px;
+  animation:foldCurlIn .72s cubic-bezier(.22,1,.36,1) 2.52s forwards;
+}
+.draw-fold-highlight{
+  fill:none;
+  stroke:rgba(255,255,255,.74);
+  stroke-width:4;
+  stroke-linecap:round;
+  stroke-dasharray:84;
+  stroke-dashoffset:84;
+  opacity:0;
+  animation:foldHighlightDraw .62s ease 2.88s forwards;
+}
+.drawn-icon{
+  transform-origin:160px 165px;
+  animation:iconSettle .72s cubic-bezier(.22,1,.36,1) 3.05s both;
+}
+.drawn-wordmark{
+  opacity:0;
+  transform:translateY(14px);
+  animation:wordmarkFade .88s cubic-bezier(.22,1,.36,1) 3.28s forwards;
+}
+.drawn-scheduled-text{
+  font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Arial,sans-serif;
+  font-size:62px;
+  font-weight:300;
+  letter-spacing:6px;
+  fill:#17243A;
+}
+.drawn-tagline{
+  font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Arial,sans-serif;
+  font-size:14px;
+  font-weight:500;
+  letter-spacing:8px;
+  fill:#17243A;
+}
+@keyframes drawLogoLine{
+  to{stroke-dashoffset:0}
+}
+@keyframes drawCheckExact{
+  0%{stroke-dashoffset:125;transform:translateX(-10px) translateY(8px)}
+  75%{stroke-dashoffset:0;transform:translateX(1px) translateY(0)}
+  100%{stroke-dashoffset:0;transform:translateX(0) translateY(0)}
+}
+@keyframes foldBaseIn{
+  0%{opacity:0;transform:scale(.72) rotate(-8deg)}
+  100%{opacity:.88;transform:scale(1) rotate(0)}
+}
+@keyframes foldCurlIn{
+  0%{opacity:0;transform:rotate(-24deg) translate(16px,-10px) scale(.72)}
+  65%{opacity:1;transform:rotate(3deg) translate(0,0) scale(1.04)}
+  100%{opacity:1;transform:rotate(0) translate(0,0) scale(1)}
+}
+@keyframes foldHighlightDraw{
+  0%{opacity:0;stroke-dashoffset:84}
+  30%{opacity:1}
+  100%{opacity:1;stroke-dashoffset:0}
+}
+@keyframes iconSettle{
+  0%{transform:scale(1)}
+  50%{transform:scale(1.035)}
+  100%{transform:scale(1)}
+}
+@keyframes wordmarkFade{
+  from{opacity:0;transform:translateY(16px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes drawnGlow{
+  0%{opacity:0;transform:scale(.72)}
+  20%{opacity:1;transform:scale(1)}
+  76%{opacity:.72;transform:scale(1.08)}
+  100%{opacity:.28;transform:scale(1.12)}
+}
