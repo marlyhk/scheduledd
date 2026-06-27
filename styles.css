@@ -1010,123 +1010,44 @@ html,body{
   }
 }
 
-/* v7.4 additions while preserving v6.7 */
-.empty-state{ text-align:center; padding:30px 18px; border:1px dashed var(--border); border-radius:24px; background:rgba(255,255,255,.82); margin:12px 0; }
-.empty-state .emoji{font-size:40px;margin-bottom:8px}
-.section-title-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.status-badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;background:var(--blue2);border:1px solid var(--border)}
-.status-badge.green{background:#DCFCE7;color:#166534}.status-badge.red{background:#FEE2E2;color:#991B1B}
-.progress-card{background:#fff;border:1px solid var(--border);border-radius:24px;padding:16px;margin:14px 0;box-shadow:0 12px 35px rgba(31,42,55,.06)}
-.progress-track{height:12px;border-radius:999px;background:#EAF3FA;overflow:hidden;margin:10px 0}
-.progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#8ECDF5,#69B1DC)}
-.my-scheduled-grid,.command-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-.task-item,.planner-session,.chat-thread,.message-bubble,.group-member-row{border:1px solid var(--border);border-radius:18px;background:#fff;padding:12px;margin:8px 0}
-.task-item.done{opacity:.65;text-decoration:line-through}
-.chat-button{position:fixed;right:22px;top:92px;z-index:75;width:54px;height:54px;border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 16px 40px rgba(31,42,55,.16)}
-.chat-panel{position:fixed;right:18px;top:154px;width:min(420px,92vw);max-height:72vh;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:28px;padding:16px;z-index:120;box-shadow:0 28px 80px rgba(31,42,55,.20)}
-.message-bubble.me{background:var(--blue2);margin-left:28px}
-.message-bubble.them{background:#F9FAFB;margin-right:28px}
-.group-card{border:1px solid var(--border);border-radius:24px;background:#fff;padding:16px;margin:12px 0}
-.financial-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
-.confetti-piece{position:fixed;width:9px;height:14px;z-index:9999;pointer-events:none;border-radius:3px;animation:confettiFall 1.9s ease-out forwards}
-@keyframes confettiFall{0%{transform:translateY(-20px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
-.badge-unlock{position:fixed;inset:0;z-index:9998;background:rgba(15,27,51,.34);display:flex;align-items:center;justify-content:center;animation:fadeIn .25s ease both}
-.badge-unlock-card{width:min(420px,88vw);background:#fff;border:1px solid var(--border);border-radius:34px;padding:32px;text-align:center;box-shadow:0 30px 100px rgba(31,42,55,.28);animation:badgePop 2.2s cubic-bezier(.22,1,.36,1) both}
-.badge-medal{font-size:74px;filter:drop-shadow(0 16px 24px rgba(31,42,55,.18))}
-@keyframes badgePop{0%{opacity:0;transform:scale(.72) rotate(-10deg)}35%{opacity:1;transform:scale(1.08) rotate(3deg)}70%{transform:scale(1) rotate(0)}100%{opacity:1;transform:scale(1)}}
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
-@media(max-width:860px){.chat-button{right:16px;top:84px}.chat-panel{right:10px;top:142px}}
-@media print{.tabs,.topbar,.chat-button,.financial-actions,button{display:none!important}.content{margin-left:0!important;width:100%!important}.card{box-shadow:none!important}}
 
-
-/* v7.5 admin/tutor/chat/semester fixes */
-.admin-edit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin:12px 0}
-.admin-mini-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.hidden-row{opacity:.55;background:#F9FAFB}
-.banner-option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
-.banner-option{border:1px solid var(--border);border-radius:22px;padding:14px;background:#fff}
-.chat-directory-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
-.chat-target-card{border:1px solid var(--border);border-radius:20px;background:#fff;padding:14px}
-.semester-chip{display:inline-flex;border-radius:999px;background:var(--blue2);padding:6px 10px;font-weight:900;font-size:12px;margin:4px 4px 4px 0}
-
-
-/* v7.6 student creation semester/course + organized admin chat */
-.admin-chat-layout{display:grid;grid-template-columns:minmax(210px,280px) 1fr;gap:14px}
-.admin-chat-sidebar{border:1px solid var(--border);border-radius:24px;background:#fff;padding:14px;max-height:70vh;overflow:auto}
-.admin-chat-main{border:1px solid var(--border);border-radius:24px;background:#fff;padding:16px;min-height:420px}
-.chat-list-section{margin:12px 0}
-.chat-list-title{font-weight:950;color:var(--navy);margin:10px 0 6px}
-.chat-list-button{width:100%;text-align:left;margin:4px 0;display:flex;justify-content:space-between;align-items:center}
-.chat-list-button small{color:var(--muted);font-weight:800}
-.semester-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.semester-filter-row button.active{background:var(--blue);color:#fff}
-@media(max-width:780px){.admin-chat-layout{grid-template-columns:1fr}.admin-chat-sidebar{max-height:none}}
-
-
-/* v7.7 booking confirmation + past availability filter */
-.confirm-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-.past-slot{opacity:.45;pointer-events:none}
-
-
-/* v7.8 booking confirmation + calendar hard filter */
-.calendar-day.past,
-.day.past,
-.date-card.past{
-  opacity:.35!important;
+/* v8.1 stable booking/calendar/payment rules */
+.expired-date-strike,
+.calendar-day.expired-date-strike,
+.date-card.expired-date-strike,
+.day.expired-date-strike{
+  position:relative!important;
+  opacity:.52!important;
   pointer-events:none!important;
-  text-decoration:line-through!important;
 }
-.slot-button.past,
-.time-slot.past,
-button.past-slot{
-  display:none!important;
+.expired-date-strike::after{
+  content:"";
+  position:absolute;
+  left:14%;
+  right:14%;
+  top:50%;
+  border-top:3px solid #ef4444;
+  transform:rotate(-14deg);
+  border-radius:999px;
 }
-
-
-/* v7.9 real calendar + booking + payment fix */
-.calendar-day.past,
-.calendar-day.unavailable,
-.date-cell.past,
-.date-card.past,
-.day.past{
-  opacity:.35!important;
-  pointer-events:none!important;
-  text-decoration:line-through!important;
-}
-button[data-date].past,
-button[data-slot-date].past,
-button[data-time].past,
-.time-slot.past,
-.slot-button.past,
-.past-slot{
+.expired-slot,
+.past-slot,
+.time-slot.expired-slot,
+.slot-button.expired-slot{
   display:none!important;
   pointer-events:none!important;
 }
-.student-payment-readonly{
-  opacity:.6!important;
-  pointer-events:none!important;
-  cursor:not-allowed!important;
-}
-
-
-/* v8.0 real booking calendar + read-only student payments */
-.calendar-day.past,.date-card.past,.day.past,.calendar-cell.past{
-  opacity:.35!important;
-  pointer-events:none!important;
-  text-decoration:line-through!important;
-}
-.time-slot.past,.slot-button.past,.past-slot{
-  display:none!important;
-}
-.student-payment-readonly{
-  opacity:.7!important;
-  cursor:not-allowed!important;
-  pointer-events:none!important;
-}
-.readonly-payment-card{
+.student-payment-view-card{
   border:1px solid var(--border);
   border-radius:20px;
   background:#fff;
   padding:14px;
+  margin:10px 0;
+}
+.payment-readonly-note{
+  background:#EEF7FF;
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:12px;
   margin:10px 0;
 }
