@@ -1330,3 +1330,11 @@ html,body{
 }
 .s93-type-warning b{color:#7C2D12}
 .s93-type-warning button{margin-top:8px}
+
+/* v9.9 admin dashboard request access section */
+.admin-request-access-home{margin-top:18px;overflow-x:auto}
+.section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}
+.section-head h2{margin-bottom:4px}
+.admin-request-access-home .table td:last-child{min-width:190px}
+.admin-request-access-home .table button{margin:3px}
+@media(max-width:720px){.section-head{flex-direction:column}.admin-request-access-home .table{min-width:900px}}
