@@ -1011,97 +1011,38 @@ html,body{
 }
 
 
-/* v8.3 clean booking module from v6.7 */
-.clean-booking-layout{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-  gap:14px;
-}
-.clean-booking-calendar{
-  display:grid;
-  grid-template-columns:repeat(7,1fr);
-  gap:8px;
-  margin-top:12px;
-}
-.clean-day{
-  min-height:58px;
-  border:1px solid var(--border);
-  background:#fff;
-  border-radius:16px;
-  font-weight:900;
-  cursor:pointer;
-  position:relative;
-}
-.clean-day.available:hover{
-  transform:translateY(-1px);
-  box-shadow:0 10px 24px rgba(31,42,55,.08);
-}
-.clean-day.selected{
-  outline:3px solid rgba(105,177,220,.35);
-  background:var(--blue2);
-}
-.clean-day.unavailable,
-.clean-day.expired{
-  opacity:.55;
-  cursor:not-allowed;
-  pointer-events:none;
-  background:#F9FAFB;
-}
-.clean-day.unavailable::after,
-.clean-day.expired::after{
-  content:"";
-  position:absolute;
-  left:18%;
-  right:18%;
-  top:50%;
-  border-top:3px solid #ef4444;
-  transform:rotate(-14deg);
-  border-radius:999px;
-}
-.clean-time-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
-  gap:10px;
-  margin-top:12px;
-}
-.clean-time{
-  border:1px solid var(--border);
-  background:#fff;
-  border-radius:16px;
-  padding:12px;
-  font-weight:900;
-  cursor:pointer;
-}
-.clean-time.selected{
-  background:var(--blue2);
-  outline:3px solid rgba(105,177,220,.35);
-}
-.clean-time.expired{
-  display:none!important;
-}
-.clean-summary{
-  border:1px solid var(--border);
-  border-radius:22px;
-  background:#fff;
-  padding:16px;
-}
-.clean-confirm-actions{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-top:14px;
-}
-.student-payment-view-card{
-  border:1px solid var(--border);
-  border-radius:20px;
-  background:#fff;
-  padding:14px;
-  margin:10px 0;
-}
-.payment-readonly-note{
-  background:#EEF7FF;
-  border:1px solid var(--border);
-  border-radius:18px;
-  padding:12px;
-  margin:10px 0;
-}
+/* v9.0 clean booking/payments/chat module */
+.v90-booking-layout{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
+.v90-card{border:1px solid var(--border);background:#fff;border-radius:24px;padding:16px;box-shadow:0 12px 35px rgba(31,42,55,.06)}
+.v90-calendar-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.v90-calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:12px}
+.v90-weekday{text-align:center;font-size:12px;font-weight:900;color:var(--muted);padding:6px}
+.v90-day{min-height:58px;border:1px solid var(--border);background:#fff;border-radius:16px;font-weight:900;cursor:pointer;position:relative}
+.v90-day.blank{visibility:hidden}
+.v90-day.available:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(31,42,55,.08)}
+.v90-day.selected{outline:3px solid rgba(105,177,220,.35);background:var(--blue2)}
+.v90-day.unavailable,.v90-day.expired{opacity:.55;cursor:not-allowed;pointer-events:none;background:#F9FAFB}
+.v90-day.unavailable::after,.v90-day.expired::after{content:"";position:absolute;left:18%;right:18%;top:50%;border-top:3px solid #ef4444;transform:rotate(-14deg);border-radius:999px}
+.v90-time-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:12px;max-height:420px;overflow:auto;padding-right:4px}
+.v90-time{border:1px solid var(--border);background:#fff;border-radius:16px;padding:12px;font-weight:900;cursor:pointer}
+.v90-time:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(31,42,55,.08)}
+.v90-time.selected{background:var(--blue2);outline:3px solid rgba(105,177,220,.35)}
+.v90-summary{border:1px solid var(--border);border-radius:22px;background:#fff;padding:16px}
+.v90-confirm-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.v90-payment-card{border:1px solid var(--border);border-radius:20px;background:#fff;padding:14px;margin:10px 0}
+.v90-paid{background:#DCFCE7!important;color:#166534!important;border-color:#86EFAC!important}
+.v90-unpaid{background:#FEE2E2!important;color:#991B1B!important;border-color:#FCA5A5!important}
+.v90-chat-button{position:fixed;right:22px;top:92px;z-index:85;width:56px;height:56px;border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 16px 40px rgba(31,42,55,.16)}
+.v90-chat-badge{position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border-radius:999px;min-width:22px;height:22px;padding:0 6px;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center}
+.v90-chat-panel{position:fixed;right:18px;top:154px;width:min(760px,94vw);height:min(720px,78vh);display:grid;grid-template-columns:260px 1fr;gap:0;background:#fff;border:1px solid var(--border);border-radius:28px;z-index:130;box-shadow:0 28px 80px rgba(31,42,55,.20);overflow:hidden}
+.v90-chat-list{border-right:1px solid var(--border);padding:14px;overflow:auto;background:#F8FBFD}
+.v90-chat-main{padding:16px;display:flex;flex-direction:column;min-width:0}
+.v90-chat-target{width:100%;text-align:left;margin:5px 0;border-radius:16px;padding:10px;background:#fff;border:1px solid var(--border)}
+.v90-chat-target.active{background:var(--blue2)}
+.v90-message-list{flex:1;overflow:auto;border:1px solid var(--border);border-radius:20px;padding:12px;background:#fff}
+.v90-msg{border-radius:18px;padding:10px 12px;margin:8px 0;max-width:80%;word-wrap:break-word}
+.v90-msg.me{background:var(--blue2);margin-left:auto}
+.v90-msg.them{background:#F3F4F6;margin-right:auto}
+.v90-chat-composer{display:flex;gap:8px;margin-top:10px}
+.v90-chat-composer input{flex:1}
+@media(max-width:800px){.v90-chat-panel{grid-template-columns:1fr;height:82vh}.v90-chat-list{max-height:210px;border-right:0;border-bottom:1px solid var(--border)}}

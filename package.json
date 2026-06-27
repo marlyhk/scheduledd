@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v8-3-v67-clean-booking-module",
-  "version": "8.3.0",
+  "name": "scheduled-v9-0-v67-booking-payments-chat",
+  "version": "9.0.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"
