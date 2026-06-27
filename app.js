@@ -1022,6 +1022,44 @@ function exportFinancialExcel(){if(typeof exportTutorBookingsCSV==="function")re
 function exportFinancialPDF(){alert("Use Print, then choose Save as PDF.");window.print()}
 
 
+
+/* ===== v7.2 hotfix: safe dashboard router and page fallbacks ===== */
+function safePageFallback(title, message){
+  const target=document.getElementById("content");
+  if(target){
+    target.innerHTML=`<div class="card"><h2>${title}</h2><p class="muted">${message}</p></div>`;
+  }
+}
+function dashboardPage(){
+  try{
+    if(profile && profile.role==="admin"){
+      if(typeof adminDashboardPage==="function")return adminDashboardPage();
+      if(typeof adminOverview==="function")return adminOverview();
+      return safePageFallback("Admin Dashboard","Welcome back. Use the sidebar to manage Scheduled.");
+    }
+    if(profile && profile.role==="tutor"){
+      if(typeof tutorDashboardPage==="function")return tutorDashboardPage();
+      if(typeof schedulePage==="function")return schedulePage();
+      return safePageFallback("Tutor Dashboard","Welcome back. Your schedule and students are available from the sidebar.");
+    }
+    if(typeof studentDashboardPage==="function")return studentDashboardPage();
+    return safePageFallback("Student Dashboard","Welcome back. Your sessions and planner are available from the sidebar.");
+  }catch(e){
+    console.error("dashboardPage fallback error", e);
+    safePageFallback("Dashboard","Welcome back. Use the sidebar to continue.");
+  }
+}
+function safeRunPage(fnName, fallbackTitle){
+  try{
+    const fn=window[fnName];
+    if(typeof fn==="function")return fn();
+    return safePageFallback(fallbackTitle||"Page","This section is available soon.");
+  }catch(e){
+    console.error(fnName,e);
+    return safePageFallback("Website error", String(e.message||e));
+  }
+}
+
 function renderTabs(){
   let tabs=[];
   if(profile.role==="admin")tabs=["Dashboard","Command Center","Tutors","Tutor Profiles","Students","Groups","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"];
