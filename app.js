@@ -129,6 +129,47 @@ function cleanRequestPhoneInput(){
 }
 function openWhatsApp(phone,msg){const p=phoneForWhatsApp(phone);if(!p)return alert("No WhatsApp number saved.");window.open(`https://wa.me/${p}?text=${encodeURIComponent(msg)}`,"_blank")}
 
+function safeOptionText(v){return String(v||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
+function uniqueSorted(arr){return [...new Set((arr||[]).map(x=>String(x||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b))}
+async function getRequestAccessChoices(){
+  let source=DATA||{};
+  try{
+    const snap=await db.ref("/").once("value");
+    source=snap.val()||source||{};
+  }catch(_){source=DATA||{}}
+  const users=Object.values(source.users||{});
+  const publicTutors=Object.values(source.publicTutors||{});
+  const coursesObj=Object.values(source.courses||{});
+  const universities=[];
+  const courses=[];
+  users.forEach(u=>{
+    if(u&&u.university)universities.push(u.university);
+    if(u&&Array.isArray(u.courses))courses.push(...u.courses);
+    if(u&&Array.isArray(u.assignedCourses))courses.push(...u.assignedCourses);
+  });
+  publicTutors.forEach(t=>{
+    if(t&&t.university)universities.push(t.university);
+    if(t&&Array.isArray(t.courses))courses.push(...t.courses);
+  });
+  coursesObj.forEach(c=>{
+    if(!c)return;
+    if(c.name)courses.push(c.name);
+    if(c.university)universities.push(c.university);
+  });
+  return {universities:uniqueSorted(universities),courses:uniqueSorted(courses)};
+}
+async function populateRequestAccessChoices(prefillCourses=""){
+  const uniSelect=$("reqUniversity"), courseSelect=$("reqCourses");
+  if(!uniSelect||!courseSelect)return;
+  const {universities,courses}=await getRequestAccessChoices();
+  uniSelect.innerHTML=`<option value="">Select your university</option>${universities.map(u=>`<option value="${safeOptionText(u)}">${safeOptionText(u)}</option>`).join("")}`;
+  courseSelect.innerHTML=courses.length?courses.map(c=>`<option value="${safeOptionText(c)}">${safeOptionText(c)}</option>`).join(""):`<option value="" disabled>No courses available yet</option>`;
+  const prefilled=String(prefillCourses||"").split(",").map(x=>x.trim()).filter(Boolean);
+  [...courseSelect.options].forEach(o=>{if(prefilled.includes(o.value))o.selected=true});
+  if(!universities.length){uniSelect.innerHTML=`<option value="">No universities available yet</option>`;}
+}
+function selectedRequestCourses(){return Array.from($("reqCourses")?.selectedOptions||[]).map(o=>o.value).filter(Boolean)}
+
 function openRequestAccessForm(prefillCourses=""){
   $("loginPage").innerHTML=`<div class="login-card">
     <button class="ghost" onclick="location.reload()">← Back to Login</button>
@@ -146,13 +187,15 @@ function openRequestAccessForm(prefillCourses=""){
     <div class="phone-prefix-field"><span>+961</span><input id="reqPhone" inputmode="numeric" autocomplete="tel" placeholder="71 123 456" oninput="cleanRequestPhoneInput()"></div>
     <p class="field-hint">Enter your Lebanese number without the country code. Example: 71 123 456 or 03 123 456.</p>
     <label>University</label>
-    <input id="reqUniversity" placeholder="University">
+    <select id="reqUniversity" class="scroll-select"><option value="">Loading universities...</option></select>
     <label>Course(s) Needed</label>
-    <input id="reqCourses" placeholder="Course(s) needed" value="${prefillCourses||""}">
+    <select id="reqCourses" class="scroll-select" multiple size="6"><option value="">Loading courses...</option></select>
+    <p class="field-hint">Pick from the courses already available on Scheduled. Hold Ctrl/Command to choose more than one.</p>
     <label>Message</label>
     <textarea id="reqMessage" placeholder="Message (optional)"></textarea>
     <button onclick="submitAccessRequest()">Submit Request</button>
   </div>`;
+  populateRequestAccessChoices(prefillCourses);
 }
 function toggleRequestAccess(){
   if($("requestAccess")){
@@ -162,7 +205,7 @@ function toggleRequestAccess(){
   }
 }
 
-async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const rawPhone=($("reqPhone")?.value||"").trim();const phone=normalizeLebanonPhone(rawPhone);const university=($("reqUniversity")?.value||"").trim();const courses=($("reqCourses")?.value||"").trim();const message=($("reqMessage")?.value||"").trim();if(!name||!email||!rawPhone||!university||!courses){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}if(!phone){return notice("Please enter a valid Lebanese phone number.")}await db.ref("accessRequests").push({name,email,phone,whatsapp:phone,university,courses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqUniversity","reqCourses","reqMessage"].forEach(id=>{if($(id))$(id).value=""});notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
+async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const rawPhone=($("reqPhone")?.value||"").trim();const phone=normalizeLebanonPhone(rawPhone);const university=($("reqUniversity")?.value||"").trim();const chosenCourses=selectedRequestCourses();const courses=chosenCourses.join(", ");const message=($("reqMessage")?.value||"").trim();if(!name||!email||!rawPhone||!university||!chosenCourses.length){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}if(!phone){return notice("Please enter a valid Lebanese phone number.")}await db.ref("accessRequests").push({name,email,phone,whatsapp:phone,university,courses,courseList:chosenCourses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqMessage"].forEach(id=>{if($(id))$(id).value=""});if($("reqUniversity"))$("reqUniversity").selectedIndex=0;if($("reqCourses"))[...$("reqCourses").options].forEach(o=>o.selected=false);notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
 async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{}}}
