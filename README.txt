@@ -1,15 +1,21 @@
-Scheduled v8.1 — From v6.7 Booking/Payments/Calendar Fix
+Scheduled v8.3 — v6.7 Clean Booking Module
 
-Built directly from v6.7 stable sidebar rebuild.
+Built directly from Scheduled v6.7 stable.
 
-Fixes:
-- Payments tab remains accessible for students, but read-only.
-- Admin can edit payment status.
-- Assigned tutor can edit payment status.
-- Students can see paid/unpaid updates but cannot toggle status.
-- Expired dates are visually disabled with red strike detail.
-- Expired times for today are hidden/disabled.
-- Booking confirmation reads selected tutor/date/time more defensively.
-- Booking sends WhatsApp confirmation details to tutor.
+Changed only:
+- Booking module replaced cleanly.
+- Payments permissions adjusted:
+  - student read-only and auto-refresh every minute
+  - assigned tutor/admin can edit paid/unpaid
 
-JS syntax check passed.
+Booking behavior:
+- Past dates automatically unavailable with red strike.
+- Past times today disappear.
+- Tomorrow/future days show available times.
+- Calendar refreshes every minute.
+- Booking confirmation sends details to tutor by WhatsApp.
+- Removed Go to My Sessions and reschedule/contact notes.
+
+Checks:
+- JS syntax check passed.
+- Critical duplicate function check passed.

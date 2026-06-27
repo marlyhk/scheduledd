@@ -1011,31 +1011,85 @@ html,body{
 }
 
 
-/* v8.1 stable booking/calendar/payment rules */
-.expired-date-strike,
-.calendar-day.expired-date-strike,
-.date-card.expired-date-strike,
-.day.expired-date-strike{
-  position:relative!important;
-  opacity:.52!important;
-  pointer-events:none!important;
+/* v8.3 clean booking module from v6.7 */
+.clean-booking-layout{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:14px;
 }
-.expired-date-strike::after{
+.clean-booking-calendar{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:8px;
+  margin-top:12px;
+}
+.clean-day{
+  min-height:58px;
+  border:1px solid var(--border);
+  background:#fff;
+  border-radius:16px;
+  font-weight:900;
+  cursor:pointer;
+  position:relative;
+}
+.clean-day.available:hover{
+  transform:translateY(-1px);
+  box-shadow:0 10px 24px rgba(31,42,55,.08);
+}
+.clean-day.selected{
+  outline:3px solid rgba(105,177,220,.35);
+  background:var(--blue2);
+}
+.clean-day.unavailable,
+.clean-day.expired{
+  opacity:.55;
+  cursor:not-allowed;
+  pointer-events:none;
+  background:#F9FAFB;
+}
+.clean-day.unavailable::after,
+.clean-day.expired::after{
   content:"";
   position:absolute;
-  left:14%;
-  right:14%;
+  left:18%;
+  right:18%;
   top:50%;
   border-top:3px solid #ef4444;
   transform:rotate(-14deg);
   border-radius:999px;
 }
-.expired-slot,
-.past-slot,
-.time-slot.expired-slot,
-.slot-button.expired-slot{
+.clean-time-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+  gap:10px;
+  margin-top:12px;
+}
+.clean-time{
+  border:1px solid var(--border);
+  background:#fff;
+  border-radius:16px;
+  padding:12px;
+  font-weight:900;
+  cursor:pointer;
+}
+.clean-time.selected{
+  background:var(--blue2);
+  outline:3px solid rgba(105,177,220,.35);
+}
+.clean-time.expired{
   display:none!important;
-  pointer-events:none!important;
+}
+.clean-summary{
+  border:1px solid var(--border);
+  border-radius:22px;
+  background:#fff;
+  padding:16px;
+}
+.clean-confirm-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:14px;
 }
 .student-payment-view-card{
   border:1px solid var(--border);

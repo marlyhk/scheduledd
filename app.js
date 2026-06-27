@@ -932,36 +932,41 @@ document.addEventListener("keydown",function(e){
 
 
 
-/* ===== v8.1 stable booking/calendar/payment rules from v6.7 ===== */
-let scheduledSelectedTutorId="";
-let scheduledSelectedDate="";
-let scheduledSelectedTime="";
-let scheduledSelectedCourse="";
-let scheduledSelectedDuration=1;
-let scheduledSelectedPaymentMethod="Cash";
+/* ===== v8.3 CLEAN BOOKING MODULE — built from v6.7 base only ===== */
+const CLEAN_BOOKING = {
+  tutorId:"",
+  course:"",
+  date:"",
+  time:"",
+  duration:1,
+  paymentMethod:"Cash"
+};
 
-function s81Today(){
+function cbList(obj){
+  return Object.entries(obj||{}).map(([id,v])=>({id,...v}));
+}
+function cbToday(){
   const n=new Date();
   return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`;
 }
-function s81NowMinutes(){
+function cbNowMinutes(){
   const n=new Date();
   return n.getHours()*60+n.getMinutes();
 }
-function s81TimeToMinutes(t){
-  if(!t)return 0;
+function cbTimeToMinutes(t){
+  if(!t)return null;
   let s=String(t).trim();
   const ap=s.match(/\b(AM|PM)\b/i);
   s=s.replace(/\b(AM|PM)\b/i,"").trim();
   let h=0,m=0;
   if(s.includes(":")){
-    const p=s.split(":");
-    h=parseInt(p[0]||"0",10);
-    m=parseInt(p[1]||"0",10);
+    const parts=s.split(":");
+    h=parseInt(parts[0]||"0",10);
+    m=parseInt(parts[1]||"0",10);
   }else{
     h=parseInt(s||"0",10);
   }
-  if(isNaN(h))h=0;
+  if(isNaN(h))return null;
   if(isNaN(m))m=0;
   if(ap){
     const tag=ap[1].toUpperCase();
@@ -970,191 +975,305 @@ function s81TimeToMinutes(t){
   }
   return h*60+m;
 }
-function s81IsExpiredDate(date){
-  return String(date||"") < s81Today();
+function cbFormatTime(t){
+  if(typeof formatTime12==="function")return formatTime12(t);
+  const mins=cbTimeToMinutes(t);
+  if(mins===null)return t||"";
+  let h=Math.floor(mins/60), m=mins%60;
+  const ap=h>=12?"PM":"AM";
+  h=h%12||12;
+  return `${h}:${String(m).padStart(2,"0")} ${ap}`;
 }
-function s81IsExpiredSlot(date,time){
-  if(!date)return true;
-  if(String(date)<s81Today())return true;
-  if(String(date)>s81Today())return false;
-  return s81TimeToMinutes(time)<=s81NowMinutes();
+function cbIsPastDate(date){
+  return String(date||"") < cbToday();
 }
-function s81FilterFutureSlots(slots){
-  return (Array.isArray(slots)?slots:[]).filter(s=>{
-    const d=s.date||s.day||s.availableDate||s.slotDate||"";
-    const t=s.start||s.time||s.from||s.startTime||"";
-    return !s81IsExpiredSlot(d,t);
+function cbIsExpiredSlot(date,time){
+  if(!date)return false;
+  if(cbIsPastDate(date))return true;
+  if(String(date)>cbToday())return false;
+  const mins=cbTimeToMinutes(time);
+  if(mins===null)return false;
+  return mins<=cbNowMinutes();
+}
+function cbDayPlus(days){
+  const d=new Date();
+  d.setDate(d.getDate()+days);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function cbMoney(x){
+  return typeof money==="function"?money(x):"$"+Number(x||0).toFixed(2);
+}
+function cbTutors(){
+  if(typeof tutors==="function")return tutors().filter(t=>!t.removed&&!t.hiddenFromBookings);
+  return cbList(DATA.users||{}).filter(u=>u.role==="tutor"&&!u.removed&&!u.hiddenFromBookings);
+}
+function cbCoursesAll(){
+  if(typeof courses==="function")return courses();
+  return cbList(DATA.courses||{});
+}
+function cbCoursesForTutor(tutor){
+  const raw=Array.isArray(tutor?.courses)?tutor.courses:[];
+  const courseObjs=cbCoursesAll();
+  const names=raw.map(id=>{
+    const c=courseObjs.find(x=>x.id===id||x.code===id||x.name===id);
+    return c?.name||c?.code||id;
+  }).filter(Boolean);
+  return names.length?names:["General Tutoring"];
+}
+function cbAvailabilityForTutor(tutorId){
+  const a=DATA.availability||{};
+  return cbList(a).filter(x=>x.tutorId===tutorId || x.uid===tutorId || x.userId===tutorId);
+}
+function cbBookedSet(tutorId){
+  const set=new Set();
+  cbList(DATA.bookings||{}).filter(b=>b.tutorId===tutorId).forEach(b=>{
+    set.add(`${b.date}|${b.start||b.time}`);
   });
+  return set;
 }
-function s81TrySetDate(date){
-  if(s81IsExpiredDate(date)){
-    alert("This day has already passed and can no longer be booked.");
-    return false;
-  }
-  scheduledSelectedDate=date;
-  window.selectedBookingDate=date;
-  return true;
+function cbAllTimesForDate(tutorId,date){
+  const av=cbAvailabilityForTutor(tutorId);
+  const booked=cbBookedSet(tutorId);
+  let times=[];
+  av.forEach(a=>{
+    const d=a.date||a.day||a.availableDate||a.slotDate;
+    if(d && d!==date)return;
+    if(Array.isArray(a.slots))a.slots.forEach(s=>times.push(s.start||s.time||s.from||s));
+    else if(Array.isArray(a.times))a.times.forEach(s=>times.push(s.start||s.time||s.from||s));
+    else if(a.start)times.push(a.start);
+    else if(a.time)times.push(a.time);
+    else if(a.from)times.push(a.from);
+  });
+  times=[...new Set(times.filter(Boolean))].sort((a,b)=>(cbTimeToMinutes(a)??0)-(cbTimeToMinutes(b)??0));
+  return times.filter(t=>!booked.has(`${date}|${t}`)&&!cbIsExpiredSlot(date,t));
 }
-function s81TrySetTime(time){
-  if(s81IsExpiredSlot(scheduledSelectedDate||window.selectedBookingDate,time)){
-    alert("This time has already passed and can no longer be booked.");
-    return false;
-  }
-  scheduledSelectedTime=time;
-  window.selectedBookingTime=time;
-  return true;
+function cbDateHasFutureTime(tutorId,date){
+  if(cbIsPastDate(date))return false;
+  return cbAllTimesForDate(tutorId,date).length>0;
 }
-function s81ReadSelections(){
-  const selects=[...document.querySelectorAll("select")];
-  for(const sel of selects){
-    const id=(sel.id||"").toLowerCase();
-    const name=(sel.name||"").toLowerCase();
-    if((id.includes("tutor")||name.includes("tutor")) && sel.value){
-      scheduledSelectedTutorId=sel.value;
-      window.selectedTutorId=sel.value;
-    }
-    if((id.includes("course")||name.includes("course")) && sel.value)scheduledSelectedCourse=sel.value;
-    if((id.includes("time")||name.includes("time")) && sel.value)s81TrySetTime(sel.value);
-    if((id.includes("duration")||name.includes("duration")) && sel.value)scheduledSelectedDuration=Number(sel.value||1);
-    if((id.includes("payment")||id.includes("pay")||name.includes("payment")||name.includes("pay")) && sel.value)scheduledSelectedPaymentMethod=sel.value;
-  }
-  const dateInput=document.querySelector("input[type='date'],#bookingDate,#dateSelect,#selectedDate");
-  if(dateInput?.value)s81TrySetDate(dateInput.value);
-  const timeInput=document.querySelector("input[type='time'],#bookingTime,#timeSelect,#selectedTime");
-  if(timeInput?.value)s81TrySetTime(timeInput.value);
+function cbSelectedTutor(){
+  return user(CLEAN_BOOKING.tutorId)||cbTutors()[0]||{};
 }
-function s81PatchBookingUI(){
-  try{
-    s81ReadSelections();
-    document.querySelectorAll("input[type='date']").forEach(inp=>{
-      inp.min=s81Today();
-      if(inp.value && s81IsExpiredDate(inp.value))inp.value="";
-    });
-    document.querySelectorAll("[data-tutor-id]").forEach(el=>{
-      el.onclick=()=>{scheduledSelectedTutorId=el.getAttribute("data-tutor-id");window.selectedTutorId=scheduledSelectedTutorId;};
-    });
-    document.querySelectorAll("[data-date],[data-slot-date]").forEach(el=>{
-      const d=el.getAttribute("data-date")||el.getAttribute("data-slot-date")||el.dataset?.date||el.dataset?.slotDate;
-      const t=el.getAttribute("data-time")||el.getAttribute("data-slot-time")||el.dataset?.time||el.dataset?.slotTime||"";
-      if(!d)return;
-      if((t && s81IsExpiredSlot(d,t)) || (!t && s81IsExpiredDate(d))){
-        el.classList.add(t?"expired-slot":"expired-date-strike");
-        if("disabled" in el)el.disabled=true;
-        if(t)el.style.display="none";
-      }else{
-        el.addEventListener("click",()=>{
-          s81TrySetDate(d);
-          if(t)s81TrySetTime(t);
-        },{once:false});
-      }
-    });
-    const activeDate=scheduledSelectedDate||window.selectedBookingDate||"";
-    document.querySelectorAll(".time-slot,.slot-button,button").forEach(el=>{
-      const txt=(el.textContent||"").trim();
-      if(activeDate && /^\d{1,2}(:\d{2})?\s*(AM|PM)?$/i.test(txt)){
-        if(s81IsExpiredSlot(activeDate,txt)){
-          el.classList.add("expired-slot","past-slot");
-          if("disabled" in el)el.disabled=true;
-          el.style.display="none";
-        }else{
-          el.addEventListener("click",()=>s81TrySetTime(txt),{once:false});
-        }
-      }
-    });
-  }catch(e){console.warn("s81PatchBookingUI",e)}
+function cbSelectedCourse(){
+  const tutor=cbSelectedTutor();
+  if(CLEAN_BOOKING.course)return CLEAN_BOOKING.course;
+  return cbCoursesForTutor(tutor)[0]||"General Tutoring";
 }
-setInterval(s81PatchBookingUI,1200);
-
-function s81PaymentEditableForBooking(b){
-  if(!profile)return false;
-  if(profile.role==="admin")return true;
-  if(profile.role==="tutor" && b.tutorId===currentUser.uid)return true;
-  return false;
+function cbBookingTotal(){
+  const tutor=cbSelectedTutor();
+  return Number(tutor.rate||0)*Number(CLEAN_BOOKING.duration||1);
 }
-function s81StudentPaymentsPage(){
-  const bookings=v74List(DATA.bookings||{}).filter(b=>b.studentId===currentUser.uid).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  $("content").innerHTML=`<div class="card">
-    <h2>Payments</h2>
-    <div class="payment-readonly-note">You can view your payment status here. Only your tutor or the admin can mark a session as paid.</div>
-    ${bookings.length?bookings.map(b=>`<div class="student-payment-view-card">
-      <b>${b.course||"Session"}</b><br>
-      ${b.date||""} • ${b.start||b.time||""}<br>
-      Tutor: ${(user(b.tutorId)||{}).name||""}<br>
-      Payment method: ${b.paymentMethod||"Cash"}<br>
-      Status: <span class="status-badge ${b.paid?"green":"red"}">${b.paid?"Paid":"Unpaid"}</span>
-    </div>`).join(""):v74Empty("💵","No payments yet","Your sessions will appear here after booking.")}
-  </div>`;
-}
-
-async function markPayment(id,paid){
-  const b=(DATA.bookings||{})[id]||{};
-  if(!s81PaymentEditableForBooking(b))return alert("Only the assigned tutor or admin can update payment status.");
-  await db.ref("bookings/"+id+"/paid").set(!!paid);
-  await loadData();
-  if(profile.role==="student")return s81StudentPaymentsPage();
-  if(typeof financialPage==="function")financialPage();
-}
-
-
-
-async function togglePayment(id){
-  const b=(DATA.bookings||{})[id]||{};
-  if(!s81PaymentEditableForBooking(b))return alert("Only the assigned tutor or admin can update payment status.");
-  await db.ref("bookings/"+id+"/paid").set(!b.paid);
-  await loadData();
-  if(profile.role==="student")return s81StudentPaymentsPage();
-  if(typeof financialPage==="function")financialPage();
-}
-
-
-function s81TutorPhone(tutor){
-  return String(tutor?.whatsapp||tutor?.phone||"").replace(/[^\d+]/g,"");
-}
-function s81BookingTotal(b){
-  const tutor=user(b.tutorId)||{};
-  return Number(tutor.rate||b.rate||0)*Number(b.duration||1);
-}
-function s81WhatsappUrl(b){
-  const tutor=user(b.tutorId)||{};
-  const student=user(b.studentId)||profile;
-  const total=s81BookingTotal(b);
+function cbWhatsappUrl(booking){
+  const tutor=user(booking.tutorId)||{};
+  const student=user(booking.studentId)||profile;
+  const phone=String(tutor.whatsapp||tutor.phone||"").replace(/[^\d+]/g,"");
   const text=[
     "Hello, I booked a tutoring session on Scheduled.",
     "",
     `Student name: ${student?.name||""}`,
     `Tutor: ${tutor?.name||""}`,
-    `Course: ${b.course||""}`,
+    `Course: ${booking.course||""}`,
     `University: ${student?.university||profile?.university||""}`,
-    `Date: ${b.date||""}`,
-    `Time: ${b.start||b.time||""}`,
-    `Duration: ${b.duration||""} hour(s)`,
-    `Rate: ${typeof money==="function"?money(tutor.rate||0):(tutor.rate||0)}`,
-    `Total: ${typeof money==="function"?money(total):total}`,
-    `Payment method: ${b.paymentMethod||"Cash"}`,
+    `Date: ${booking.date||""}`,
+    `Time: ${booking.start||""}`,
+    `Duration: ${booking.duration||""} hour(s)`,
+    `Rate: ${cbMoney(tutor.rate||0)}`,
+    `Total: ${cbMoney(Number(tutor.rate||0)*Number(booking.duration||1))}`,
+    `Payment method: ${booking.paymentMethod||"Cash"}`,
     "",
     "Please confirm this session."
-  ].join("\\n");
-  const phone=s81TutorPhone(tutor);
+  ].join("\n");
   return phone?`https://wa.me/${phone}?text=${encodeURIComponent(text)}`:`https://wa.me/?text=${encodeURIComponent(text)}`;
 }
-function s81Confirmation(id){
-  const b=(DATA.bookings||{})[id]||{};
+function cbEmpty(icon,title,body){
+  if(typeof v74Empty==="function")return v74Empty(icon,title,body);
+  return `<div class="empty-state"><div class="emoji">${icon}</div><h3>${title}</h3><p class="muted">${body}</p></div>`;
+}
+function cbRenderConfirmation(bookingId){
+  const b=(DATA.bookings||{})[bookingId]||{};
+  const tutor=user(b.tutorId)||{};
+  const student=user(b.studentId)||profile;
   return `<div class="card">
     <h2>Booking Confirmed ✅</h2>
-    <p><b>Important note:</b> Your tutoring session has been successfully booked. Please send the following information via WhatsApp for your tutor to confirm.</p>
-    <div class="planner-session">
+    <p>Your tutoring session has been successfully booked.<br>Please send the following information via WhatsApp for your tutor to confirm.</p>
+    <div class="clean-summary">
       <b>${b.course||"Session"}</b><br>
-      Student: ${(user(b.studentId)||profile)?.name||""}<br>
-      Tutor: ${(user(b.tutorId)||{}).name||""}<br>
+      Student: ${student?.name||""}<br>
+      Tutor: ${tutor?.name||""}<br>
+      University: ${student?.university||profile?.university||""}<br>
       Date: ${b.date||""}<br>
-      Time: ${b.start||b.time||""}<br>
+      Time: ${cbFormatTime(b.start||"")}<br>
       Duration: ${b.duration||""} hour(s)<br>
-      Payment method: ${b.paymentMethod||"Cash"}<br>
-      Total: ${typeof money==="function"?money(s81BookingTotal(b)):s81BookingTotal(b)}
+      Rate: ${cbMoney(tutor.rate||0)}<br>
+      Total: ${cbMoney(Number(tutor.rate||0)*Number(b.duration||1))}<br>
+      Payment method: ${b.paymentMethod||"Cash"}
     </div>
-    <div class="confirm-actions"><a class="button" href="${s81WhatsappUrl(b)}" target="_blank">Contact Tutor on WhatsApp</a></div>
+    <div class="clean-confirm-actions">
+      <a class="button" target="_blank" href="${cbWhatsappUrl(b)}">Final Confirmation with Tutor on WhatsApp</a>
+    </div>
   </div>`;
 }
+function cbRenderTutorCoursePanel(){
+  const tutorList=cbTutors();
+  if(!CLEAN_BOOKING.tutorId && tutorList[0])CLEAN_BOOKING.tutorId=tutorList[0].id;
+  const tutor=cbSelectedTutor();
+  const courseList=cbCoursesForTutor(tutor);
+  if(!CLEAN_BOOKING.course)CLEAN_BOOKING.course=courseList[0]||"General Tutoring";
+  return `<div class="card">
+    <h2>Book a Session</h2>
+    <label>Tutor</label>
+    <select id="cleanTutorSelect" onchange="cbSelectTutor(this.value)">
+      ${tutorList.map(t=>`<option value="${t.id}" ${CLEAN_BOOKING.tutorId===t.id?"selected":""}>${t.name||t.email}</option>`).join("")}
+    </select>
+    <label>Course</label>
+    <select id="cleanCourseSelect" onchange="CLEAN_BOOKING.course=this.value;cbRenderBookingPage();">
+      ${courseList.map(c=>`<option value="${c}" ${CLEAN_BOOKING.course===c?"selected":""}>${c}</option>`).join("")}
+    </select>
+    <div class="row">
+      <div><label>Duration</label><select id="cleanDuration" onchange="CLEAN_BOOKING.duration=Number(this.value);cbRenderBookingPage();"><option value="1" ${CLEAN_BOOKING.duration==1?"selected":""}>1 hour</option><option value="1.5" ${CLEAN_BOOKING.duration==1.5?"selected":""}>1.5 hours</option><option value="2" ${CLEAN_BOOKING.duration==2?"selected":""}>2 hours</option><option value="3" ${CLEAN_BOOKING.duration==3?"selected":""}>3 hours</option></select></div>
+      <div><label>Payment Method</label><select id="cleanPayment" onchange="CLEAN_BOOKING.paymentMethod=this.value;cbRenderBookingPage();"><option ${CLEAN_BOOKING.paymentMethod==="Cash"?"selected":""}>Cash</option><option ${CLEAN_BOOKING.paymentMethod==="Whish"?"selected":""}>Whish</option></select></div>
+    </div>
+    <div class="clean-summary">
+      <b>Summary</b><br>
+      Tutor: ${tutor.name||""}<br>
+      Course: ${cbSelectedCourse()}<br>
+      Duration: ${CLEAN_BOOKING.duration} hour(s)<br>
+      Rate: ${cbMoney(tutor.rate||0)} / hour<br>
+      Total: ${cbMoney(cbBookingTotal())}<br>
+      Payment: ${CLEAN_BOOKING.paymentMethod}
+    </div>
+  </div>`;
+}
+function cbRenderCalendar(){
+  const days=Array.from({length:35},(_,i)=>cbDayPlus(i-7));
+  const tutorId=CLEAN_BOOKING.tutorId;
+  return `<div class="card">
+    <div class="section-title-row"><h2>Select Date</h2><span class="muted">Past dates update automatically.</span></div>
+    <div class="clean-booking-calendar">
+      ${days.map(d=>{
+        const expired=cbIsPastDate(d);
+        const has=cbDateHasFutureTime(tutorId,d);
+        const cls=expired?"expired":(has?"available":"unavailable");
+        return `<button type="button" class="clean-day ${cls} ${CLEAN_BOOKING.date===d?"selected":""}" ${(!has||expired)?"disabled":""} onclick="cbSelectDate('${d}')">${d.slice(5)}</button>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+function cbRenderTimes(){
+  if(!CLEAN_BOOKING.date)return `<div class="card">${cbEmpty("⏰","Choose a date","Available future times will appear here.")}</div>`;
+  const times=cbAllTimesForDate(CLEAN_BOOKING.tutorId,CLEAN_BOOKING.date);
+  return `<div class="card">
+    <div class="section-title-row"><h2>Select Time</h2><span class="muted">Expired times disappear automatically.</span></div>
+    <div class="clean-time-grid">
+      ${times.length?times.map(t=>`<button type="button" class="clean-time ${CLEAN_BOOKING.time===t?"selected":""}" onclick="cbSelectTime('${t}')">${cbFormatTime(t)}</button>`).join(""):cbEmpty("⏰","No available future times","This date has no available future time slots.")}
+    </div>
+  </div>`;
+}
+function cbRenderBookingPage(){
+  const content=document.getElementById("content");
+  if(!content)return;
+  content.innerHTML=`<div class="clean-booking-layout">${cbRenderTutorCoursePanel()}${cbRenderCalendar()}${cbRenderTimes()}</div>
+    <div class="card"><button onclick="confirmBooking()">Confirm Booking</button></div>`;
+}
+function cbSelectTutor(id){
+  CLEAN_BOOKING.tutorId=id;
+  CLEAN_BOOKING.course="";
+  CLEAN_BOOKING.date="";
+  CLEAN_BOOKING.time="";
+  cbRenderBookingPage();
+}
+function cbSelectDate(date){
+  if(cbIsPastDate(date))return alert("This date has already passed and cannot be booked.");
+  CLEAN_BOOKING.date=date;
+  CLEAN_BOOKING.time="";
+  cbRenderBookingPage();
+}
+function cbSelectTime(time){
+  if(cbIsExpiredSlot(CLEAN_BOOKING.date,time))return alert("This time has already passed and cannot be booked.");
+  CLEAN_BOOKING.time=time;
+  cbRenderBookingPage();
+}
+function bookingPage(){
+  cbRenderBookingPage();
+}
+async function confirmBooking(){
+  try{
+    await loadData();
+    if(!CLEAN_BOOKING.tutorId)return alert("Please choose a tutor.");
+    if(!CLEAN_BOOKING.date)return alert("Please choose a valid date.");
+    if(!CLEAN_BOOKING.time)return alert("Please choose a valid time.");
+    if(cbIsPastDate(CLEAN_BOOKING.date))return alert("This date has already passed and can no longer be booked.");
+    if(cbIsExpiredSlot(CLEAN_BOOKING.date,CLEAN_BOOKING.time))return alert("This time has already passed and can no longer be booked.");
+    const booking={
+      studentId:currentUser.uid,
+      tutorId:CLEAN_BOOKING.tutorId,
+      course:cbSelectedCourse(),
+      date:CLEAN_BOOKING.date,
+      start:CLEAN_BOOKING.time,
+      duration:Number(CLEAN_BOOKING.duration||1),
+      paymentMethod:CLEAN_BOOKING.paymentMethod||"Cash",
+      paid:false,
+      status:"confirmed",
+      done:false,
+      createdAt:Date.now()
+    };
+    const ref=await db.ref("bookings").push(booking);
+    await loadData();
+    if(typeof checkMilestonesAfterBooking==="function")await checkMilestonesAfterBooking();
+    document.getElementById("content").innerHTML=cbRenderConfirmation(ref.key);
+  }catch(e){
+    console.error(e);
+    alert("Booking could not be confirmed. Please try again.");
+  }
+}
+setInterval(()=>{
+  if(document.getElementById("content") && document.getElementById("cleanTutorSelect")){
+    cbRenderBookingPage();
+  }
+},60000);
+
+/* Payments: student read-only, tutor assigned/admin editable */
+function cbCanEditPayment(b){
+  if(!profile)return false;
+  if(profile.role==="admin")return true;
+  if(profile.role==="tutor" && b.tutorId===currentUser.uid)return true;
+  return false;
+}
+function cbStudentPaymentsPage(){
+  const bookings=cbList(DATA.bookings||{}).filter(b=>b.studentId===currentUser.uid).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  document.getElementById("content").innerHTML=`<div class="card">
+    <h2>Payments</h2>
+    <div class="payment-readonly-note">You can view your payment status here. Only your assigned tutor or the admin can mark sessions as paid.</div>
+    ${bookings.length?bookings.map(b=>`<div class="student-payment-view-card">
+      <b>${b.course||"Session"}</b><br>
+      ${b.date||""} • ${cbFormatTime(b.start||b.time||"")}<br>
+      Tutor: ${(user(b.tutorId)||{}).name||""}<br>
+      Payment method: ${b.paymentMethod||"Cash"}<br>
+      Status: <span class="status-badge ${b.paid?"green":"red"}">${b.paid?"Paid":"Unpaid"}</span>
+    </div>`).join(""):cbEmpty("💵","No payments yet","Your booked sessions will appear here.")}
+  </div>`;
+}
+async function markPayment(id,paid){
+  const b=(DATA.bookings||{})[id]||{};
+  if(!cbCanEditPayment(b))return alert("Only the assigned tutor or admin can update payment status.");
+  await db.ref("bookings/"+id+"/paid").set(!!paid);
+  await loadData();
+  if(profile.role==="student")return cbStudentPaymentsPage();
+  if(typeof financialPage==="function")financialPage();
+}
+async function togglePayment(id){
+  const b=(DATA.bookings||{})[id]||{};
+  if(!cbCanEditPayment(b))return alert("Only the assigned tutor or admin can update payment status.");
+  await db.ref("bookings/"+id+"/paid").set(!b.paid);
+  await loadData();
+  if(profile.role==="student")return cbStudentPaymentsPage();
+  if(typeof financialPage==="function")financialPage();
+}
+setInterval(()=>{
+  if(profile?.role==="student" && document.getElementById("content")?.textContent?.includes("Payments")){
+    loadData().then(()=>cbStudentPaymentsPage()).catch(()=>{});
+  }
+},60000);
 
 function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 async function openTab(tab,btn){await loadData(); if(typeof closeMenu==="function")setTimeout(closeMenu,0);document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:tutorAnnouncementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
@@ -1397,7 +1516,7 @@ async function rejectAccessRequest(id){if(!confirm("Reject this access request?"
 
 function bookingRows(bs,edit){return bs.length?`<table class="table"><tr><th>Date</th><th>Time</th><th>Course</th><th>Tutor</th><th>Student/Group</th><th>Details</th><th>Payments</th><th>Notes</th><th>Actions</th></tr>${bs.map(b=>`<tr><td>${b.date}</td><td>${formatTime12(b.start)}</td><td>${b.course}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${b.duration}h • ${b.format||"Individual"} ${b.groupSize||1}<br>${b.location}<br>${b.paymentMethod}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${money(total(b))}</td><td>${(b.payments||[]).map((p,i)=>`${p.name}: ${money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">Toggle</button>`:""}`).join("<br>")}</td><td>${b.notes||""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td><td>${edit?`<button onclick="editBooking('${b.id}')">Edit</button><button onclick="markBookingPayment('${b.id}')">Mark Paid</button><button onclick="markDone('${b.id}')">Mark Done</button><button class="danger" onclick="deleteBooking('${b.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No sessions yet.</p>`}
 function bookingsPage(edit){let bs=myBookings();$("content").innerHTML=`<div class="card"><h2>Upcoming Sessions</h2>${bookingRows(bs.filter(b=>!b.done),edit&&profile.role!=="student")}</div><div class="card"><h2>Past Sessions</h2>${bookingRows(bs.filter(b=>b.done),edit&&profile.role!=="student")}</div>`}
-async function togglePayment(id,i){let b=DATA.bookings[id];b.payments[i].paid=!b.payments[i].paid;await db.ref(`bookings/${id}/payments`).set(b.payments);await loadData();bookingsPage(true)}
+
 async function editNotes(id){let b=DATA.bookings[id];let n=prompt("Session notes:",b.notes||"");if(n!==null){await db.ref(`bookings/${id}/notes`).set(n);await loadData();bookingsPage(true)}}
 async function editBooking(id){let b=DATA.bookings[id];let date=prompt("Date:",b.date);if(date===null)return;let start=prompt("Start time:",b.start);if(start===null)return;let duration=prompt("Duration:",b.duration);if(duration===null)return;let location=prompt("Location:",b.location);if(location===null)return;await db.ref("bookings/"+id).update({date,start,duration:Number(duration),location,paymentMethod:method(location)});await loadData();bookingsPage(true)}
 async function deleteBooking(id){if(!confirm("Delete this booking?"))return;await db.ref("bookings/"+id).remove();await loadData();bookingsPage(true)}
@@ -1418,17 +1537,7 @@ function calendarPage(){let now=new Date(),year=Number(localStorage.getItem("cal
 function moveMonth(delta){let now=new Date(),y=Number(localStorage.getItem("calYear")||now.getFullYear()),m=Number(localStorage.getItem("calMonth")||now.getMonth()),d=new Date(y,m+delta,1);localStorage.setItem("calYear",d.getFullYear());localStorage.setItem("calMonth",d.getMonth());calendarPage()}
 function dailyView(date){let bs=myBookings().filter(b=>b.date===date).sort((a,b)=>(a.start||"").localeCompare(b.start||""));$("content").innerHTML=`<div class="card"><button class="ghost" onclick="calendarPage()">Back to Calendar</button><h2>Daily Schedule — ${date}</h2>${bs.map(b=>`<div class="schedule-item"><b>${formatTime12(b.start)}</b> • ${b.course}<br>${profile.role==="student"?user(b.tutorId).name:user(b.studentId).name}<br>${b.duration}h • ${b.location}<br>${paymentSummary(b)}</div>`).join("")}</div>`}
 
-function bookingPage(){const courses=allCourseNames(),universities=allUniversityNames();$("content").innerHTML=`<div class="card"><h2>Book a Session</h2><label>1. Choose Course</label><select id="bcourseFirst" onchange="updateTutorListForCourse()"><option value="">Select a course</option>${courses.map(c=>`<option value="${c}">${c}</option>`).join("")}</select><label>2. Choose University</label><select id="buniversity" onchange="updateTutorListForCourse()"><option value="">All universities</option>${universities.map(u=>`<option value="${u}">${u}</option>`).join("")}</select><div id="courseTutorList"></div><div id="bookingDetails" class="hidden"><hr><label>3. Selected Tutor</label><select id="bt" onchange="updateBooking()"></select><div id="bookingCalendar"></div><div class="row"><div><label>4. Date</label><input id="bd" type="date" onchange="updateSlots()"></div><div><label>5. Duration</label><select id="bdu" onchange="updateSlots()"><option value="1">1 hour</option><option value="1.5">1h 30min</option><option value="2">2 hours</option><option value="2.5">2h 30min</option><option value="3">3 hours</option></select></div><div><label>6. Available Time</label><select id="bs" onchange="updateBookingLocations();updatePrice()"></select></div></div><label>Session Format</label><div class="row"><select id="bf" onchange="updatePrice()"><option>Individual</option><option>Group</option></select><select id="bg" onchange="updatePrice()"><option value="1">1 student</option><option value="2">2 students</option><option value="3">3 students</option><option value="4">4 students</option><option value="5">5 students</option></select></div><label>Session Type</label><div class="checkbox-grid">${["Course & Formulas","Book Exercises","Previous Exams","Other"].map(x=>`<label class="check"><input type="checkbox" class="stype" value="${x}">${x}</label>`).join("")}</div><label>Location</label><select id="bl" onchange="updatePrice()"></select><div id="price" class="card small"></div><button onclick="confirmBooking()">Confirm Booking + WhatsApp</button><div class="contact-help"><b>Didn\'t find a time that suits you?</b><br><span class="muted">Contact your tutor directly on WhatsApp.</span><br><button class="whatsapp" onclick="contactSelectedTutorForTime()">Contact Tutor</button></div></div></div>`
-
-  if(preselectTutorId){
-    const pt=user(preselectTutorId);
-    const wantedCourse=window.preselectCourse||"";
-    const courseToUse=(pt.courses||[]).includes(wantedCourse)?wantedCourse:((pt.courses||[])[0]||"");
-    if(courseToUse){$("bcourseFirst").value=courseToUse;}
-    if(pt.university){$("buniversity").value=pt.university;}
-    updateTutorListForCourse();
-  }
-}function updateTutorListForCourse(){
+function updateTutorListForCourse(){
   const course=$("bcourseFirst").value,university=$("buniversity").value,listBox=$("courseTutorList"),details=$("bookingDetails");
   if(!course){listBox.innerHTML="";details.classList.add("hidden");return}
   let ts=tutorsForCourseAndUniversity(course,university);
@@ -1503,52 +1612,6 @@ function updateSlots(){
 }
 function updateBookingLocations(){if(!$("bt")||!$("bt").value||!$("bs"))return;let locs=slotLocationOptions($("bt").value,$("bd").value,$("bs").value,$("bdu").value,$("bcourseFirst").value);$("bl").innerHTML=locs.length?locs.map(l=>`<option>${l}</option>`).join(""):`<option value="">No location available</option>`}
 function updatePrice(){if(!$("bt")||!$("bt").value)return;let t=user($("bt").value),d=Number($("bdu").value),g=$("bf").value==="Group"?Number($("bg").value):1;$("price").innerHTML=`<b>Course:</b> ${$("bcourseFirst").value||"-"}<br><b>Tutor:</b> ${t.name||"-"}<br><b>University:</b> ${t.university||"Not specified"}<br><b>Rate:</b> ${money(t.rate)}/hour/person<br><b>Duration:</b> ${d}h<br><b>Students:</b> ${g}<br><b>Total:</b> ${money((t.rate||0)*d*g)}<br><b>Payment:</b> ${method($("bl").value)}`}
-
-async function confirmBooking(){
-  try{
-    await loadData();
-    s81ReadSelections();
-
-    let tutorId=scheduledSelectedTutorId||window.selectedTutorId||"";
-    if(!tutorId){
-      const anyTutorSelect=[...document.querySelectorAll("select")].find(s=>user(s.value)?.role==="tutor");
-      if(anyTutorSelect)tutorId=anyTutorSelect.value;
-    }
-    const tutor=user(tutorId)||{};
-    const course=scheduledSelectedCourse||window.selectedCourse||v74Arr(tutor.courses)[0]||"";
-    const date=scheduledSelectedDate||window.selectedBookingDate||"";
-    const start=scheduledSelectedTime||window.selectedBookingTime||"";
-    const duration=Number(scheduledSelectedDuration||window.selectedDuration||1);
-    const paymentMethod=scheduledSelectedPaymentMethod||"Cash";
-
-    if(!tutorId)return alert("Please choose a tutor.");
-    if(!date)return alert("Please choose a valid date.");
-    if(!start)return alert("Please choose a valid time.");
-    if(s81IsExpiredSlot(date,start))return alert("This date or time has already passed and can no longer be booked.");
-
-    const booking={
-      studentId:currentUser.uid,
-      tutorId,
-      course,
-      date,
-      start,
-      duration,
-      paymentMethod,
-      paid:false,
-      status:"confirmed",
-      done:false,
-      createdAt:Date.now()
-    };
-    const ref=await db.ref("bookings").push(booking);
-    await loadData();
-    if(typeof checkMilestonesAfterBooking==="function")await checkMilestonesAfterBooking();
-    $("content").innerHTML=s81Confirmation(ref.key);
-  }catch(e){
-    console.error(e);
-    alert("Booking could not be confirmed. Please check your selected tutor, date and time, then try again.");
-  }
-}
-
 
 function showBookingModal(t){const div=document.createElement("div");div.className="modal";div.innerHTML=`<div class="modal-box"><h2>🎉 Booking Confirmed!</h2><p>Your tutoring session has been successfully booked.</p><p><b>Important:</b> </p><p><b>Tutor:</b> ${t.name}<br><b>WhatsApp:</b> ${t.whatsapp||""}</p><button class="whatsapp" onclick="openWhatsApp('${t.whatsapp||""}','Hi, I have a question about my tutoring session on Scheduled.')">Contact Tutor on WhatsApp</button></div>`;document.body.appendChild(div)}
 
@@ -1635,3 +1698,5 @@ function exportAdminTutorMonthlyFromExport(){
 function exportCSV(){const rows=[["Date","Time","Course","Tutor","Student/Group","Duration","Location","Payment Method","Total","Payments"]];myBookings().forEach(b=>rows.push([b.date,b.start,b.course,user(b.tutorId).name||"",user(b.studentId).name||"",b.duration,b.location,b.paymentMethod,total(b),(b.payments||[]).map(p=>`${p.name}: ${money(p.amount)} ${p.paid?"Paid":"Unpaid"}`).join(" | ")]));const csv=rows.map(r=>r.map(x=>`"${String(x??"").replaceAll('"','""')}"`).join(",")).join("\n"),blob=new Blob([csv],{type:"text/csv"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="scheduled-export.csv";a.click();URL.revokeObjectURL(url)}
 function profilePage(){$("content").innerHTML=`<div class="card"><h2>Profile</h2><p><b>Name:</b> ${profile.name}</p><p><b>Email:</b> ${profile.email}</p><p><b>Role:</b> ${profile.role}</p><label>New password</label><input id="np" type="password" placeholder="New password"><button onclick="changePassword()">Change Password</button>${profile.role==="tutor"?`<hr><p><b>WhatsApp:</b> ${profile.whatsapp||""}</p><button class="whatsapp" onclick="openWhatsApp('${profile.whatsapp||""}','Hi, I have a question about tutoring on Scheduled.')">WhatsApp Button Preview</button>`:""}</div>`}
 async function changePassword(){try{await auth.currentUser.updatePassword($("np").value);alert("Password changed")}catch(e){alert(e.message)}}
+
+
