@@ -1107,3 +1107,26 @@ button[data-time].past,
   pointer-events:none!important;
   cursor:not-allowed!important;
 }
+
+
+/* v8.0 real booking calendar + read-only student payments */
+.calendar-day.past,.date-card.past,.day.past,.calendar-cell.past{
+  opacity:.35!important;
+  pointer-events:none!important;
+  text-decoration:line-through!important;
+}
+.time-slot.past,.slot-button.past,.past-slot{
+  display:none!important;
+}
+.student-payment-readonly{
+  opacity:.7!important;
+  cursor:not-allowed!important;
+  pointer-events:none!important;
+}
+.readonly-payment-card{
+  border:1px solid var(--border);
+  border-radius:20px;
+  background:#fff;
+  padding:14px;
+  margin:10px 0;
+}

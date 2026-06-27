@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v7-9-real-calendar-booking-payment-fix",
-  "version": "7.9.0",
+  "name": "scheduled-v8-0-booking-calendar-payment-fix",
+  "version": "8.0.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"

@@ -1,16 +1,13 @@
-Scheduled v7.9 — Real Calendar + Booking + Payment Fix
+Scheduled v8.0 — Booking Calendar + Payment Fix
 
-Built from v7.8.
+Built from v7.9.
 
 Fixes:
-- Past dates cannot be booked.
-- Past times today cannot be booked.
-- Expired slots are hidden from UI.
-- confirmBooking rebuilt defensively to avoid website errors.
-- WhatsApp confirmation sends full booking details to tutor.
-- Removed reschedule/cancel/questions note.
-- Kept only WhatsApp confirmation action after booking.
-- Tutor/admin can remove booked sessions.
-- Students cannot mark sessions paid/unpaid. Only tutor/admin can update payment status.
+- Booking now reads the selected tutor from the actual booking UI.
+- Past dates are disabled.
+- Past times today are hidden/disabled.
+- Booking confirmation sends full details via WhatsApp.
+- Student Payments tab remains accessible but read-only.
+- Only tutor/admin can mark paid/unpaid.
 
 JS syntax check passed.

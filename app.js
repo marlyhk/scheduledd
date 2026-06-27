@@ -1717,23 +1717,23 @@ function v79CanEditPayment(){
 }
 
 async function markPayment(id,paid){
-  if(!v79CanEditPayment())return alert("Only the tutor or admin can update payment status.");
+  if(!v80CanEditPayment())return alert("Only the tutor or admin can update payment status.");
   await db.ref("bookings/"+id+"/paid").set(!!paid);
   await loadData();
   if(typeof financialPage==="function")financialPage();
-  else if(typeof bookingsPage==="function")bookingsPage(profile.role==="admin");
 }
+
 
 
 
 async function togglePayment(id){
-  if(!v79CanEditPayment())return alert("Only the tutor or admin can update payment status.");
+  if(!v80CanEditPayment())return alert("Only the tutor or admin can update payment status.");
   const b=(DATA.bookings||{})[id]||{};
   await db.ref("bookings/"+id+"/paid").set(!b.paid);
   await loadData();
   if(typeof financialPage==="function")financialPage();
-  else if(typeof bookingsPage==="function")bookingsPage(profile.role==="admin");
 }
+
 
 
 function v79ProtectStudentPaymentButtons(){
@@ -1750,6 +1750,247 @@ function v79ProtectStudentPaymentButtons(){
 }
 setInterval(v79CleanBookingDom,15000);
 setInterval(v79ProtectStudentPaymentButtons,1200);
+
+
+
+/* ===== v8.0 booking calendar and read-only student payments ===== */
+let selectedTutorId="";
+let selectedBookingDate="";
+let selectedBookingTime="";
+let selectedBookingCourse="";
+let selectedBookingDuration=1;
+let selectedBookingPaymentMethod="Cash";
+
+function v80Today(){
+  const n=new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`;
+}
+function v80NowMin(){
+  const n=new Date();
+  return n.getHours()*60+n.getMinutes();
+}
+function v80ToMin(t){
+  if(t===undefined||t===null)return 0;
+  let s=String(t).trim();
+  const ap=s.match(/\b(AM|PM)\b/i);
+  s=s.replace(/\b(AM|PM)\b/i,"").trim();
+  let h=0,m=0;
+  if(s.includes(":")){
+    const p=s.split(":");
+    h=parseInt(p[0]||"0",10);
+    m=parseInt(p[1]||"0",10);
+  }else{
+    h=parseInt(s||"0",10);
+  }
+  if(isNaN(h))h=0;
+  if(isNaN(m))m=0;
+  if(ap){
+    const tag=ap[1].toUpperCase();
+    if(tag==="PM"&&h<12)h+=12;
+    if(tag==="AM"&&h===12)h=0;
+  }
+  return h*60+m;
+}
+function v80Expired(date,time=""){
+  if(!date)return true;
+  const today=v80Today();
+  if(String(date)<today)return true;
+  if(String(date)>today)return false;
+  if(time)return v80ToMin(time)<=v80NowMin();
+  return false;
+}
+function v80FutureSlots(slots){
+  return (Array.isArray(slots)?slots:[]).filter(s=>{
+    const d=s.date||s.day||s.availableDate||s.slotDate||"";
+    const t=s.start||s.time||s.from||s.startTime||"";
+    return !v80Expired(d,t);
+  });
+}
+function v80SetTutor(id){
+  selectedTutorId=id;
+  window.selectedTutorId=id;
+}
+function v80SetDate(d){
+  if(v80Expired(d)){
+    alert("This day has already passed and cannot be booked.");
+    return false;
+  }
+  selectedBookingDate=d;
+  window.selectedBookingDate=d;
+  return true;
+}
+function v80SetTime(t){
+  if(v80Expired(selectedBookingDate,t)){
+    alert("This time has already passed and cannot be booked.");
+    return false;
+  }
+  selectedBookingTime=t;
+  window.selectedBookingTime=t;
+  return true;
+}
+function v80ReadBookingSelections(){
+  const tutorEl=document.querySelector("#bookingTutor,#tutorSelect,#selectedTutor,select[name='tutor'],select[data-role='tutor']");
+  if(tutorEl?.value)v80SetTutor(tutorEl.value);
+  const courseEl=document.querySelector("#bookingCourse,#courseSelect,#selectedCourse,select[name='course'],input[name='course']");
+  if(courseEl?.value)selectedBookingCourse=courseEl.value;
+  const dateEl=document.querySelector("#bookingDate,#dateSelect,#selectedDate,input[type='date'],input[name='date']");
+  if(dateEl?.value)v80SetDate(dateEl.value);
+  const timeEl=document.querySelector("#bookingTime,#timeSelect,#selectedTime,select[name='time'],input[type='time']");
+  if(timeEl?.value)v80SetTime(timeEl.value);
+  const durEl=document.querySelector("#bookingDuration,#durationSelect,select[name='duration'],input[name='duration']");
+  if(durEl?.value)selectedBookingDuration=Number(durEl.value||1);
+  const payEl=document.querySelector("#paymentMethod,#bookingPaymentMethod,#payMethod,select[name='paymentMethod']");
+  if(payEl?.value)selectedBookingPaymentMethod=payEl.value;
+}
+function v80PatchBookingClicks(){
+  try{
+    document.querySelectorAll("select").forEach(sel=>{
+      const id=(sel.id||"").toLowerCase();
+      if(id.includes("tutor"))sel.onchange=()=>{v80SetTutor(sel.value);v80ReadBookingSelections();};
+      if(id.includes("course"))sel.onchange=()=>{selectedBookingCourse=sel.value;v80ReadBookingSelections();};
+      if(id.includes("time"))sel.onchange=()=>{v80SetTime(sel.value);v80ReadBookingSelections();};
+      if(id.includes("payment")||id.includes("pay"))sel.onchange=()=>{selectedBookingPaymentMethod=sel.value;v80ReadBookingSelections();};
+    });
+    document.querySelectorAll("input[type='date']").forEach(inp=>{
+      inp.min=v80Today();
+      if(v80Expired(inp.value))inp.value="";
+      inp.onchange=()=>{v80SetDate(inp.value);v80ReadBookingSelections();};
+    });
+    document.querySelectorAll("[data-tutor-id]").forEach(el=>{
+      el.addEventListener("click",()=>v80SetTutor(el.getAttribute("data-tutor-id")));
+    });
+    document.querySelectorAll("[data-date],[data-slot-date]").forEach(el=>{
+      const d=el.getAttribute("data-date")||el.getAttribute("data-slot-date");
+      if(v80Expired(d)){
+        el.classList.add("past");
+        if("disabled" in el)el.disabled=true;
+        el.style.pointerEvents="none";
+      }else{
+        el.addEventListener("click",()=>v80SetDate(d));
+      }
+    });
+    document.querySelectorAll("[data-time],[data-slot-time],.time-slot,.slot-button").forEach(el=>{
+      const t=el.getAttribute("data-time")||el.getAttribute("data-slot-time")||(el.textContent||"").trim();
+      const d=el.getAttribute("data-date")||el.getAttribute("data-slot-date")||selectedBookingDate||window.selectedBookingDate||"";
+      if(d&&t&&v80Expired(d,t)){
+        el.classList.add("past","past-slot");
+        if("disabled" in el)el.disabled=true;
+        el.style.display="none";
+      }else if(t){
+        el.addEventListener("click",()=>v80SetTime(t));
+      }
+    });
+  }catch(e){console.warn("v80PatchBookingClicks",e)}
+}
+setInterval(v80PatchBookingClicks,1200);
+
+function v80TutorPhone(tutor){
+  return String(tutor?.whatsapp||tutor?.phone||"").replace(/[^\d+]/g,"");
+}
+function v80BookingTotal(b){
+  const tutor=user(b.tutorId)||{};
+  const duration=Number(b.duration||1);
+  const rate=Number(b.rate||tutor.rate||0);
+  return rate*duration;
+}
+function v80WhatsappUrl(b){
+  const tutor=user(b.tutorId)||{};
+  const student=user(b.studentId)||profile;
+  const total=v80BookingTotal(b);
+  const text=[
+    "Hello, I booked a tutoring session on Scheduled.",
+    "",
+    `Student name: ${student?.name||""}`,
+    `Tutor: ${tutor?.name||""}`,
+    `Course: ${b.course||""}`,
+    `University: ${student?.university||profile?.university||""}`,
+    `Date: ${b.date||""}`,
+    `Time: ${b.start||""}`,
+    `Duration: ${b.duration||""} hour(s)`,
+    `Rate: ${typeof money==="function"?money(tutor.rate||0):(tutor.rate||0)}`,
+    `Total: ${typeof money==="function"?money(total):total}`,
+    `Payment method: ${b.paymentMethod||"Cash"}`,
+    "",
+    "Please confirm this session."
+  ].join("\n");
+  const phone=v80TutorPhone(tutor);
+  return phone?`https://wa.me/${phone}?text=${encodeURIComponent(text)}`:`https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+function v80Confirmation(id){
+  const b=(DATA.bookings||{})[id]||{};
+  return `<div class="card">
+    <h2>Booking Confirmed ✅</h2>
+    <p><b>Important note:</b> Your tutoring session has been successfully booked. Please send the following information via WhatsApp for your tutor to confirm.</p>
+    <div class="planner-session">
+      <b>${b.course||"Session"}</b><br>
+      Student: ${(user(b.studentId)||profile)?.name||""}<br>
+      Tutor: ${(user(b.tutorId)||{}).name||""}<br>
+      Date: ${b.date||""}<br>
+      Time: ${b.start||""}<br>
+      Duration: ${b.duration||""} hour(s)<br>
+      Payment method: ${b.paymentMethod||"Cash"}<br>
+      Total: ${typeof money==="function"?money(v80BookingTotal(b)):v80BookingTotal(b)}
+    </div>
+    <div class="confirm-actions">
+      <a class="button" href="${v80WhatsappUrl(b)}" target="_blank">Contact Tutor on WhatsApp</a>
+    </div>
+  </div>`;
+}
+
+async function confirmBooking(){
+  try{
+    await loadData();
+    v80ReadBookingSelections();
+    const tutorId=selectedTutorId||window.selectedTutorId||"";
+    const tutor=user(tutorId)||{};
+    const course=selectedBookingCourse||window.selectedCourse||v74Arr(tutor.courses)[0]||"";
+    const date=selectedBookingDate||window.selectedBookingDate||"";
+    const start=selectedBookingTime||window.selectedBookingTime||"";
+    const duration=Number(selectedBookingDuration||window.selectedDuration||1);
+    const paymentMethod=selectedBookingPaymentMethod||"Cash";
+    if(!tutorId)return alert("Please choose a tutor.");
+    if(!date)return alert("Please choose a valid date.");
+    if(!start)return alert("Please choose a valid time.");
+    if(v80Expired(date,start))return alert("This date or time has already passed and can no longer be booked.");
+    const booking={studentId:currentUser.uid,tutorId,course,date,start,duration,paymentMethod,paid:false,status:"confirmed",done:false,createdAt:Date.now()};
+    const ref=await db.ref("bookings").push(booking);
+    await loadData();
+    if(typeof checkMilestonesAfterBooking==="function")await checkMilestonesAfterBooking();
+    $("content").innerHTML=v80Confirmation(ref.key);
+  }catch(e){
+    console.error(e);
+    alert("Booking could not be confirmed. Please try again.");
+  }
+}
+
+
+/* student payments are read-only */
+function v80StudentPaymentsPage(){
+  const b=v74List(DATA.bookings||{}).filter(x=>x.studentId===currentUser.uid).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  $("content").innerHTML=`<div class="card"><h2>Payments</h2><p class="muted">You can view your payment status here. Only your tutor or admin can mark a session as paid.</p>
+    ${b.length?b.map(x=>`<div class="readonly-payment-card">
+      <b>${x.course||"Session"}</b><br>
+      ${x.date||""} • ${x.start||""}<br>
+      Tutor: ${(user(x.tutorId)||{}).name||""}<br>
+      Payment method: ${x.paymentMethod||"Cash"}<br>
+      Status: <span class="status-badge ${x.paid?"green":"red"}">${x.paid?"Paid":"Unpaid"}</span>
+    </div>`).join(""):v74Empty("💵","No payments yet","Your booked sessions will appear here.")}
+  </div>`;
+}
+function v80CanEditPayment(){return profile&&(profile.role==="admin"||profile.role==="tutor")}
+async function markPayment(id,paid){
+  if(!v80CanEditPayment())return alert("Only the tutor or admin can update payment status.");
+  await db.ref("bookings/"+id+"/paid").set(!!paid);
+  await loadData();
+  if(typeof financialPage==="function")financialPage();
+}
+async function togglePayment(id){
+  if(!v80CanEditPayment())return alert("Only the tutor or admin can update payment status.");
+  const b=(DATA.bookings||{})[id]||{};
+  await db.ref("bookings/"+id+"/paid").set(!b.paid);
+  await loadData();
+  if(typeof financialPage==="function")financialPage();
+}
 
 function renderTabs(){let t=profile.role==="admin"?["Dashboard","Command Center","Admin Chat","Tutors","Tutor Profiles","Students","Groups","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Groups","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","My Scheduled","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Achievements","Semester Recap","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button type="button" class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 
@@ -1771,7 +2012,7 @@ async function openTab(tab,btn){
     if(tab==="Access Requests")return typeof accessRequestsPage==="function"?accessRequestsPage():v74Safe("Access Requests","Coming soon.");
     if(tab==="Calendar")return typeof calendarPage==="function"?calendarPage():v74Safe("Calendar","Coming soon.");
     if(tab==="Bookings")return typeof bookingsPage==="function"?bookingsPage(true):v74Safe("Bookings","Coming soon.");
-    if(tab==="Payments"){const r=typeof financialPage==="function"?financialPage():v74Safe("Payments","Coming soon.");setTimeout(v79ProtectStudentPaymentButtons,100);return r;}
+    if(tab==="Payments"){if(profile.role==="student")return v80StudentPaymentsPage();const r=typeof financialPage==="function"?financialPage():v74Safe("Payments","Coming soon.");return r;}
     if(tab==="Tutor Reports")return typeof adminTutorReportsPage==="function"?adminTutorReportsPage():v74Safe("Tutor Reports","Coming soon.");
     if(tab==="Announcements"){if(profile.role==="tutor"&&typeof tutorAnnouncementsPage==="function")return tutorAnnouncementsPage();if(typeof announcementsPage==="function")return announcementsPage();return v74Safe("Announcements","No announcements yet.");}
     if(tab==="Motivation Banner")return extendedMotivationBannerSettingsPage();
