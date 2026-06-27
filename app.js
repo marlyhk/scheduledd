@@ -273,6 +273,7 @@ function openRequestAccessForm(prefillCourses=""){
       <div id="reqCoursesList" class="request-course-list"><p class="muted">Loading courses...</p></div>
     </details>
     <p class="field-hint">Tap to open the list, then scroll and select one or more courses.</p>
+    <p class="field-hint"><strong>Can’t find your course?</strong> Please write the course name in the message below.</p>
     <label>Message</label>
     <textarea id="reqMessage" placeholder="Message (optional)"></textarea>
     <button onclick="submitAccessRequest()">Submit Request</button>
