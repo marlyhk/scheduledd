@@ -2053,3 +2053,195 @@ async function openTab(tab,btn){
   if(routes[tab])return routes[tab]();
   dashboardPage();
 }
+
+/* ===== Scheduled v9.7 REAL FIX: tutor global booking lock + tutor cancel/reschedule + student notifications ===== */
+function s97Status(b){return String(b?.status||"").toLowerCase().trim();}
+function s97IsActiveBooking(b){
+  const st=s97Status(b);
+  return !!b && !b.deleted && !b.done && !b.cancelledAt && !b.canceledAt && !b.cancelledBy && !b.canceledBy && st!=="cancelled" && st!=="canceled" && st!=="deleted";
+}
+function s97TimeToMin(t){return typeof s92TimeToMin==="function"?s92TimeToMin(t):toMin(t);}
+function s97MinToTime(m){return typeof s92MinToTime==="function"?s92MinToTime(m):toTime(m);}
+function s97EndTime(start,duration){return s97MinToTime(s97TimeToMin(start)+Number(duration||1)*60);}
+function s97FmtTime(t){return typeof s92FormatTime==="function"?s92FormatTime(t):(typeof formatTime12==="function"?formatTime12(t):t);}
+function s97Money(v){return typeof money==="function"?money(v):`$${Number(v||0).toFixed(2)}`;}
+function s97BookingRanges(tutorId,date,ignoreBookingId=""){
+  return list(DATA.bookings||{}).filter(b=>{
+    const bid=b.id||b.key||"";
+    return bid!==ignoreBookingId && b.tutorId===tutorId && b.date===date && s97IsActiveBooking(b);
+  }).map(b=>{
+    const start=s97TimeToMin(b.start||b.time);
+    return {start,end:start+Number(b.duration||1)*60,id:b.id||b.key||"",availabilityId:b.availabilityId||"",sessionType:(typeof s93NormalizeTypeLabel==="function"?s93NormalizeTypeLabel(b.sessionType||b.location||""):(b.sessionType||b.location||""))};
+  }).filter(r=>r.start!==null&&!isNaN(r.start)&&!isNaN(r.end));
+}
+function candidateWorks(tutorId,studentId,date,start,duration,ignoreBookingId=""){
+  const s=s97TimeToMin(start), e=s+Number(duration||1)*60;
+  if(s===null||isNaN(s)||isNaN(e))return false;
+  return !s97BookingRanges(tutorId,date,ignoreBookingId).some(r=>overlaps(s,e,r.start,r.end));
+}
+function s92BookedRanges(tutorId,date){return s97BookingRanges(tutorId,date).map(r=>({start:r.start,end:r.end,id:r.id}));}
+function s93BookedRanges(tutorId,date){return s97BookingRanges(tutorId,date);}
+function s92SlotAvailableForDuration(tutorId,date,start,duration,type){return s93SlotAvailableForDuration(tutorId,date,start,duration,type);}
+function s92AvailableStarts(tutorId,date,type,duration){return s93AvailableStarts(tutorId,date,type,duration);}
+function s92DateHasSlots(tutorId,date,type,duration){return s93DateHasSlots(tutorId,date,type,duration);}
+function s97StudentPhone(student){return student?.phone||student?.whatsapp||student?.mobile||student?.parentPhone||"";}
+function s97Total(b){
+  if(Array.isArray(b.payments)&&b.payments.length)return total(b);
+  const tutor=user(b.tutorId)||{};
+  const student=user(b.studentId)||{};
+  const count=student.type==="group"?(student.members||[]).filter(Boolean).length||Number(b.groupSize||1):Number(b.groupSize||1);
+  return Number(tutor.rate||profile?.rate||0)*Number(b.duration||1)*count;
+}
+function s97Message(b,kind="scheduled",oldB=null,reason=""){
+  const tutor=user(b.tutorId)||profile||{};
+  const student=user(b.studentId)||{};
+  const title=kind==="cancelled"?"Session Cancelled":kind==="rescheduled"?"Session Rescheduled":"Session Scheduled";
+  const lines=[`Scheduled - ${title}`,"",`Tutor: ${tutor.name||""}`,`Student/Group: ${student.name||""}`,`Course: ${b.course||""}`];
+  if(oldB){lines.push("","Previous time:",`Date: ${oldB.date||""}`,`Time: ${s97FmtTime(oldB.start||oldB.time||"")} → ${s97FmtTime(s97EndTime(oldB.start||oldB.time,oldB.duration))}`,`Duration: ${oldB.duration||""} hour(s)`,"","New time:");}
+  lines.push(`Date: ${b.date||""}`,`Time: ${s97FmtTime(b.start||b.time||"")} → ${s97FmtTime(s97EndTime(b.start||b.time,b.duration))}`,`Duration: ${b.duration||""} hour(s)`,`Location: ${b.location||b.sessionType||""}`,`Payment method: ${b.paymentMethod||""}`,`Total expenses: ${s97Money(s97Total(b))}`);
+  if(reason)lines.push("",`Message: ${reason}`);
+  if(kind==="cancelled")lines.push("","This session has been cancelled by the tutor. The original time is now available again for booking.");
+  if(kind==="rescheduled")lines.push("","The previous time is now available again. The new time is now unavailable across every course this tutor teaches.");
+  if(kind==="scheduled")lines.push("","This time is now unavailable across every course this tutor teaches.");
+  return lines.join("\n");
+}
+async function s97InternalChat(fromId,toId,text,meta={}){
+  if(!fromId||!toId||!text)return;
+  const cid=typeof s92ChatId==="function"?s92ChatId(fromId,toId):[fromId,toId].sort().join("_");
+  await db.ref("chats/"+cid+"/participants").set({[fromId]:true,[toId]:true});
+  await db.ref("chats/"+cid+"/messages").push({from:fromId,to:toId,text,read:false,createdAt:Date.now(),system:true,...meta});
+}
+async function s97NotifyStudent(b,kind="scheduled",oldB=null,reason="",openWa=true){
+  const text=s97Message(b,kind,oldB,reason);
+  const title=kind==="cancelled"?"Session Cancelled":kind==="rescheduled"?"Session Rescheduled":"New Session Scheduled";
+  if(typeof v56NotifyStudent==="function")await v56NotifyStudent(b.studentId,title,text);
+  await s97InternalChat(b.tutorId||currentUser?.uid,b.studentId,text,{bookingId:b.id||"",eventType:kind});
+  if(openWa){
+    const phone=s97StudentPhone(user(b.studentId)||{});
+    if(phone)openWhatsApp(phone,text);
+    else alert("Student was notified in the website chat, but no WhatsApp/phone number is saved for this student.");
+  }
+}
+function v56CoursesForTutorStudent(studentId){
+  const s=user(studentId)||{};
+  const assigned=Array.isArray(s.assignedCourses)?s.assignedCourses:[];
+  const tutorObj=user(currentUser?.uid)||profile||{};
+  const tutorCourses=Array.isArray(tutorObj.courses)?tutorObj.courses:(Array.isArray(profile?.courses)?profile.courses:[]);
+  const overlap=assigned.filter(c=>tutorCourses.includes(c));
+  const source=overlap.length?overlap:(assigned.length?assigned:tutorCourses);
+  return [...new Set(source.filter(Boolean))];
+}
+function tutorScheduleSessionPage(){
+  if(profile.role!=="tutor")return;
+  const ss=v56AssignedStudentsForTutor(currentUser.uid);
+  const today=typeof todayISO==="function"?todayISO():new Date().toISOString().slice(0,10);
+  $("content").innerHTML=`<div class="card tutor-schedule-form"><h2>Schedule Session</h2>
+    <p class="muted">Create a session for one of your assigned students or groups. Once confirmed, this time is blocked across every course you teach.</p>
+    ${ss.length?`<div class="row">
+      <label>Student / Group<select id="tssStudent" onchange="updateTutorScheduleCourses()">${ss.map(s=>`<option value="${s.id}">${s.name||""}${s.type==="group"?" (Group)":""}</option>`).join("")}</select></label>
+      <label>Course<select id="tssCourse"></select></label>
+      <label>Date<input id="tssDate" type="date" value="${today}"></label>
+      <label>Time<input id="tssTime" type="time"></label>
+      <label>Duration<select id="tssDuration" onchange="updateTutorSchedulePrice()"><option value="1">1 hour</option><option value="1.5">1.5 hours</option><option value="2">2 hours</option><option value="2.5">2.5 hours</option><option value="3">3 hours</option></select></label>
+      <label>Location<select id="tssLocation"><option>Online</option><option>On Campus</option><option>Both / To Confirm</option></select></label>
+      <label>Payment Status<select id="tssPayStatus"><option>Unpaid</option><option>Paid</option></select></label>
+      <label>Payment Method<select id="tssPayMethod"><option>Cash</option><option>Whish</option></select></label>
+    </div>
+    <div id="tssSummary" class="contact-help"></div>
+    <button onclick="createTutorScheduledSession()">Confirm Session & Notify Student</button>`:`<p class='muted'>No assigned students yet. Ask admin to assign students/groups to you first.</p>`}
+  </div>`;
+  updateTutorScheduleCourses();
+}
+async function createTutorScheduledSession(){
+  await loadData();
+  const studentId=$("tssStudent")?.value,course=$("tssCourse")?.value,date=$("tssDate")?.value,start=$("tssTime")?.value;
+  const duration=Number($("tssDuration")?.value||1),location=$("tssLocation")?.value||"Online";
+  const paymentStatus=$("tssPayStatus")?.value||"Unpaid",paymentMethod=$("tssPayMethod")?.value||"Cash";
+  if(!studentId||!course||!date||!start||!duration)return alert("Please fill student/group, course, date, time, and duration.");
+  if(!v56AssignedStudentsForTutor(currentUser.uid).some(s=>s.id===studentId))return alert("You can only schedule sessions for students/groups assigned to you.");
+  if(!candidateWorks(currentUser.uid,studentId,date,start,duration))return alert("This tutor is already booked at this time in another course/session. Choose another time.");
+  if(!confirm("Confirm this session and notify the student in website chat + WhatsApp?"))return;
+  const student=user(studentId)||{};
+  const members=student.type==="group"?(student.members||[]).filter(Boolean).length||1:1;
+  const amount=Number((user(currentUser.uid)||profile||{}).rate||0)*duration*members;
+  const paidNow=paymentStatus==="Paid";
+  const payDate=paidNow?(typeof todayISO==="function"?todayISO():new Date().toISOString().slice(0,10)):"";
+  const booking={tutorId:currentUser.uid,studentId,course,date,start,duration,location,paymentMethod,payments:[{name:student.name||"Student",amount,paid:paidNow,method:paymentMethod,paymentDate:payDate}],status:"confirmed",done:false,createdAt:Date.now(),createdBy:currentUser.uid,createdByRole:"tutor",tutorScheduled:true};
+  const ref=await db.ref("bookings").push(booking); booking.id=ref.key;
+  await s97NotifyStudent(booking,"scheduled",null,"",true);
+  await loadData(); showToast("✓ Session created successfully.","The time is now blocked globally and the student was notified."); tutorScheduleSessionPage();
+}
+function bookingRows(bs,edit){
+  return bs.length?`<table class="table"><tr><th>Date</th><th>Time</th><th>Course</th><th>Tutor</th><th>Student/Group</th><th>Status</th><th>Details</th><th>Payments</th><th>Notes</th><th>Actions</th></tr>${bs.map(b=>{
+    const active=s97IsActiveBooking(b);
+    const canTutorControl=profile.role==="tutor"&&b.tutorId===currentUser.uid&&active;
+    const status=s97Status(b)||"confirmed";
+    const actions=edit?`${canTutorControl?`<button onclick="rescheduleTutorBooking('${b.id}')">Reschedule</button><button class="danger" onclick="cancelTutorBooking('${b.id}')">Cancel</button>`:""}<button onclick="editBooking('${b.id}')">Edit</button><button onclick="markBookingPayment('${b.id}')">Mark Paid</button><button onclick="markDone('${b.id}')">Mark Done</button><button class="danger" onclick="deleteBooking('${b.id}')">Delete</button>`:"";
+    return `<tr><td>${b.date||""}</td><td>${s97FmtTime(b.start||b.time||"")}</td><td>${b.course||""}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${status}${!active?"<br><span class='muted'>released</span>":""}</td><td>${b.duration||""}h • ${b.format||"Individual"} ${b.groupSize||1}<br>${b.location||b.sessionType||""}<br>${b.paymentMethod||""}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${s97Money(s97Total(b))}</td><td>${(b.payments||[]).map((p,i)=>`${p.name}: ${s97Money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">Toggle</button>`:""}`).join("<br>")}</td><td>${b.notes||""}${b.cancelReason?`<br><b>Cancel reason:</b> ${b.cancelReason}`:""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td><td>${actions}</td></tr>`;
+  }).join("")}</table>`:`<p class="muted">No sessions yet.</p>`;
+}
+function bookingsPage(edit){
+  let bs=myBookings().sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.start||a.time||"").localeCompare(b.start||b.time||""));
+  const upcoming=bs.filter(b=>!b.done&&s97IsActiveBooking(b));
+  const inactive=bs.filter(b=>!b.done&&!s97IsActiveBooking(b));
+  const past=bs.filter(b=>b.done);
+  $("content").innerHTML=`<div class="card"><h2>Upcoming Sessions</h2>${bookingRows(upcoming,edit&&profile.role!=="student")}</div>${inactive.length?`<div class="card"><h2>Cancelled / Released Sessions</h2>${bookingRows(inactive,edit&&profile.role!=="student")}</div>`:""}<div class="card"><h2>Past Sessions</h2>${bookingRows(past,edit&&profile.role!=="student")}</div>`;
+}
+async function cancelTutorBooking(id){
+  const b=DATA.bookings[id]; if(!b)return alert("Booking not found.");
+  if(profile.role!=="tutor"||b.tutorId!==currentUser.uid)return alert("Only the assigned tutor can cancel this session.");
+  if(!s97IsActiveBooking(b))return alert("This session is already cancelled, deleted, or completed.");
+  const reason=prompt("Cancellation reason/message to student:","The tutor cancelled this session."); if(reason===null)return;
+  if(!confirm("Cancel this session? The original time will become available for booking again, and the student will be notified in chat + WhatsApp."))return;
+  const cancelled={...b,id,status:"cancelled",cancelledAt:Date.now(),cancelledBy:currentUser.uid,cancelReason:reason};
+  await db.ref("bookings/"+id).update({status:"cancelled",cancelledAt:Date.now(),cancelledBy:currentUser.uid,cancelReason:reason});
+  await s97NotifyStudent(cancelled,"cancelled",null,reason,true);
+  await loadData(); bookingsPage(true);
+}
+async function rescheduleTutorBooking(id){
+  const b=DATA.bookings[id]; if(!b)return alert("Booking not found.");
+  if(profile.role!=="tutor"||b.tutorId!==currentUser.uid)return alert("Only the assigned tutor can reschedule this session.");
+  if(!s97IsActiveBooking(b))return alert("This session is already cancelled, deleted, or completed.");
+  const date=prompt("New date YYYY-MM-DD:",b.date||""); if(date===null)return;
+  const start=prompt("New start time HH:MM:",b.start||b.time||""); if(start===null)return;
+  const duration=Number(prompt("New duration in hours:",b.duration||1)); if(!duration)return alert("Duration must be a number.");
+  const location=prompt("New location:",b.location||b.sessionType||"Online"); if(location===null)return;
+  const reason=prompt("Message to student:","The tutor rescheduled this session."); if(reason===null)return;
+  if(!candidateWorks(b.tutorId,b.studentId,date,start,duration,id))return alert("This tutor is already booked at the new time in another course/session. Choose another time.");
+  if(!confirm("Reschedule this session? The old time will become available again and the new time will be blocked across every course. The student will be notified in chat + WhatsApp."))return;
+  const oldB={...b,id};
+  const history=Array.isArray(b.rescheduleHistory)?b.rescheduleHistory:[];
+  const updates={date,start,duration,location,paymentMethod:b.paymentMethod||method(location),status:"confirmed",rescheduledAt:Date.now(),rescheduledBy:currentUser.uid,rescheduleMessage:reason,rescheduleHistory:[...history,{date:b.date,start:b.start||b.time,duration:b.duration,location:b.location||b.sessionType,changedAt:Date.now(),changedBy:currentUser.uid}]};
+  await db.ref("bookings/"+id).update(updates);
+  const newB={...b,...updates,id};
+  await s97NotifyStudent(newB,"rescheduled",oldB,reason,true);
+  await loadData(); bookingsPage(true);
+}
+async function editBooking(id){
+  let b=DATA.bookings[id]; if(!b)return alert("Booking not found.");
+  if(profile.role==="tutor"&&b.tutorId===currentUser.uid)return rescheduleTutorBooking(id);
+  let date=prompt("Date:",b.date); if(date===null)return;
+  let start=prompt("Start time:",b.start||b.time); if(start===null)return;
+  let duration=Number(prompt("Duration:",b.duration)); if(!duration)return alert("Duration must be a number.");
+  let location=prompt("Location:",b.location||b.sessionType); if(location===null)return;
+  if(!candidateWorks(b.tutorId,b.studentId,date,start,duration,id))return alert("This tutor is already booked at this time. Choose another time.");
+  await db.ref("bookings/"+id).update({date,start,duration,location,paymentMethod:b.paymentMethod||method(location)});
+  await loadData(); bookingsPage(true);
+}
+function dailyView(date){
+  let bs=myBookings().filter(b=>b.date===date&&s97IsActiveBooking(b)).sort((a,b)=>(a.start||a.time||"").localeCompare(b.start||b.time||""));
+  $("content").innerHTML=`<div class="card"><button class="ghost" onclick="calendarPage()">Back to Calendar</button><h2>Daily Schedule — ${date}</h2>${bs.length?bs.map(b=>`<div class="schedule-item"><b>${s97FmtTime(b.start||b.time||"")}</b> • ${b.course||""}<br>${profile.role==="student"?user(b.tutorId).name:user(b.studentId).name}<br>${b.duration||""}h • ${b.location||b.sessionType||""}<br>${paymentSummary(b)}${profile.role==="tutor"&&b.tutorId===currentUser.uid?`<br><button onclick="rescheduleTutorBooking('${b.id}')">Reschedule</button><button class="danger" onclick="cancelTutorBooking('${b.id}')">Cancel</button>`:""}</div>`).join(""):"<p class='muted'>No active sessions for this date.</p>"}</div>`;
+}
+function calendarPage(){
+  let now=new Date(),year=Number(localStorage.getItem("calYear")||now.getFullYear()),month=Number(localStorage.getItem("calMonth")||now.getMonth()),days=monthDays(year,month),bs=myBookings().filter(s97IsActiveBooking);
+  $("content").innerHTML=`<div class="card"><h2>Calendar</h2><div class="row"><button onclick="moveMonth(-1)">Previous</button><div class="card small"><b>${new Date(year,month,1).toLocaleDateString("en-US",{month:"long",year:"numeric"})}</b></div><button onclick="moveMonth(1)">Next</button></div><div class="calendar-grid">${days.map(d=>{let dayBookings=bs.filter(b=>b.date===d.date).sort((a,b)=>(a.start||a.time||"").localeCompare(b.start||b.time||""));return`<div class="day-card ${dayBookings.length?'':'not-available'}" onclick="${dayBookings.length?`dailyView('${d.date}')`:''}"><h4>${d.weekday} ${d.day}</h4>${dayBookings.slice(0,3).map(b=>`<div class="event">${s97FmtTime(b.start||b.time||"")} • ${profile.role==="student"?user(b.tutorId).name:user(b.studentId).name}<br>${b.course||""}</div>`).join("")}</div>`}).join("")}</div></div>`;
+}
+async function openTab(tab,btn){
+  await loadData();
+  if(typeof closeMenu==="function")setTimeout(closeMenu,0);
+  document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
+  if(btn)btn.classList.add("active");
+  const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:profile?.role==="student"?paymentsPage:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:profile?.role==="tutor"?tutorAnnouncementsPage:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"Schedule Session":tutorScheduleSessionPage,"My Students":myStudentsPage,Financial:financialPage,Statistics:statsPage,Reviews:reviewsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false)};
+  if(routes[tab])return routes[tab]();
+  dashboardPage();
+}
