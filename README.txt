@@ -1,13 +1,13 @@
-Scheduled v7.6 — Student Semester/Course + Organized Admin Chat
+Scheduled v7.7 — Booking Confirmation + Past Time Filter
 
-Built from v7.5.
+Built from v7.6.
 
-Fixes/adds:
-- New student/group creation form now includes semester assignment.
-- New student/group creation form now includes course assignment.
-- Admin Chat is organized into Tutors and Students lists.
-- Admin Chat can be filtered by semester.
-- Selecting a tutor/student opens the chat directly in the same page.
-- Everything else from v7.5 preserved.
+Fixes:
+- Removed “via WhatsApp” from the reschedule/cancel/questions note.
+- Booking confirmation note now tells students the session is booked and to send the confirmation details via WhatsApp.
+- Removed the “Go to My Sessions” confirmation action.
+- Keeps the “Contact Tutor on WhatsApp” action.
+- Past dates become unavailable.
+- Times that already passed today are filtered/hidden from availability.
 
 JS syntax check passed.

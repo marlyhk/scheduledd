@@ -1321,6 +1321,87 @@ async function sendAdminChatMessage(otherId){
   openAdminChat(otherId);
 }
 
+
+
+/* ===== v7.7 booking confirmation wording + past date/time filtering ===== */
+function v77NowParts(){
+  const now=new Date();
+  const y=now.getFullYear();
+  const m=String(now.getMonth()+1).padStart(2,"0");
+  const d=String(now.getDate()).padStart(2,"0");
+  return {now,today:`${y}-${m}-${d}`,minutes:now.getHours()*60+now.getMinutes()};
+}
+function v77TimeToMinutes(t){
+  if(!t)return 0;
+  let s=String(t).trim();
+  const ampm=s.match(/\s*(AM|PM)$/i);
+  s=s.replace(/\s*(AM|PM)$/i,"");
+  let [h,m]=s.split(":").map(x=>parseInt(x,10));
+  if(isNaN(h))h=0;
+  if(isNaN(m))m=0;
+  if(ampm){
+    const ap=ampm[1].toUpperCase();
+    if(ap==="PM"&&h<12)h+=12;
+    if(ap==="AM"&&h===12)h=0;
+  }
+  return h*60+m;
+}
+function v77IsPastDate(date){
+  const p=v77NowParts();
+  return String(date||"")<p.today;
+}
+function v77IsPastSlot(date,start){
+  const p=v77NowParts();
+  if(!date)return true;
+  if(String(date)<p.today)return true;
+  if(String(date)>p.today)return false;
+  return v77TimeToMinutes(start)<=p.minutes;
+}
+function v77FilterFutureSlots(slots){
+  return (Array.isArray(slots)?slots:[]).filter(s=>!v77IsPastSlot(s.date||s.day||s.availableDate,s.start||s.time||s.from));
+}
+function v77DateClass(date,hasAvailability){
+  if(v77IsPastDate(date))return "unavailable past";
+  return hasAvailability?"available":"unavailable";
+}
+function v77AvailabilityMessage(){
+  return `<p class="muted">Past dates and times that already passed today are automatically unavailable.</p>`;
+}
+
+/* Override/patch common slot rendering after page loads */
+function v77RemovePastSlotButtons(){
+  try{
+    const today=v77NowParts().today;
+    document.querySelectorAll("[data-date][data-time], [data-slot-date][data-slot-time]").forEach(el=>{
+      const date=el.getAttribute("data-date")||el.getAttribute("data-slot-date");
+      const time=el.getAttribute("data-time")||el.getAttribute("data-slot-time");
+      if(v77IsPastSlot(date,time)){
+        el.classList.add("past-slot");
+        el.disabled=true;
+        el.style.display="none";
+      }
+    });
+  }catch(e){console.warn(e)}
+}
+function v77BookingConfirmationHtml(tutor,booking,whatsappUrl){
+  const info=[
+    `Student: ${profile?.name||""}`,
+    `Tutor: ${tutor?.name||""}`,
+    `Course: ${booking?.course||""}`,
+    `Date: ${booking?.date||""}`,
+    `Time: ${booking?.start||""}`,
+    `Duration: ${booking?.duration||""} hour(s)`
+  ].join("\\n");
+  return `<div class="card">
+    <h2>Booking Confirmed ✅</h2>
+    <p><b>Important note:</b> Your tutoring session has been successfully booked. Please send the following information via WhatsApp for your tutor to confirm.</p>
+    <pre>${info}</pre>
+    <div class="confirm-actions">
+      <a class="button" href="${whatsappUrl||"#"}" target="_blank">Contact Tutor on WhatsApp</a>
+    </div>
+  </div>`;
+}
+
 function renderTabs(){let t=profile.role==="admin"?["Dashboard","Command Center","Admin Chat","Tutors","Tutor Profiles","Students","Groups","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Groups","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","My Scheduled","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Achievements","Semester Recap","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button type="button" class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 
 async function openTab(tab,btn){
@@ -1355,7 +1436,7 @@ async function openTab(tab,btn){
     if(tab==="Reviews")return typeof reviewsPage==="function"?reviewsPage():v74Safe("Reviews","Coming soon.");
     if(tab==="Profile")return typeof profilePage==="function"?profilePage():v74Safe("Profile","Coming soon.");
     if(tab==="My Scheduled")return myScheduledPage();
-    if(tab==="Book")return typeof bookingPage==="function"?bookingPage():v74Safe("Book","Coming soon.");
+    if(tab==="Book"){const r=typeof bookingPage==="function"?bookingPage():v74Safe("Book","Coming soon.");setTimeout(v77RemovePastSlotButtons,50);return r;}
     if(tab==="Emergency")return typeof emergencySessionsPage==="function"?emergencySessionsPage():v74Safe("Emergency","Coming soon.");
     if(tab==="All Tutors")return typeof allTutorsPage==="function"?allTutorsPage():v74Safe("All Tutors","Coming soon.");
     if(tab==="My Tutors")return typeof myTutorsPage==="function"?myTutorsPage():v74Safe("My Tutors","Coming soon.");
@@ -1654,7 +1735,7 @@ async function confirmBooking(){if(!$("bcourseFirst").value)return alert("Choose
   if(!existingAssigned.includes($("bt").value)){
     await db.ref("users/"+currentUser.uid+"/assignedTutorIds").set([...existingAssigned,$("bt").value]);
   }let msg=`📚 New Tutoring Booking\n\nTutor: ${t.name}\nUniversity: ${t.university||"Not specified"}\nStudent/Group: ${profile.name}\nCourse: ${b.course}\nDate: ${b.date}\nTime: ${formatTime12(b.start)}\nDuration: ${d}h\nFormat: ${b.format} (${g})\nType: ${b.sessionTypes.join(", ")}\nLocation: ${loc}\nPayment Method: ${b.paymentMethod}\nTotal: ${money(total(b))}`;openWhatsApp(t.whatsapp,msg);await loadData();showBookingModal(t)}
-function showBookingModal(t){const div=document.createElement("div");div.className="modal";div.innerHTML=`<div class="modal-box"><h2>🎉 Booking Confirmed!</h2><p>Your tutoring session has been successfully booked.</p><p><b>Important:</b> If you need to reschedule, cancel, or have any questions, please contact your tutor directly via WhatsApp.</p><p><b>Tutor:</b> ${t.name}<br><b>WhatsApp:</b> ${t.whatsapp||""}</p><button class="whatsapp" onclick="openWhatsApp('${t.whatsapp||""}','Hi, I have a question about my tutoring session on Scheduled.')">Contact Tutor on WhatsApp</button><button onclick="document.body.removeChild(this.closest('.modal'));openTab('My Sessions')">Go to My Sessions</button></div>`;document.body.appendChild(div)}
+function showBookingModal(t){const div=document.createElement("div");div.className="modal";div.innerHTML=`<div class="modal-box"><h2>🎉 Booking Confirmed!</h2><p>Your tutoring session has been successfully booked. Please send the following information via WhatsApp for your tutor to confirm.</p><p><b>Important:</b> If you need to reschedule, cancel, or have any questions, please contact your tutor.</p><p><b>Tutor:</b> ${t.name}<br><b>WhatsApp:</b> ${t.whatsapp||""}</p><button class="whatsapp" onclick="openWhatsApp('${t.whatsapp||""}','Hi, I have a question about my tutoring session on Scheduled.')">Contact Tutor on WhatsApp</button></div>`;document.body.appendChild(div)}
 
 function myTutorsPage(){let ts=studentTutors(currentUser.uid);$("content").innerHTML=`<div class="card"><h2>My Tutors</h2>${ts.length?`<div class="grid">${ts.map(t=>{let bs=list(DATA.bookings).filter(b=>b.studentId===currentUser.uid&&b.tutorId===t.id);return`<div class="card"><h3>${t.name}</h3><p>${t.university||""}</p><p>${(t.courses||[]).join(", ")}</p><button class="whatsapp" onclick="openWhatsApp('${t.whatsapp||""}','Hi, I have a question about my tutoring session on Scheduled.')">Contact Tutor on WhatsApp</button><button onclick="bookWithTutor('${t.id}')">Book a New Session</button><hr><b>Upcoming</b><br>${bs.filter(b=>!b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Past</b><br>${bs.filter(b=>b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}</div>`}).join("")}</div>`:`<p class="muted">No tutors yet. Book a session first.</p>`}</div>`}
 function bookWithTutor(id, course=""){

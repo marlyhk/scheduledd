@@ -1061,3 +1061,8 @@ html,body{
 .semester-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .semester-filter-row button.active{background:var(--blue);color:#fff}
 @media(max-width:780px){.admin-chat-layout{grid-template-columns:1fr}.admin-chat-sidebar{max-height:none}}
+
+
+/* v7.7 booking confirmation + past availability filter */
+.confirm-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.past-slot{opacity:.45;pointer-events:none}
