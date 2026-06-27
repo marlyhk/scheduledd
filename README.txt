@@ -1,22 +1,25 @@
-Scheduled v7.3 — Safe Complete from v6.7
+Scheduled v7.4 — Preserve v6.7 + Add New Features
 
 Built directly from v6.7 stable sidebar rebuild.
 
-Critical fixes:
-- No route references undefined function variables.
-- Defines dashboardPage and announcementsPage safely.
-- openTab uses string route names and fallbacks so pages do not crash.
-- Sidebar from v6.7 preserved.
+Preserved from v6.7:
+- Motivation dashboard/banner.
+- Favorites.
+- Reviews.
+- Student Profile.
+- All Tutors / My Tutors.
+- Existing booking, payments, documents, reports, dashboards.
+- Stable sidebar.
 
-Added carefully:
-- My Scheduled planner with sessions and tasks.
-- Internal chat button.
+Added:
+- My Scheduled planner.
+- Chat button.
 - Groups + semester system.
 - Tutor direct scheduling for individual/group sessions.
-- Group capacity, number of students, and names.
-- Command Center.
-- Achievements, weekly/monthly goals, animated badge unlock/confetti.
+- Achievements, goals, badge animation/confetti.
 - Semester recap.
-- Admin-only hide tutor/public profile controls.
-- Removed booking WhatsApp 'find time' prompt.
-- JS syntax check passed.
+- Command Center.
+- Admin hide tutor/public profile controls.
+- Removed only the WhatsApp "find a time" booking prompt.
+
+JS syntax check passed and required old/new functions verified.

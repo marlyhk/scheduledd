@@ -1,17 +1,5 @@
-
-/* v7.3 global no-blank safety */
-window.addEventListener("error",function(e){
-  try{
-    const c=document.getElementById("content");
-    const splash=document.getElementById("splash");
-    const app=document.getElementById("app");
-    if(splash)splash.classList.add("hidden");
-    if(app)app.classList.remove("hidden");
-    if(c && !c.innerHTML.trim()){
-      c.innerHTML=`<div class="card"><h2>Website error</h2><p class="muted">${String(e.message||"Unknown error")}</p><button onclick="location.reload()">Reload</button></div>`;
-    }
-  }catch(_){}
-});
+/* v7.4 no blank safety */
+window.addEventListener("error",function(e){try{const c=document.getElementById("content");const splash=document.getElementById("splash");const app=document.getElementById("app");if(splash)splash.classList.add("hidden");if(app)app.classList.remove("hidden");if(c&&!c.innerHTML.trim()){c.innerHTML=`<div class="card"><h2>Website error</h2><p class="muted">${String(e.message||"Unknown error")}</p><button onclick="location.reload()">Reload</button></div>`}}catch(_){}});
 
 /* ScheduledSafeErrorV67 */
 window.addEventListener("error", function(e){
@@ -535,7 +523,34 @@ function isFavoriteTutor(tutorId){return Array.isArray(profile.favoriteTutorIds)
 function assignedCourseBadges(studentId){const courses=typeof assignedCoursesForStudent==="function"?assignedCoursesForStudent(studentId):[];return courses.length?courses.join(", "):"None"}
 function markBookingPayment(bookingId){const b=DATA.bookings[bookingId];if(!b)return alert("Booking not found.");const method=prompt("Payment method: Cash or Whish",(b.paymentMethod||"Cash"));if(method===null)return;const cleanMethod=(method.toLowerCase().includes("whish")||method.toLowerCase().includes("wish"))?"Whish":"Cash";const date=prompt("Payment date YYYY-MM-DD:",todayISO());if(date===null)return;const payments=(b.payments||[]).map(p=>({...p,paid:true,method:cleanMethod,paymentDate:date}));db.ref("bookings/"+bookingId).update({paymentMethod:cleanMethod,payments}).then(async()=>{await loadData();bookingsPage(profile.role!=="student")})}
 function calendarLinkForBooking(b){const t=user(b.tutorId),s=user(b.studentId);const title=encodeURIComponent(`Scheduled: ${b.course||"Tutoring"}`);const details=encodeURIComponent(`Course: ${b.course||""}\nTutor: ${t.name||""}\nStudent: ${s.name||""}\nLocation: ${b.location||""}`);const date=(b.date||"").replaceAll("-","");const start=(b.start||"00:00").replace(":","");const dur=Math.round(Number(b.duration||1)*60), sh=Number((b.start||"00:00").split(":")[0]), sm=Number((b.start||"00:00").split(":")[1]||0);const end=sh*60+sm+dur,eh=String(Math.floor(end/60)).padStart(2,"0"),em=String(end%60).padStart(2,"0");return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${date}T${start}00/${date}T${eh}${em}00&details=${details}`}
+function dashboardPage(){if(profile.role==="admin")return adminDashboardPage();if(profile.role==="tutor")return tutorDashboardPage();return studentDashboardPage()}
+function studentDashboardPage(){const nb=nextBooking(),my=myBookings(),month=thisMonthBookings(my),quote=randomMotivation();$("content").innerHTML=`<div class="dashboard-hero"><h2 class="student-welcome-line">${scheduledGreeting()}, ${profile.name||"student"} ✨</h2><p class="student-welcome-sub">${scheduledGreetingSub()}</p>${renderStudentInspoBanner()}<div class="quick-actions"><button onclick="openTab('Book')">Book New Session</button><button class="ghost" onclick="emergencySessionsPage()">⚡ Need Help Today?</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Next Session</div><div class="kpi-value">${nb?`${nb.date}<br><span class="small">${formatTime12(nb.start)}</span>`:"None"}</div></div><div class="kpi-card"><div class="kpi-label">Hours This Month</div><div class="kpi-value">${totalHours(month)}</div></div><div class="kpi-card"><div class="kpi-label">Upcoming Sessions</div><div class="kpi-value">${my.filter(b=>!b.done).length}</div></div><div class="kpi-card"><div class="kpi-label">My Tutors</div><div class="kpi-value">${studentTutors(currentUser.uid).length}</div></div></div><div class="grid"><div class="card"><h2>Upcoming Sessions</h2>${upcomingBookingsForUser().slice(0,5).map(b=>`<div class="timeline-item"><b>${b.course}</b><br>${b.date} • ${formatTime12(b.start)}<br>${user(b.tutorId).name||""}<br><a href="${calendarLinkForBooking(b)}" target="_blank">Add to Google Calendar</a></div>`).join("")||"<p class='muted'>No upcoming sessions.</p>"}</div><div class="card"><h2>Assigned Courses</h2><p>${assignedCourseBadges(currentUser.uid)}</p><hr><h2>Announcements</h2>${getAnnouncementsForRole().slice(0,3).map(a=>`<div class="announcement-card"><b>${a.title||""}</b><p>${a.message||""}</p></div>`).join("")||"<p class='muted'>No announcements yet.</p>"}</div></div>`}
+function tutorDashboardPage(){const b=myBookings(),today=b.filter(x=>isToday(x.date)&&!x.done),month=thisMonthBookings(b);$("content").innerHTML=`<div class="dashboard-hero"><h2>Welcome back, ${profile.name||"Tutor"} 👋</h2><p class="muted">Your tutoring business overview.</p><div class="quick-actions"><button onclick="openTab('Availability')">Add Availability</button><button class="ghost" onclick="openTab('Calendar')">Open Calendar</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Today's Sessions</div><div class="kpi-value">${today.length}</div></div><div class="kpi-card"><div class="kpi-label">Hours This Month</div><div class="kpi-value">${totalHours(month)}</div></div><div class="kpi-card"><div class="kpi-label">This Month Earnings</div><div class="kpi-value">${money(month.reduce((s,b)=>s+total(b),0))}</div></div><div class="kpi-card"><div class="kpi-label">Average Rating</div><div class="kpi-value">${avgRating(currentUser.uid)}</div></div></div><div class="grid"><div class="card"><h2>Today</h2>${today.map(b=>`<div class="timeline-item"><b>${formatTime12(b.start)} • ${b.course}</b><br>${user(b.studentId).name||""}<br>${b.location||""}</div>`).join("")||"<p class='muted'>No sessions today.</p>"}</div><div class="card"><h2>Pending Payments</h2>${b.filter(x=>unpaid([x])>0).slice(0,6).map(x=>`<div class="timeline-item">${x.date} • ${user(x.studentId).name||""}<br>${money(unpaid([x]))} unpaid<br><button onclick="markBookingPayment('${x.id}')">Mark as Paid</button></div>`).join("")||"<p class='muted'>No pending payments.</p>"}</div></div>`}
+function adminDashboardPage(){const bs=list(DATA.bookings),today=bs.filter(b=>isToday(b.date)),month=thisMonthBookings(bs),req=list(DATA.accessRequests).filter(r=>(r.status||"pending")==="pending");$("content").innerHTML=`<div class="dashboard-hero"><h2>Scheduled Admin Dashboard</h2><p class="muted">Everything important in one place.</p><div class="quick-actions"><button onclick="openTab('Students')">Add Student</button><button onclick="openTab('Tutors')">Add Tutor</button><button class="ghost" onclick="openTab('Announcements')">Send Announcement</button></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Students</div><div class="kpi-value">${students().length}</div></div><div class="kpi-card"><div class="kpi-label">Tutors</div><div class="kpi-value">${tutors().length}</div></div><div class="kpi-card"><div class="kpi-label">Sessions Today</div><div class="kpi-value">${today.length}</div></div><div class="kpi-card"><div class="kpi-label">Revenue This Month</div><div class="kpi-value">${money(month.reduce((s,b)=>s+total(b),0))}</div></div><div class="kpi-card"><div class="kpi-label">Pending Requests</div><div class="kpi-value">${req.length}</div></div><div class="kpi-card"><div class="kpi-label">Unpaid</div><div class="kpi-value">${money(unpaid(bs))}</div></div></div>`}
+function announcementsPage(){if(profile.role==="admin"){$("content").innerHTML=`<div class="card"><h2>Announcements</h2><div class="row"><input id="annTitle" placeholder="Title"><select id="annAudience"><option value="everyone">Everyone</option><option value="student">Students</option><option value="tutor">Tutors</option></select></div><textarea id="annMessage" placeholder="Announcement message"></textarea><button onclick="sendAnnouncement()">Send Announcement</button></div><div class="card"><h2>Previous Announcements</h2>${list(DATA.announcements||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(a=>`<div class="announcement-card"><b>${a.title}</b><p>${a.message}</p><span class="muted">${a.audience}</span></div>`).join("")||"<p class='muted'>None yet.</p>"}</div>`}else{$("content").innerHTML=`<div class="card"><h2>Announcements</h2>${getAnnouncementsForRole().map(a=>`<div class="announcement-card"><b>${a.title}</b><p>${a.message}</p></div>`).join("")||"<p class='muted'>No announcements yet.</p>"}</div>`}}
+async function sendAnnouncement(){const title=$("annTitle").value.trim(),message=$("annMessage").value.trim(),audience=$("annAudience").value;if(!title||!message)return alert("Fill title and message.");await db.ref("announcements").push({title,message,audience,createdAt:Date.now(),createdBy:currentUser.uid});await createNotification(audience,title,message);await loadData();announcementsPage()}
+function statsPage(){const b=myBookings();if(profile.role==="student"){$("content").innerHTML=`<div class="card"><h2>My Statistics</h2><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Total Hours Studied</div><div class="kpi-value">${totalHours(b)}</div></div><div class="kpi-card"><div class="kpi-label">Sessions Completed</div><div class="kpi-value">${b.filter(x=>x.done).length}</div></div><div class="kpi-card"><div class="kpi-label">Upcoming Sessions</div><div class="kpi-value">${b.filter(x=>!x.done).length}</div></div><div class="kpi-card"><div class="kpi-label">Number of Tutors</div><div class="kpi-value">${studentTutors(currentUser.uid).length}</div></div></div></div>`}else{$("content").innerHTML=`<div class="card"><h2>Tutor Statistics</h2><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Total Students</div><div class="kpi-value">${[...new Set(b.map(x=>x.studentId))].length}</div></div><div class="kpi-card"><div class="kpi-label">Total Sessions</div><div class="kpi-value">${b.length}</div></div><div class="kpi-card"><div class="kpi-label">Hours Taught</div><div class="kpi-value">${totalHours(b)}</div></div><div class="kpi-card"><div class="kpi-label">Average Rating</div><div class="kpi-value">${avgRating(currentUser.uid)}</div></div></div></div>`}}
+function reviewsPage(){if(profile.role==="tutor"){const rs=getReviewsForTutor(currentUser.uid);$("content").innerHTML=`<div class="card"><h2>My Reviews</h2><div class="kpi-card"><div class="kpi-label">Average Rating</div><div class="kpi-value">${avgRating(currentUser.uid)}</div></div>${rs.map(r=>`<div class="timeline-item"><b>${"★".repeat(Number(r.rating||0))}${"☆".repeat(5-Number(r.rating||0))}</b><p>${r.text||""}</p></div>`).join("")||"<p class='muted'>No reviews yet.</p>"}</div>`}else{const completed=myBookings().filter(b=>b.done);$("content").innerHTML=`<div class="card"><h2>Leave a Review</h2>${completed.map(b=>`<div class="timeline-item"><b>${user(b.tutorId).name||""} • ${b.course}</b><br>${b.date}<br><button onclick="reviewBooking('${b.id}')">Review</button></div>`).join("")||"<p class='muted'>No completed sessions yet.</p>"}</div>`}}
+async function reviewBooking(id){const b=DATA.bookings[id];if(!b)return;const rating=Number(prompt("Rating from 1 to 5:","5")||0);if(!rating||rating<1||rating>5)return alert("Rating must be 1 to 5.");const text=prompt("Written review:","")||"";await db.ref("reviews").push({bookingId:id,tutorId:b.tutorId,studentId:currentUser.uid,course:b.course,rating,text,createdAt:Date.now()});await createNotification("tutor","New Review",`You received a ${rating}-star review.`,b.tutorId);await loadData();reviewsPage()}
+function favoritesPage(){const ids=Array.isArray(profile.favoriteTutorIds)?profile.favoriteTutorIds:[],favs=ids.map(id=>({id,...user(id)})).filter(t=>t.role==="tutor");$("content").innerHTML=`<div class="card"><h2>Favorite Tutors</h2>${favs.length?`<div class="grid">${favs.map(t=>`<div class="card"><h3>${t.name}</h3><p>${t.university||""}<br>${(t.courses||[]).join(", ")}</p><button onclick="bookWithTutor('${t.id}')">Book Now</button><button class="ghost" onclick="toggleFavoriteTutor('${t.id}')">Remove Favorite</button></div>`).join("")}</div>`:"<p class='muted'>No favorite tutors yet.</p>"}</div>`}
+function emergencySessionsPage(){const today=todayISO();const available=tutors().filter(t=>(t.courses||[]).some(c=>dayHasAvailable(t.id,today,c)));$("content").innerHTML=`<div class="card"><h2>⚡ Emergency Sessions Today</h2><p class="muted">Tutors with availability today.</p>${available.length?`<div class="grid">${available.map(t=>`<div class="card"><span class="emergency-badge">Available today</span><h3>${t.name}</h3><p>${t.university||""}<br>${(t.courses||[]).join(", ")}</p><button onclick="bookWithTutor('${t.id}')">Book Now</button></div>`).join("")}</div>`:"<p class='muted'>No emergency slots available today.</p>"}</div>`}
+function studentProfilePage(){$("content").innerHTML=`<div class="profile-section"><h2>Student Profile</h2><p><b>Name:</b> ${profile.name||""}</p><p><b>Email:</b> ${profile.email||""}</p><p><b>Phone:</b> ${profile.phone||""}</p><p><b>University:</b> ${profile.university||""}</p><p><b>Major:</b> ${profile.major||"Not specified"}</p><p><b>Year:</b> ${profile.year||"Not specified"}</p><p><b>Assigned Courses:</b> ${assignedCourseBadges(currentUser.uid)}</p><p><b>Assigned Tutors:</b> ${assignedTutorNames(currentUser.uid)||"None"}</p></div>`}
 
+
+/* ===== v5.6 stable post-v5.0 additions ===== */
+function v56List(obj){return Object.entries(obj||{}).map(([id,v])=>({id,...v}))}
+
+function v56MotivationQuotes(){
+  const custom=v56List(DATA.motivationQuotes||{}).map(q=>q.text).filter(Boolean);
+  if(custom.length)return custom;
+  if(typeof MOTIVATION_QUOTES!=="undefined")return MOTIVATION_QUOTES;
+  return [
+    "Small progress is still progress — show up today.",
+    "Your future self is built by what you do now.",
+    "One focused session can change your whole week.",
+    "Consistency beats intensity when exams get close."
+  ];
+}
 function randomMotivation(){return (scheduledTodayBanner&&scheduledTodayBanner().text)||"Keep going — you are doing better than you think.";}
 function motivationBannerSettingsPage(){
   if(!profile || profile.role!=="admin"){
@@ -915,156 +930,63 @@ document.addEventListener("keydown",function(e){
 });
 
 
-/* ===== v7.3 stable full feature layer from v6.7 ===== */
-function v73List(obj){return Object.entries(obj||{}).map(([id,v])=>({id,...v}))}
-function v73Arr(x){return Array.isArray(x)?x:[]}
-function v73Uid(){return currentUser&&currentUser.uid}
-function v73Today(){return typeof todayISO==="function"?todayISO():new Date().toISOString().slice(0,10)}
-function v73Money(x){return typeof money==="function"?money(x):"$"+Number(x||0).toFixed(2)}
-function v73Empty(icon,title,body,button=""){return `<div class="empty-state"><div class="emoji">${icon}</div><h3>${title}</h3><p class="muted">${body}</p>${button}</div>`}
-function v73SafePage(title,msg){const c=document.getElementById("content"); if(c)c.innerHTML=`<div class="card"><h2>${title}</h2><p class="muted">${msg}</p></div>`}
+/* ===== v7.4 feature layer preserving v6.7 ===== */
+function v74List(obj){return Object.entries(obj||{}).map(([id,v])=>({id,...v}))}
+function v74Arr(x){return Array.isArray(x)?x:[]}
+function v74Uid(){return currentUser&&currentUser.uid}
+function v74Today(){return typeof todayISO==="function"?todayISO():new Date().toISOString().slice(0,10)}
+function v74Money(x){return typeof money==="function"?money(x):"$"+Number(x||0).toFixed(2)}
+function v74Empty(icon,title,body,button=""){return `<div class="empty-state"><div class="emoji">${icon}</div><h3>${title}</h3><p class="muted">${body}</p>${button}</div>`}
+function v74Safe(title,msg){const c=document.getElementById("content"); if(c)c.innerHTML=`<div class="card"><h2>${title}</h2><p class="muted">${msg}</p></div>`}
 
-/* Safe aliases for old/new page names */
-function dashboardPage(){
-  try{
-    if(profile?.role==="admin"){
-      if(typeof adminDashboardPage==="function")return adminDashboardPage();
-      if(typeof adminOverview==="function")return adminOverview();
-      return v73SafePage("Admin Dashboard","Use the sidebar to manage Scheduled.");
-    }
-    if(profile?.role==="tutor"){
-      if(typeof tutorDashboardPage==="function")return tutorDashboardPage();
-      if(typeof schedulePage==="function")return schedulePage();
-      return v73SafePage("Tutor Dashboard","Use the sidebar to manage your sessions.");
-    }
-    if(typeof studentDashboardPage==="function")return studentDashboardPage();
-    return v73SafePage("Student Dashboard","Use the sidebar to book sessions and open My Scheduled.");
-  }catch(e){console.error(e);return v73SafePage("Dashboard","Use the sidebar to continue.");}
-}
-function announcementsPage(){
-  if(typeof tutorAnnouncementsPage==="function" && profile?.role==="tutor")return tutorAnnouncementsPage();
-  const anns=v73List(DATA.announcements||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  document.getElementById("content").innerHTML=`<div class="card"><h2>Announcements</h2>${anns.length?anns.map(a=>`<div class="announcement-card"><b>${a.title||"Announcement"}</b><p>${a.message||""}</p></div>`).join(""):v73Empty("📢","No announcements yet","Announcements will appear here.")}</div>`;
-}
-function publicTutorProfilesPage(){ if(typeof adminTutorProfilesPage==="function")return adminTutorProfilesPage(); if(typeof publicProfilesPage==="function")return publicProfilesPage(); return v73SafePage("Tutor Profiles","Public tutor profile management is available from the public profile section."); }
-function schedulePage(){ return typeof bookingsPage==="function" ? bookingsPage(false) : v73SafePage("Schedule","Your schedule will appear here."); }
-function exportPage(){ return typeof docsPage==="function" ? docsPage() : v73SafePage("Export","Exports are available in financial pages."); }
-
-/* Visibility controls */
 function tutorVisibleInApp(t){return t&&t.role==="tutor"&&!t.removed&&!t.hiddenFromBookings}
 function publicProfileVisible(p){return p&&!p.hiddenPublicProfile&&!p.hidden}
-async function toggleTutorBookingVisibility(tutorId){
-  if(profile.role!=="admin")return alert("Admin only.");
-  const t=user(tutorId)||{};
-  await db.ref("users/"+tutorId+"/hiddenFromBookings").set(!t.hiddenFromBookings);
-  await loadData();
-  if(typeof adminTutors==="function")adminTutors();
-}
-async function togglePublicProfileVisibility(profileId){
-  if(profile.role!=="admin")return alert("Admin only.");
-  const p=(DATA.publicTutors||{})[profileId]||{};
-  await db.ref("publicTutors/"+profileId+"/hiddenPublicProfile").set(!p.hiddenPublicProfile);
-  await loadData();
-  publicTutorProfilesPage();
-}
+async function toggleTutorBookingVisibility(tutorId){if(profile.role!=="admin")return alert("Admin only.");const t=user(tutorId)||{};await db.ref("users/"+tutorId+"/hiddenFromBookings").set(!t.hiddenFromBookings);await loadData();if(typeof adminTutors==="function")adminTutors()}
+async function togglePublicProfileVisibility(profileId){if(profile.role!=="admin")return alert("Admin only.");const p=(DATA.publicTutors||{})[profileId]||{};await db.ref("publicTutors/"+profileId+"/hiddenPublicProfile").set(!p.hiddenPublicProfile);await loadData();if(typeof publicTutorProfilesPage==="function")publicTutorProfilesPage()}
 
-/* Chat */
-function v73ChatPeople(){
-  if(profile.role==="student")return (typeof studentTutors==="function"?studentTutors(v73Uid()):[]).map(t=>({id:t.id,name:t.name||"Tutor",role:"Tutor"}));
-  if(profile.role==="tutor"){
-    const assigned=typeof assignedStudentsForTutor==="function"?assignedStudentsForTutor(v73Uid()):(typeof students==="function"?students().filter(s=>v73Arr(s.assignedTutorIds).includes(v73Uid())):[]);
-    return assigned.map(s=>({id:s.id,name:s.name||"Student",role:"Student"}));
-  }
-  return [];
-}
-function v73ChatId(a,b){return [a,b].sort().join("_")}
-function openChatPanel(){
-  const old=document.getElementById("chatPanel"); if(old){old.remove();return;}
-  const panel=document.createElement("div"); panel.id="chatPanel"; panel.className="chat-panel";
-  const people=v73ChatPeople();
-  panel.innerHTML=`<div class="section-title-row"><h2>Messages</h2><button class="ghost" onclick="openChatPanel()">Close</button></div>${people.length?people.map(p=>`<div class="chat-thread"><b>${p.name}</b><br><span class="muted">${p.role}</span><br><button onclick="openChatWith('${p.id}')">Open Chat</button></div>`).join(""):v73Empty("💬","No chats yet","Chats appear when students and tutors are assigned.")}`;
-  document.body.appendChild(panel);
-}
-function openChatWith(otherId){
-  const panel=document.getElementById("chatPanel"); if(!panel)return;
-  const cid=v73ChatId(v73Uid(),otherId), other=user(otherId)||{};
-  const msgs=v73List((DATA.chats||{})[cid]?.messages||{}).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
-  panel.innerHTML=`<div class="section-title-row"><h2>${other.name||"Chat"}</h2><button class="ghost" onclick="openChatPanel()">Back</button></div>${msgs.length?msgs.map(m=>`<div class="message-bubble ${m.from===v73Uid()?"me":"them"}">${m.text||""}<br><span class="muted small">${new Date(m.createdAt||Date.now()).toLocaleString()}</span></div>`).join(""):v73Empty("💬","Start the conversation","Send your first message inside Scheduled.")}<div class="row"><input id="chatInput" placeholder="Write a message..."><button onclick="sendChatMessage('${otherId}')">Send</button></div>`;
-}
-async function sendChatMessage(otherId){
-  const text=(document.getElementById("chatInput")?.value||"").trim(); if(!text)return;
-  const cid=v73ChatId(v73Uid(),otherId);
-  await db.ref("chats/"+cid+"/participants").set({[v73Uid()]:true,[otherId]:true});
-  await db.ref("chats/"+cid+"/messages").push({from:v73Uid(),to:otherId,text,createdAt:Date.now()});
-  await loadData(); openChatWith(otherId);
-}
-function injectChatButton(){
-  const old=document.getElementById("globalChatButton");
-  if(!profile||profile.role==="admin"){if(old)old.remove();return}
-  if(old)return;
-  const b=document.createElement("button"); b.id="globalChatButton"; b.className="chat-button"; b.type="button"; b.innerHTML="💬"; b.onclick=openChatPanel;
-  document.body.appendChild(b);
-}
+function v74ChatPeople(){if(profile.role==="student")return (typeof studentTutors==="function"?studentTutors(v74Uid()):[]).map(t=>({id:t.id,name:t.name||"Tutor",role:"Tutor"}));if(profile.role==="tutor"){const assigned=typeof assignedStudentsForTutor==="function"?assignedStudentsForTutor(v74Uid()):[];return assigned.map(s=>({id:s.id,name:s.name||"Student",role:"Student"}))}return []}
+function v74ChatId(a,b){return [a,b].sort().join("_")}
+function openChatPanel(){const old=document.getElementById("chatPanel");if(old){old.remove();return}const panel=document.createElement("div");panel.id="chatPanel";panel.className="chat-panel";const people=v74ChatPeople();panel.innerHTML=`<div class="section-title-row"><h2>Messages</h2><button class="ghost" onclick="openChatPanel()">Close</button></div>${people.length?people.map(p=>`<div class="chat-thread"><b>${p.name}</b><br><span class="muted">${p.role}</span><br><button onclick="openChatWith('${p.id}')">Open Chat</button></div>`).join(""):v74Empty("💬","No chats yet","Chats appear when students and tutors are assigned.")}`;document.body.appendChild(panel)}
+function openChatWith(otherId){const panel=document.getElementById("chatPanel");if(!panel)return;const cid=v74ChatId(v74Uid(),otherId),other=user(otherId)||{};const msgs=v74List((DATA.chats||{})[cid]?.messages||{}).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));panel.innerHTML=`<div class="section-title-row"><h2>${other.name||"Chat"}</h2><button class="ghost" onclick="openChatPanel()">Back</button></div>${msgs.length?msgs.map(m=>`<div class="message-bubble ${m.from===v74Uid()?"me":"them"}">${m.text||""}<br><span class="muted small">${new Date(m.createdAt||Date.now()).toLocaleString()}</span></div>`).join(""):v74Empty("💬","Start the conversation","Send your first message inside Scheduled.")}<div class="row"><input id="chatInput" placeholder="Write a message..."><button onclick="sendChatMessage('${otherId}')">Send</button></div>`}
+async function sendChatMessage(otherId){const text=(document.getElementById("chatInput")?.value||"").trim();if(!text)return;const cid=v74ChatId(v74Uid(),otherId);await db.ref("chats/"+cid+"/participants").set({[v74Uid()]:true,[otherId]:true});await db.ref("chats/"+cid+"/messages").push({from:v74Uid(),to:otherId,text,createdAt:Date.now()});await loadData();openChatWith(otherId)}
+function injectChatButton(){const old=document.getElementById("globalChatButton");if(!profile||profile.role==="admin"){if(old)old.remove();return}if(old)return;const b=document.createElement("button");b.id="globalChatButton";b.className="chat-button";b.type="button";b.innerHTML="💬";b.onclick=openChatPanel;document.body.appendChild(b)}
 
-/* My Scheduled */
-function v73StudentUpcoming(id=v73Uid()){return v73List(DATA.bookings||{}).filter(b=>b.studentId===id&&!b.done&&(b.date||"")>=v73Today()).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.start||"").localeCompare(b.start||""))}
-function v73StudentCompleted(id=v73Uid()){return v73List(DATA.bookings||{}).filter(b=>b.studentId===id&&b.done).length}
-function myTasks(){return v73List(DATA.tasks||{}).filter(t=>t.studentId===v73Uid()).sort((a,b)=>(a.done?1:0)-(b.done?1:0)||(a.dueDate||"9999").localeCompare(b.dueDate||"9999"))}
-async function addTask(){const title=(document.getElementById("taskTitle")?.value||"").trim(); if(!title)return alert("Write a task first."); await db.ref("tasks").push({studentId:v73Uid(),title,course:document.getElementById("taskCourse")?.value||"",dueDate:document.getElementById("taskDue")?.value||"",done:false,createdAt:Date.now()}); await loadData(); myScheduledPage();}
-async function toggleTask(id){const t=(DATA.tasks||{})[id]; if(!t)return; await db.ref("tasks/"+id+"/done").set(!t.done); await loadData(); myScheduledPage();}
-async function deleteTask(id){if(!confirm("Delete this task?"))return; await db.ref("tasks/"+id).remove(); await loadData(); myScheduledPage();}
-function myScheduledPage(){
-  const today=v73Today(), sessions=v73StudentUpcoming(), tasks=myTasks();
-  const todaySessions=sessions.filter(s=>s.date===today), todayTasks=tasks.filter(t=>!t.done&&(!t.dueDate||t.dueDate<=today));
-  document.getElementById("content").innerHTML=`<div class="dashboard-hero"><h2 class="student-welcome-line">My Scheduled</h2><p class="student-welcome-sub">Your sessions and study tasks in one place.</p></div>
-  <div class="card"><h2>Add a Task</h2><div class="row"><input id="taskTitle" placeholder="Review PHYS213 formulas"><input id="taskCourse" placeholder="Course"><input id="taskDue" type="date"><button onclick="addTask()">Add Task</button></div></div>
-  <div class="my-scheduled-grid"><div class="card"><h2>Today</h2>${todaySessions.map(b=>`<div class="planner-session"><b>${b.course||"Session"}</b><br>${typeof formatTime12==="function"?formatTime12(b.start):b.start} • ${(user(b.tutorId)||{}).name||""}</div>`).join("")}${todayTasks.map(t=>`<div class="task-item"><label class="check"><input type="checkbox" onchange="toggleTask('${t.id}')"> ${t.title}</label><br><span class="muted">${t.course||""} ${t.dueDate||""}</span></div>`).join("")||(!todaySessions.length?v73Empty("✨","Nothing urgent today","Perfect day to revise or plan ahead."):"")}</div><div class="card"><h2>Upcoming Sessions</h2>${sessions.length?sessions.map(b=>`<div class="planner-session"><b>${b.course||"Session"}</b><br>${b.date} • ${typeof formatTime12==="function"?formatTime12(b.start):b.start}<br>${(user(b.tutorId)||{}).name||""}</div>`).join(""):v73Empty("📅","No upcoming sessions","Book your next session when you're ready.")}</div><div class="card"><h2>Tasks</h2>${tasks.length?tasks.map(t=>`<div class="task-item ${t.done?"done":""}"><label class="check"><input type="checkbox" ${t.done?"checked":""} onchange="toggleTask('${t.id}')"> ${t.title}</label><br><span class="muted">${t.course||""} ${t.dueDate||""}</span><br><button class="ghost" onclick="deleteTask('${t.id}')">Delete</button></div>`).join(""):v73Empty("📝","No tasks yet","Add your first task to use Scheduled every day.")}</div></div>`;
-}
+function v74StudentUpcoming(id=v74Uid()){return v74List(DATA.bookings||{}).filter(b=>b.studentId===id&&!b.done&&(b.date||"")>=v74Today()).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.start||"").localeCompare(b.start||""))}
+function myTasks(){return v74List(DATA.tasks||{}).filter(t=>t.studentId===v74Uid()).sort((a,b)=>(a.done?1:0)-(b.done?1:0)||(a.dueDate||"9999").localeCompare(b.dueDate||"9999"))}
+async function addTask(){const title=(document.getElementById("taskTitle")?.value||"").trim();if(!title)return alert("Write a task first.");await db.ref("tasks").push({studentId:v74Uid(),title,course:document.getElementById("taskCourse")?.value||"",dueDate:document.getElementById("taskDue")?.value||"",done:false,createdAt:Date.now()});await loadData();myScheduledPage()}
+async function toggleTask(id){const t=(DATA.tasks||{})[id];if(!t)return;await db.ref("tasks/"+id+"/done").set(!t.done);await loadData();myScheduledPage()}
+async function deleteTask(id){if(!confirm("Delete this task?"))return;await db.ref("tasks/"+id).remove();await loadData();myScheduledPage()}
+function myScheduledPage(){const today=v74Today(),sessions=v74StudentUpcoming(),tasks=myTasks();const todaySessions=sessions.filter(s=>s.date===today),todayTasks=tasks.filter(t=>!t.done&&(!t.dueDate||t.dueDate<=today));document.getElementById("content").innerHTML=`<div class="dashboard-hero"><h2 class="student-welcome-line">My Scheduled</h2><p class="student-welcome-sub">Your sessions and study tasks in one place.</p></div><div class="card"><h2>Add a Task</h2><div class="row"><input id="taskTitle" placeholder="Review PHYS213 formulas"><input id="taskCourse" placeholder="Course"><input id="taskDue" type="date"><button onclick="addTask()">Add Task</button></div></div><div class="my-scheduled-grid"><div class="card"><h2>Today</h2>${todaySessions.map(b=>`<div class="planner-session"><b>${b.course||"Session"}</b><br>${typeof formatTime12==="function"?formatTime12(b.start):b.start} • ${(user(b.tutorId)||{}).name||""}</div>`).join("")}${todayTasks.map(t=>`<div class="task-item"><label class="check"><input type="checkbox" onchange="toggleTask('${t.id}')"> ${t.title}</label><br><span class="muted">${t.course||""} ${t.dueDate||""}</span></div>`).join("")||(!todaySessions.length?v74Empty("✨","Nothing urgent today","Perfect day to revise or plan ahead."):"")}</div><div class="card"><h2>Upcoming Sessions</h2>${sessions.length?sessions.map(b=>`<div class="planner-session"><b>${b.course||"Session"}</b><br>${b.date} • ${typeof formatTime12==="function"?formatTime12(b.start):b.start}<br>${(user(b.tutorId)||{}).name||""}</div>`).join(""):v74Empty("📅","No upcoming sessions","Book your next session when you're ready.")}</div><div class="card"><h2>Tasks</h2>${tasks.length?tasks.map(t=>`<div class="task-item ${t.done?"done":""}"><label class="check"><input type="checkbox" ${t.done?"checked":""} onchange="toggleTask('${t.id}')"> ${t.title}</label><br><span class="muted">${t.course||""} ${t.dueDate||""}</span><br><button class="ghost" onclick="deleteTask('${t.id}')">Delete</button></div>`).join(""):v74Empty("📝","No tasks yet","Add your first task to use Scheduled every day.")}</div></div>`}
 
-/* Achievements */
+function v74Completed(){return v74List(DATA.bookings||{}).filter(b=>b.studentId===v74Uid()&&b.done).length}
 function achievementDefs(){return [{id:"first_booking",icon:"🥇",title:"First Booking",target:1,metric:"bookings"},{id:"first_session",icon:"🎉",title:"First Completed Session",target:1,metric:"completed"},{id:"study_starter",icon:"📚",title:"Study Starter",target:10,metric:"completed"},{id:"semester_momentum",icon:"🎓",title:"Semester Momentum",target:20,metric:"completed"}]}
-function achievementMetric(d,id=v73Uid()){const b=v73List(DATA.bookings||{}).filter(x=>x.studentId===id); return d.metric==="bookings"?b.length:b.filter(x=>x.done).length}
-function nextAchievement(){for(const d of achievementDefs()){const val=achievementMetric(d); if(val<d.target)return {...d,value:val}} const d=achievementDefs().slice(-1)[0]; return {...d,value:d.target}}
-function achievementProgressCard(){const a=nextAchievement(), pct=Math.min(100,Math.round((a.value/a.target)*100)), left=Math.max(0,a.target-a.value); return `<div class="progress-card"><div class="section-title-row"><b>${a.icon} Next Achievement: ${a.title}</b><span>${a.value}/${a.target}</span></div><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><span class="muted">${left?`${left} more to unlock this badge.`:"Badge unlocked."}</span></div>`}
-function weeklyMonthlyGoals(){const c=v73StudentCompleted(), w=Math.min(2,c%3), m=Math.min(8,c%9); return `<div class="my-scheduled-grid"><div class="progress-card"><b>📅 Weekly Goal</b><div class="progress-track"><div class="progress-fill" style="width:${w/2*100}%"></div></div><span>${w}/2 sessions this week</span></div><div class="progress-card"><b>🗓 Monthly Goal</b><div class="progress-track"><div class="progress-fill" style="width:${m/8*100}%"></div></div><span>${m}/8 sessions this month</span></div></div>`}
+function achievementMetric(d){const b=v74List(DATA.bookings||{}).filter(x=>x.studentId===v74Uid());return d.metric==="bookings"?b.length:b.filter(x=>x.done).length}
+function nextAchievement(){for(const d of achievementDefs()){const val=achievementMetric(d);if(val<d.target)return {...d,value:val}}const d=achievementDefs().slice(-1)[0];return {...d,value:d.target}}
+function achievementProgressCard(){const a=nextAchievement(),pct=Math.min(100,Math.round((a.value/a.target)*100)),left=Math.max(0,a.target-a.value);return `<div class="progress-card"><div class="section-title-row"><b>${a.icon} Next Achievement: ${a.title}</b><span>${a.value}/${a.target}</span></div><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><span class="muted">${left?`${left} more to unlock this badge.`:"Badge unlocked."}</span></div>`}
+function weeklyMonthlyGoals(){const c=v74Completed(),w=Math.min(2,c%3),m=Math.min(8,c%9);return `<div class="my-scheduled-grid"><div class="progress-card"><b>📅 Weekly Goal</b><div class="progress-track"><div class="progress-fill" style="width:${w/2*100}%"></div></div><span>${w}/2 sessions this week</span></div><div class="progress-card"><b>🗓 Monthly Goal</b><div class="progress-track"><div class="progress-fill" style="width:${m/8*100}%"></div></div><span>${m}/8 sessions this month</span></div></div>`}
 function runConfetti(){const colors=["#69B1DC","#B7DDFC","#22C55E","#F59E0B","#F472B6"];for(let i=0;i<70;i++){const p=document.createElement("div");p.className="confetti-piece";p.style.left=Math.random()*100+"vw";p.style.top="-20px";p.style.background=colors[Math.floor(Math.random()*colors.length)];p.style.animationDelay=(Math.random()*.35)+"s";document.body.appendChild(p);setTimeout(()=>p.remove(),2300)}}
 function showBadgeUnlock(icon="🏅",title="Badge Unlocked",text="You reached a new milestone."){runConfetti();const w=document.createElement("div");w.className="badge-unlock";w.innerHTML=`<div class="badge-unlock-card"><div class="badge-medal">${icon}</div><h2>${title}</h2><p>${text}</p></div>`;document.body.appendChild(w);setTimeout(()=>w.remove(),2600)}
-async function checkMilestonesAfterBooking(){if(profile.role!=="student")return;const earned=(DATA.achievements||{})[v73Uid()]||{};for(const d of achievementDefs()){const v=achievementMetric(d);if(v>=d.target&&!earned[d.id]){await db.ref("achievements/"+v73Uid()+"/"+d.id).set({earnedAt:Date.now(),title:d.title,icon:d.icon});showBadgeUnlock(d.icon,d.title,`You unlocked ${d.title}.`);await loadData();break}}}
-function achievementsPage(){const earned=(DATA.achievements||{})[v73Uid()]||{};document.getElementById("content").innerHTML=`<div class="card"><h2>Achievements</h2>${achievementProgressCard()}<div class="my-scheduled-grid">${achievementDefs().map(d=>{const ok=earned[d.id]||achievementMetric(d)>=d.target;return `<div class="kpi-card" style="${ok?"":"opacity:.45"}"><div class="kpi-value">${d.icon}</div><b>${d.title}</b><br><span class="muted">${Math.min(achievementMetric(d),d.target)}/${d.target}</span></div>`}).join("")}</div></div>`}
-function semesterInNumbersPage(){const b=v73List(DATA.bookings||{}).filter(x=>x.studentId===v73Uid());document.getElementById("content").innerHTML=`<div class="card"><h2>✨ This Semester in Numbers</h2><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Sessions Completed</div><div class="kpi-value">${b.filter(x=>x.done).length}</div></div><div class="kpi-card"><div class="kpi-label">Hours Studied</div><div class="kpi-value">${typeof totalHours==="function"?totalHours(b):b.reduce((s,x)=>s+Number(x.duration||0),0)}</div></div><div class="kpi-card"><div class="kpi-label">Tutors</div><div class="kpi-value">${typeof studentTutors==="function"?studentTutors(v73Uid()).length:0}</div></div><div class="kpi-card"><div class="kpi-label">Badges</div><div class="kpi-value">${Object.keys((DATA.achievements||{})[v73Uid()]||{}).length}</div></div></div></div>`}
+async function checkMilestonesAfterBooking(){if(profile.role!=="student")return;const earned=(DATA.achievements||{})[v74Uid()]||{};for(const d of achievementDefs()){const v=achievementMetric(d);if(v>=d.target&&!earned[d.id]){await db.ref("achievements/"+v74Uid()+"/"+d.id).set({earnedAt:Date.now(),title:d.title,icon:d.icon});showBadgeUnlock(d.icon,d.title,`You unlocked ${d.title}.`);await loadData();break}}}
+function achievementsPage(){const earned=(DATA.achievements||{})[v74Uid()]||{};document.getElementById("content").innerHTML=`<div class="card"><h2>Achievements</h2>${achievementProgressCard()}<div class="my-scheduled-grid">${achievementDefs().map(d=>{const ok=earned[d.id]||achievementMetric(d)>=d.target;return `<div class="kpi-card" style="${ok?"":"opacity:.45"}"><div class="kpi-value">${d.icon}</div><b>${d.title}</b><br><span class="muted">${Math.min(achievementMetric(d),d.target)}/${d.target}</span></div>`}).join("")}</div></div>`}
+function semesterInNumbersPage(){const b=v74List(DATA.bookings||{}).filter(x=>x.studentId===v74Uid());document.getElementById("content").innerHTML=`<div class="card"><h2>✨ This Semester in Numbers</h2><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Sessions Completed</div><div class="kpi-value">${b.filter(x=>x.done).length}</div></div><div class="kpi-card"><div class="kpi-label">Hours Studied</div><div class="kpi-value">${typeof totalHours==="function"?totalHours(b):b.reduce((s,x)=>s+Number(x.duration||0),0)}</div></div><div class="kpi-card"><div class="kpi-label">Tutors</div><div class="kpi-value">${typeof studentTutors==="function"?studentTutors(v74Uid()).length:0}</div></div><div class="kpi-card"><div class="kpi-label">Badges</div><div class="kpi-value">${Object.keys((DATA.achievements||{})[v74Uid()]||{}).length}</div></div></div></div>`}
 
-/* Groups/Semesters */
-function v73ActiveGroups(){return v73List(DATA.groups||{}).filter(g=>!g.archived)}
-function v73ActiveSemesters(){return v73List(DATA.semesters||{}).filter(s=>!s.archived)}
+function v74ActiveGroups(){return v74List(DATA.groups||{}).filter(g=>!g.archived)}
+function v74ActiveSemesters(){return v74List(DATA.semesters||{}).filter(s=>!s.archived)}
 async function createSemester(){if(profile.role!=="admin")return alert("Admin only.");const name=(document.getElementById("semName")?.value||"").trim();if(!name)return alert("Semester name required.");await db.ref("semesters").push({name,archived:false,createdAt:Date.now()});await loadData();groupsPage()}
-async function createGroup(){if(profile.role!=="admin"&&profile.role!=="tutor")return alert("Admin/tutor only.");const name=(document.getElementById("groupName")?.value||"").trim(),course=(document.getElementById("groupCourse")?.value||"").trim(),capacity=Number(document.getElementById("groupCapacity")?.value||0),tutorId=profile.role==="tutor"?v73Uid():(document.getElementById("groupTutor")?.value||""),semesterId=document.getElementById("groupSemester")?.value||"",members=(document.getElementById("groupMembers")?.value||"").split(",").map(x=>x.trim()).filter(Boolean);if(!name||!course||!capacity||!tutorId)return alert("Fill group name, course, tutor, and capacity.");if(members.length>capacity)return alert("Number of students exceeds capacity.");await db.ref("groups").push({name,course,capacity,tutorId,semesterId,members,archived:false,createdAt:Date.now(),createdBy:v73Uid()});await loadData();groupsPage()}
+async function createGroup(){if(profile.role!=="admin"&&profile.role!=="tutor")return alert("Admin/tutor only.");const name=(document.getElementById("groupName")?.value||"").trim(),course=(document.getElementById("groupCourse")?.value||"").trim(),capacity=Number(document.getElementById("groupCapacity")?.value||0),tutorId=profile.role==="tutor"?v74Uid():(document.getElementById("groupTutor")?.value||""),semesterId=document.getElementById("groupSemester")?.value||"",members=(document.getElementById("groupMembers")?.value||"").split(",").map(x=>x.trim()).filter(Boolean);if(!name||!course||!capacity||!tutorId)return alert("Fill group name, course, tutor, and capacity.");if(members.length>capacity)return alert("Number of students exceeds capacity.");await db.ref("groups").push({name,course,capacity,tutorId,semesterId,members,archived:false,createdAt:Date.now(),createdBy:v74Uid()});await loadData();groupsPage()}
 async function archiveGroup(id){if(!confirm("Archive this group?"))return;await db.ref("groups/"+id+"/archived").set(true);await loadData();groupsPage()}
-function groupsPage(){const canEdit=profile.role==="admin"||profile.role==="tutor", semesters=v73ActiveSemesters(), groups=v73ActiveGroups().filter(g=>profile.role==="admin"||g.tutorId===v73Uid());document.getElementById("content").innerHTML=`<div class="card"><h2>Groups & Semesters</h2>${profile.role==="admin"?`<h3>Create Semester</h3><div class="row"><input id="semName" placeholder="Fall 2026"><button onclick="createSemester()">Create Semester</button></div>`:""}${canEdit?`<hr><h3>Create Group</h3><div class="row"><input id="groupName" placeholder="Group name"><input id="groupCourse" placeholder="Course">${profile.role==="admin"?`<select id="groupTutor">${(typeof tutors==="function"?tutors():[]).map(t=>`<option value="${t.id}">${t.name}</option>`).join("")}</select>`:""}<select id="groupSemester"><option value="">No semester</option>${semesters.map(s=>`<option value="${s.id}">${s.name}</option>`).join("")}</select><input id="groupCapacity" type="number" placeholder="Capacity"></div><textarea id="groupMembers" placeholder="Student names, separated by commas"></textarea><button onclick="createGroup()">Create Group</button>`:""}</div><div class="card"><h2>Active Groups</h2>${groups.length?groups.map(g=>`<div class="group-card"><div class="section-title-row"><h3>${g.name}</h3><span class="status-badge ${v73Arr(g.members).length>=Number(g.capacity)?"red":"green"}">${v73Arr(g.members).length}/${g.capacity} seats</span></div><p><b>Course:</b> ${g.course}<br><b>Tutor:</b> ${(user(g.tutorId)||{}).name||""}<br><b>Semester:</b> ${(DATA.semesters||{})[g.semesterId]?.name||"None"}</p><b>Members</b>${v73Arr(g.members).map(m=>`<div class="group-member-row">${m}</div>`).join("")||"<p class='muted'>No members listed.</p>"}${canEdit?`<button class="danger" onclick="archiveGroup('${g.id}')">Archive Group</button>`:""}</div>`).join(""):v73Empty("👥","No groups yet","Create your first group to organize semester sessions and payments.")}</div>`}
+function groupsPage(){const canEdit=profile.role==="admin"||profile.role==="tutor",semesters=v74ActiveSemesters(),groups=v74ActiveGroups().filter(g=>profile.role==="admin"||g.tutorId===v74Uid());document.getElementById("content").innerHTML=`<div class="card"><h2>Groups & Semesters</h2>${profile.role==="admin"?`<h3>Create Semester</h3><div class="row"><input id="semName" placeholder="Fall 2026"><button onclick="createSemester()">Create Semester</button></div>`:""}${canEdit?`<hr><h3>Create Group</h3><div class="row"><input id="groupName" placeholder="Group name"><input id="groupCourse" placeholder="Course">${profile.role==="admin"?`<select id="groupTutor">${(typeof tutors==="function"?tutors():[]).map(t=>`<option value="${t.id}">${t.name}</option>`).join("")}</select>`:""}<select id="groupSemester"><option value="">No semester</option>${semesters.map(s=>`<option value="${s.id}">${s.name}</option>`).join("")}</select><input id="groupCapacity" type="number" placeholder="Capacity"></div><textarea id="groupMembers" placeholder="Student names, separated by commas"></textarea><button onclick="createGroup()">Create Group</button>`:""}</div><div class="card"><h2>Active Groups</h2>${groups.length?groups.map(g=>`<div class="group-card"><div class="section-title-row"><h3>${g.name}</h3><span class="status-badge ${v74Arr(g.members).length>=Number(g.capacity)?"red":"green"}">${v74Arr(g.members).length}/${g.capacity} seats</span></div><p><b>Course:</b> ${g.course}<br><b>Tutor:</b> ${(user(g.tutorId)||{}).name||""}<br><b>Semester:</b> ${(DATA.semesters||{})[g.semesterId]?.name||"None"}</p><b>Members</b>${v74Arr(g.members).map(m=>`<div class="group-member-row">${m}</div>`).join("")||"<p class='muted'>No members listed.</p>"}${canEdit?`<button class="danger" onclick="archiveGroup('${g.id}')">Archive Group</button>`:""}</div>`).join(""):v74Empty("👥","No groups yet","Create your first group to organize semester sessions and payments.")}</div>`}
 
-/* Tutor direct scheduling */
-function tutorScheduleGroupOrStudentPage(){if(profile.role!=="tutor")return;const assigned=typeof assignedStudentsForTutor==="function"?assignedStudentsForTutor(v73Uid()):[],groups=v73ActiveGroups().filter(g=>g.tutorId===v73Uid());window.__schedAssigned=assigned;window.__schedGroups=groups;document.getElementById("content").innerHTML=`<div class="card"><h2>Schedule Session</h2><p class="muted">Schedule an individual or group session directly inside Scheduled.</p><label>Session Type</label><select id="schedType" onchange="renderScheduleTargetFields()"><option value="individual">Individual Student</option><option value="group">Group Session</option></select><div id="scheduleTargetFields"></div><div class="row"><input id="schedCourse" placeholder="Course"><input id="schedDate" type="date" value="${v73Today()}"><input id="schedTime" type="time"><select id="schedDuration"><option value="1">1 hour</option><option value="1.5">1.5 hours</option><option value="2">2 hours</option><option value="3">3 hours</option></select><select id="schedPayStatus"><option>Unpaid</option><option>Paid</option></select><select id="schedPayMethod"><option>Cash</option><option>Whish</option></select></div><button onclick="createTutorDirectSession()">Create Session</button></div>`;renderScheduleTargetFields()}
-function renderScheduleTargetFields(){const type=document.getElementById("schedType")?.value||"individual",box=document.getElementById("scheduleTargetFields");if(!box)return;if(type==="group"){const groups=window.__schedGroups||[];box.innerHTML=`<label>Group</label><select id="schedGroup">${groups.map(g=>`<option value="${g.id}">${g.name} (${v73Arr(g.members).length}/${g.capacity})</option>`).join("")}</select><div class="row"><input id="schedGroupCount" type="number" placeholder="Number of students"><input id="schedGroupNames" placeholder="Student names, comma separated"></div>`}else{const ss=window.__schedAssigned||[];box.innerHTML=`<label>Student</label><select id="schedStudent">${ss.map(s=>`<option value="${s.id}">${s.name}</option>`).join("")}</select>`}}
-async function createTutorDirectSession(){const type=document.getElementById("schedType")?.value||"individual",course=(document.getElementById("schedCourse")?.value||"").trim(),date=document.getElementById("schedDate")?.value,start=document.getElementById("schedTime")?.value,duration=Number(document.getElementById("schedDuration")?.value||1),payStatus=document.getElementById("schedPayStatus")?.value||"Unpaid",payMethod=document.getElementById("schedPayMethod")?.value||"Cash";if(!course||!date||!start)return alert("Fill course, date, and time.");let booking={tutorId:v73Uid(),course,date,start,duration,paymentMethod:payMethod,status:"confirmed",done:false,createdAt:Date.now(),createdBy:v73Uid(),createdByRole:"tutor",tutorScheduled:true};if(type==="group"){const group=(DATA.groups||{})[document.getElementById("schedGroup")?.value];if(!group)return alert("Choose a group.");const count=Number(document.getElementById("schedGroupCount")?.value||0),names=(document.getElementById("schedGroupNames")?.value||"").split(",").map(x=>x.trim()).filter(Boolean);if(!count||!names.length)return alert("Add number of students and names.");if(count>Number(group.capacity||0))return alert("This exceeds the group capacity.");booking.groupId=group.id;booking.groupName=group.name;booking.groupStudentCount=count;booking.groupStudentNames=names;booking.studentId="";booking.payments=names.map(n=>({name:n,amount:Number(profile.rate||0)*duration,paid:payStatus==="Paid",method:payMethod,paymentDate:payStatus==="Paid"?v73Today():""}))}else{const studentId=document.getElementById("schedStudent")?.value;if(!studentId)return alert("Choose a student.");booking.studentId=studentId;booking.payments=[{name:(user(studentId)||{}).name||"Student",amount:Number(profile.rate||0)*duration,paid:payStatus==="Paid",method:payMethod,paymentDate:payStatus==="Paid"?v73Today():""}]}await db.ref("bookings").push(booking);alert("Session created.");await loadData();tutorScheduleGroupOrStudentPage()}
+function tutorScheduleGroupOrStudentPage(){if(profile.role!=="tutor")return;const assigned=typeof assignedStudentsForTutor==="function"?assignedStudentsForTutor(v74Uid()):[],groups=v74ActiveGroups().filter(g=>g.tutorId===v74Uid());window.__schedAssigned=assigned;window.__schedGroups=groups;document.getElementById("content").innerHTML=`<div class="card"><h2>Schedule Session</h2><p class="muted">Schedule an individual or group session directly inside Scheduled.</p><label>Session Type</label><select id="schedType" onchange="renderScheduleTargetFields()"><option value="individual">Individual Student</option><option value="group">Group Session</option></select><div id="scheduleTargetFields"></div><div class="row"><input id="schedCourse" placeholder="Course"><input id="schedDate" type="date" value="${v74Today()}"><input id="schedTime" type="time"><select id="schedDuration"><option value="1">1 hour</option><option value="1.5">1.5 hours</option><option value="2">2 hours</option><option value="3">3 hours</option></select><select id="schedPayStatus"><option>Unpaid</option><option>Paid</option></select><select id="schedPayMethod"><option>Cash</option><option>Whish</option></select></div><button onclick="createTutorDirectSession()">Create Session</button></div>`;renderScheduleTargetFields()}
+function renderScheduleTargetFields(){const type=document.getElementById("schedType")?.value||"individual",box=document.getElementById("scheduleTargetFields");if(!box)return;if(type==="group"){const groups=window.__schedGroups||[];box.innerHTML=`<label>Group</label><select id="schedGroup">${groups.map(g=>`<option value="${g.id}">${g.name} (${v74Arr(g.members).length}/${g.capacity})</option>`).join("")}</select><div class="row"><input id="schedGroupCount" type="number" placeholder="Number of students"><input id="schedGroupNames" placeholder="Student names, comma separated"></div>`}else{const ss=window.__schedAssigned||[];box.innerHTML=`<label>Student</label><select id="schedStudent">${ss.map(s=>`<option value="${s.id}">${s.name}</option>`).join("")}</select>`}}
+async function createTutorDirectSession(){const type=document.getElementById("schedType")?.value||"individual",course=(document.getElementById("schedCourse")?.value||"").trim(),date=document.getElementById("schedDate")?.value,start=document.getElementById("schedTime")?.value,duration=Number(document.getElementById("schedDuration")?.value||1),payStatus=document.getElementById("schedPayStatus")?.value||"Unpaid",payMethod=document.getElementById("schedPayMethod")?.value||"Cash";if(!course||!date||!start)return alert("Fill course, date, and time.");let booking={tutorId:v74Uid(),course,date,start,duration,paymentMethod:payMethod,status:"confirmed",done:false,createdAt:Date.now(),createdBy:v74Uid(),createdByRole:"tutor",tutorScheduled:true};if(type==="group"){const group=(DATA.groups||{})[document.getElementById("schedGroup")?.value];if(!group)return alert("Choose a group.");const count=Number(document.getElementById("schedGroupCount")?.value||0),names=(document.getElementById("schedGroupNames")?.value||"").split(",").map(x=>x.trim()).filter(Boolean);if(!count||!names.length)return alert("Add number of students and names.");if(count>Number(group.capacity||0))return alert("This exceeds the group capacity.");booking.groupId=group.id;booking.groupName=group.name;booking.groupStudentCount=count;booking.groupStudentNames=names;booking.studentId="";booking.payments=names.map(n=>({name:n,amount:Number(profile.rate||0)*duration,paid:payStatus==="Paid",method:payMethod,paymentDate:payStatus==="Paid"?v74Today():""}))}else{const studentId=document.getElementById("schedStudent")?.value;if(!studentId)return alert("Choose a student.");booking.studentId=studentId;booking.payments=[{name:(user(studentId)||{}).name||"Student",amount:Number(profile.rate||0)*duration,paid:payStatus==="Paid",method:payMethod,paymentDate:payStatus==="Paid"?v74Today():""}]}await db.ref("bookings").push(booking);alert("Session created.");await loadData();tutorScheduleGroupOrStudentPage()}
 
-/* Command center & exports */
-function commandCenterPage(){if(profile.role!=="admin")return dashboardPage();const today=v73Today(),bs=v73List(DATA.bookings||{}),req=v73List(DATA.accessRequests||{}).filter(r=>(r.status||"pending")==="pending"),unpaidAmt=typeof unpaid==="function"?unpaid(bs):0;document.getElementById("content").innerHTML=`<div class="dashboard-hero"><h2>Command Center</h2><p class="student-welcome-sub">Your daily operations hub.</p></div><div class="command-grid"><div class="kpi-card"><div class="kpi-label">Today's Sessions</div><div class="kpi-value">${bs.filter(b=>b.date===today).length}</div></div><div class="kpi-card"><div class="kpi-label">Pending Requests</div><div class="kpi-value">${req.length}</div></div><div class="kpi-card"><div class="kpi-label">Active Groups</div><div class="kpi-value">${v73ActiveGroups().length}</div></div><div class="kpi-card"><div class="kpi-label">Unpaid Amount</div><div class="kpi-value">${v73Money(unpaidAmt)}</div></div></div><div class="card"><h2>Needs Attention</h2>${req.length?req.slice(0,5).map(r=>`<div class="timeline-item"><b>Access Request</b><br>${r.name||""} • ${r.email||""}</div>`).join(""):v73Empty("✅","All clear","No urgent admin items right now.")}</div>`}
+function commandCenterPage(){if(profile.role!=="admin")return dashboardPage();const today=v74Today(),bs=v74List(DATA.bookings||{}),req=v74List(DATA.accessRequests||{}).filter(r=>(r.status||"pending")==="pending"),unpaidAmt=typeof unpaid==="function"?unpaid(bs):0;document.getElementById("content").innerHTML=`<div class="dashboard-hero"><h2>Command Center</h2><p class="student-welcome-sub">Your daily operations hub.</p></div><div class="command-grid"><div class="kpi-card"><div class="kpi-label">Today's Sessions</div><div class="kpi-value">${bs.filter(b=>b.date===today).length}</div></div><div class="kpi-card"><div class="kpi-label">Pending Requests</div><div class="kpi-value">${req.length}</div></div><div class="kpi-card"><div class="kpi-label">Active Groups</div><div class="kpi-value">${v74ActiveGroups().length}</div></div><div class="kpi-card"><div class="kpi-label">Unpaid Amount</div><div class="kpi-value">${v74Money(unpaidAmt)}</div></div></div><div class="card"><h2>Needs Attention</h2>${req.length?req.slice(0,5).map(r=>`<div class="timeline-item"><b>Access Request</b><br>${r.name||""} • ${r.email||""}</div>`).join(""):v74Empty("✅","All clear","No urgent admin items right now.")}</div>`}
 function printCurrentPage(){window.print()}
-function exportFinancialExcel(){if(typeof exportTutorBookingsCSV==="function")return exportTutorBookingsCSV(profile.role==="tutor"?v73Uid():undefined,"");alert("CSV export is available from financial reports.")}
+function exportFinancialExcel(){if(typeof exportTutorBookingsCSV==="function")return exportTutorBookingsCSV(profile.role==="tutor"?v74Uid():undefined,"");alert("CSV export is available from financial reports.")}
 function exportFinancialPDF(){alert("Use Print, then choose Save as PDF.");window.print()}
 
-
-function renderTabs(){
-  let tabs=[];
-  if(profile.role==="admin")tabs=["Dashboard","Command Center","Tutors","Tutor Profiles","Students","Groups","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"];
-  else if(profile.role==="tutor")tabs=["Dashboard","Calendar","Schedule Session","Groups","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"];
-  else tabs=["Dashboard","My Scheduled","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Achievements","Semester Recap","Reviews","Announcements","Documents","Student Profile","Profile"];
-  const box=document.getElementById("tabs");
-  if(!box)return;
-  box.innerHTML=tabs.map((t,i)=>`<button type="button" class="${i===0?'active':''}" onclick="openTab('${t}',this)">${t}</button>`).join("");
-  openTab(tabs[0],box.querySelector("button"));
-}
-
-
+function renderTabs(){let t=profile.role==="admin"?["Dashboard","Command Center","Tutors","Tutor Profiles","Students","Groups","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Groups","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","My Scheduled","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Achievements","Semester Recap","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button type="button" class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 
 async function openTab(tab,btn){
   try{
@@ -1073,122 +995,47 @@ async function openTab(tab,btn){
     if(typeof closeMenu==="function")setTimeout(closeMenu,0);
     document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
     if(btn)btn.classList.add("active");
-    const routeNames={
-      "Dashboard":"dashboardPage",
-      "Command Center":"commandCenterPage",
-      "Tutors":"adminTutors",
-      "Tutor Profiles":"publicTutorProfilesPage",
-      "Students":"adminStudents",
-      "Groups":"groupsPage",
-      "Courses":"adminCourses",
-      "Access Requests":"accessRequestsPage",
-      "Calendar":"calendarPage",
-      "Payments":"financialPage",
-      "Tutor Reports":"adminTutorReportsPage",
-      "Announcements":"announcementsPage",
-      "Motivation Banner":"motivationBannerSettingsPage",
-      "Documents":"docsPage",
-      "Export":"exportPage",
-      "Schedule Session":"tutorScheduleGroupOrStudentPage",
-      "Availability":"availabilityPage",
-      "Schedule":"schedulePage",
-      "My Students":"myStudentsPage",
-      "Statistics":"statsPage",
-      "Reviews":"reviewsPage",
-      "Profile":"profilePage",
-      "My Scheduled":"myScheduledPage",
-      "Book":"bookingPage",
-      "Emergency":"emergencySessionsPage",
-      "All Tutors":"allTutorsPage",
-      "My Tutors":"myTutorsPage",
-      "Favorites":"favoritesPage",
-      "Achievements":"achievementsPage",
-      "Semester Recap":"semesterInNumbersPage",
-      "Student Profile":"studentProfilePage"
-    };
-    if(tab==="Bookings"||tab==="My Sessions"){
-      if(typeof bookingsPage==="function")return bookingsPage(tab==="Bookings");
-    }
-    const fnName=routeNames[tab];
-    const fn=window[fnName];
-    if(typeof fn==="function")return fn();
-    return v73SafePage(tab,"This section is not available yet.");
+    if(tab==="Dashboard")return typeof dashboardPage==="function"?dashboardPage():v74Safe("Dashboard","Use the sidebar to continue.");
+    if(tab==="Command Center")return commandCenterPage();
+    if(tab==="Tutors")return typeof adminTutors==="function"?adminTutors():v74Safe("Tutors","Coming soon.");
+    if(tab==="Tutor Profiles")return typeof publicTutorProfilesPage==="function"?publicTutorProfilesPage():v74Safe("Tutor Profiles","Coming soon.");
+    if(tab==="Students")return typeof adminStudents==="function"?adminStudents():v74Safe("Students","Coming soon.");
+    if(tab==="Groups")return groupsPage();
+    if(tab==="Courses")return typeof adminCourses==="function"?adminCourses():v74Safe("Courses","Coming soon.");
+    if(tab==="Access Requests")return typeof accessRequestsPage==="function"?accessRequestsPage():v74Safe("Access Requests","Coming soon.");
+    if(tab==="Calendar")return typeof calendarPage==="function"?calendarPage():v74Safe("Calendar","Coming soon.");
+    if(tab==="Bookings")return typeof bookingsPage==="function"?bookingsPage(true):v74Safe("Bookings","Coming soon.");
+    if(tab==="Payments")return typeof financialPage==="function"?financialPage():v74Safe("Payments","Coming soon.");
+    if(tab==="Tutor Reports")return typeof adminTutorReportsPage==="function"?adminTutorReportsPage():v74Safe("Tutor Reports","Coming soon.");
+    if(tab==="Announcements"){if(profile.role==="tutor"&&typeof tutorAnnouncementsPage==="function")return tutorAnnouncementsPage();if(typeof announcementsPage==="function")return announcementsPage();return v74Safe("Announcements","No announcements yet.");}
+    if(tab==="Motivation Banner")return typeof motivationBannerSettingsPage==="function"?motivationBannerSettingsPage():v74Safe("Motivation Banner","Coming soon.");
+    if(tab==="Documents")return typeof docsPage==="function"?docsPage():v74Safe("Documents","Coming soon.");
+    if(tab==="Export")return typeof exportPage==="function"?exportPage():v74Safe("Export","Exports are available in financial pages.");
+    if(tab==="Schedule Session"){if(typeof tutorScheduleGroupOrStudentPage==="function")return tutorScheduleGroupOrStudentPage();if(typeof tutorScheduleSessionPage==="function")return tutorScheduleSessionPage();return v74Safe("Schedule Session","Coming soon.");}
+    if(tab==="Availability")return typeof availabilityPage==="function"?availabilityPage():v74Safe("Availability","Coming soon.");
+    if(tab==="Schedule")return typeof schedulePage==="function"?schedulePage():v74Safe("Schedule","Coming soon.");
+    if(tab==="My Students")return typeof myStudentsPage==="function"?myStudentsPage():v74Safe("My Students","Coming soon.");
+    if(tab==="Statistics")return typeof statsPage==="function"?statsPage():v74Safe("Statistics","Coming soon.");
+    if(tab==="Reviews")return typeof reviewsPage==="function"?reviewsPage():v74Safe("Reviews","Coming soon.");
+    if(tab==="Profile")return typeof profilePage==="function"?profilePage():v74Safe("Profile","Coming soon.");
+    if(tab==="My Scheduled")return myScheduledPage();
+    if(tab==="Book")return typeof bookingPage==="function"?bookingPage():v74Safe("Book","Coming soon.");
+    if(tab==="Emergency")return typeof emergencySessionsPage==="function"?emergencySessionsPage():v74Safe("Emergency","Coming soon.");
+    if(tab==="All Tutors")return typeof allTutorsPage==="function"?allTutorsPage():v74Safe("All Tutors","Coming soon.");
+    if(tab==="My Tutors")return typeof myTutorsPage==="function"?myTutorsPage():v74Safe("My Tutors","Coming soon.");
+    if(tab==="Favorites")return typeof favoritesPage==="function"?favoritesPage():v74Safe("Favorites","Coming soon.");
+    if(tab==="My Sessions")return typeof bookingsPage==="function"?bookingsPage(false):v74Safe("My Sessions","Coming soon.");
+    if(tab==="Achievements")return achievementsPage();
+    if(tab==="Semester Recap")return semesterInNumbersPage();
+    if(tab==="Student Profile")return typeof studentProfilePage==="function"?studentProfilePage():v74Safe("Student Profile","Coming soon.");
+    return v74Safe(tab,"Coming soon.");
   }catch(e){
-    console.error("openTab error",e);
-    const c=document.getElementById("content");
+    console.error(e);
+    const c=$("content");
     if(c)c.innerHTML=`<div class="card"><h2>Website error</h2><p class="muted">${String(e.message||e)}</p><button onclick="location.reload()">Reload</button></div>`;
   }
 }
 
-
-
-function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}
-
-function adminTutors(){
-  const ts=tutors();
-  $("content").innerHTML=`<div class="card"><h2>Booking Tutor Accounts</h2>
-  <p class="admin-note"><b>This tab creates real booking tutor accounts.</b> If the email already exists in Firebase, Scheduled prepares the tutor profile by email and links it automatically when they log in with that same email/password. Public profile photos/descriptions are separate in Tutor Profiles.</p>
-  ${ts.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>University</th><th>Rate</th><th>WhatsApp</th><th>Courses</th><th>Actions</th></tr>${ts.map(t=>`<tr><td>${t.name||""}</td><td>${t.email||""}</td><td>${t.university||""}</td><td>${money(t.rate)}/h/person</td><td>${t.whatsapp||""}</td><td>${(t.courses||[]).join(", ")}</td><td><button onclick="editTutor('${t.id}')">Edit</button><button onclick="toggleTutorBookingVisibility('${t.id}')">${t.hiddenFromBookings?"Show in Booking":"Hide from Booking"}</button><button class="danger" onclick="deleteTutor('${t.id}')">Remove Access</button></td></tr>`).join("")}</table>`:`<p class="muted">No booking tutor accounts yet.</p>`}
-  <hr><h3>Create Booking Tutor Account</h3>
-  <div class="row">
-    <input id="tn" placeholder="Full name">
-    <input id="te" type="email" placeholder="Email">
-    <input id="tp" placeholder="Temporary password">
-    <input id="tw" placeholder="WhatsApp e.g. 96176174738">
-    <input id="tr" type="number" placeholder="Hourly rate">
-    <input id="tuiv" placeholder="University e.g. University of Balamand">
-  </div>
-  <input id="tl" placeholder="General locations: Online, On Campus (Koura Campus)">
-  <button onclick="createAccount('tutor')">Create / Link Booking Tutor</button></div>`;
-}
-async function editTutor(id){
-  const t=DATA.users[id];if(!t)return alert("Tutor not found.");
-  const name=prompt("Tutor full name:",t.name||"");if(name===null)return;
-  const university=prompt("University:",t.university||"");if(university===null)return;
-  const rate=prompt("Hourly rate:",t.rate||15);if(rate===null)return;
-  const whatsapp=prompt("WhatsApp number:",t.whatsapp||"");if(whatsapp===null)return;
-  const coursesText=prompt("Courses, comma separated:",(t.courses||[]).join(", "));if(coursesText===null)return;
-  const locationsText=prompt("General locations, comma separated:",(t.locations||[]).join(", "));if(locationsText===null)return;
-  const photoUrl=prompt("Profile picture URL:",t.photoUrl||"");if(photoUrl===null)return;
-  const description=prompt("Description / teaching style:",t.description||"");if(description===null)return;
-  const courses=coursesText.split(",").map(x=>x.trim()).filter(Boolean),locations=locationsText.split(",").map(x=>x.trim()).filter(Boolean);
-  await db.ref("users/"+id).update({name,university,rate:Number(rate||0),whatsapp,courses,locations,photoUrl,description,updatedAt:Date.now()});
-  for(const c of courses){await db.ref("courses/"+safe(c)).set({name:c})}
-  await loadData();adminTutors();
-}
-
-async function editTutorPhoto(id){
-  const input=document.createElement("input");
-  input.type="file";input.accept="image/*";
-  input.onchange=async()=>{
-    if(!input.files||!input.files[0])return;
-    const reader=new FileReader();
-    reader.onload=e=>{
-      const img=new Image();
-      img.onload=async()=>{
-        const canvas=document.createElement("canvas");
-        const max=500;let w=img.width,h=img.height;
-        if(w>h&&w>max){h=Math.round(h*max/w);w=max}
-        else if(h>=w&&h>max){w=Math.round(w*max/h);h=max}
-        canvas.width=w;canvas.height=h;
-        canvas.getContext("2d").drawImage(img,0,0,w,h);
-        await db.ref("users/"+id+"/photoUrl").set(canvas.toDataURL("image/jpeg",0.72));
-        await loadData();adminTutors();
-      };
-      img.src=e.target.result;
-    };
-    reader.readAsDataURL(input.files[0]);
-  };
-  input.click();
-}
-async function deleteTutor(id){
-  const t=DATA.users[id];if(!t)return alert("Tutor not found.");
-  if(!confirm(`Delete tutor ${t.name} from Scheduled? They will no longer be able to access the website. To delete the Firebase Auth email too, also remove it in Firebase Authentication > Users.`))return;
-  await db.ref("users/"+id).remove();
-  const av=list(DATA.availability).filter(a=>a.tutorId===id);
-  for(const a of av){await db.ref("availability/"+a.id).remove()}
-  await loadData();adminTutors();
-}
 function usersTable(a){return a.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Role/Type</th><th>Details</th></tr>${a.map(u=>`<tr><td>${u.name||""}</td><td>${u.email||""}</td><td>${u.role}${u.type?"/"+u.type:""}</td><td>${u.rate?money(u.rate)+"/h/person<br>":""}${u.university?`University: ${u.university}<br>`:""}${u.whatsapp||u.phone||""}<br>${(u.courses||[]).join(", ")}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
 function adminStudents(){
   const visible=profile.role==="admin"
@@ -1452,7 +1299,11 @@ function moveBookingMonth(delta){
 function chooseBookingDate(date){$("bd").value=date;renderBookingCalendar();updateSlots()}
 function updateBooking(){if(!$("bt")||!$("bt").value)return;renderBookingCalendar();updateSlots();updatePrice()}
 
-
+function contactSelectedTutorForTime(){
+  const tutorId=$("bt")?.value;
+  const t=user(tutorId);
+  openWhatsApp(t.whatsapp||"", "Hi, I couldn't find a time that suits me on Scheduled. Can we arrange a session time?");
+}
 
 function updateSlots(){
   if(!$("bt")||!$("bt").value)return;
