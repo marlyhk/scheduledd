@@ -59,7 +59,7 @@ function openRequestAccessForm(prefillCourses=""){
     <div id="notice" class="notice hidden"></div>
     <label>Full Name</label><input id="reqName" placeholder="Full name">
     <label>Email Address</label><input id="reqEmail" type="email" placeholder="Email address">
-    <label>Phone Number</label><input id="reqPhone" placeholder="Phone number">
+    <label>Phone Number</label><div class="phone-prefix-field"><span>+961</span><input id="reqPhone" inputmode="numeric" autocomplete="tel" placeholder="71 123 456" oninput="cleanRequestPhoneInput()"></div><p class="field-hint">Enter your Lebanese number without the country code. Example: 71 123 456 or 03 123 456.</p>
     <label>University</label><input id="reqUniversity" placeholder="University">
     <label>Course(s) Needed</label><input id="reqCourses" placeholder="Course(s) needed" value="${prefillCourses||""}">
     <label>Message</label><textarea id="reqMessage" placeholder="Message (optional)"></textarea>
@@ -109,7 +109,25 @@ let preselectTutorId=null;
 setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")}, 5100);
 function notice(m){$("notice").textContent=m;$("notice").classList.remove("hidden")}
 function cleanPhone(p){return String(p||"").replace(/[^\d]/g,"")}
-function openWhatsApp(phone,msg){const p=cleanPhone(phone);if(!p)return alert("No WhatsApp number saved.");window.open(`https://wa.me/${p}?text=${encodeURIComponent(msg)}`,"_blank")}
+function normalizeLebanonPhone(p){
+  let d=cleanPhone(p);
+  if(d.startsWith("00"))d=d.slice(2);
+  let local=d.startsWith("961")?d.slice(3):d;
+  local=local.replace(/^0+/,"");
+  if(!/^\d{7,8}$/.test(local))return "";
+  return "961"+local;
+}
+function phoneForWhatsApp(p){return normalizeLebanonPhone(p)||cleanPhone(p)}
+function cleanRequestPhoneInput(){
+  const el=$("reqPhone");
+  if(!el)return;
+  let d=cleanPhone(el.value);
+  if(d.startsWith("00"))d=d.slice(2);
+  if(d.startsWith("961"))d=d.slice(3);
+  d=d.replace(/^0+/,"");
+  el.value=d;
+}
+function openWhatsApp(phone,msg){const p=phoneForWhatsApp(phone);if(!p)return alert("No WhatsApp number saved.");window.open(`https://wa.me/${p}?text=${encodeURIComponent(msg)}`,"_blank")}
 
 function openRequestAccessForm(prefillCourses=""){
   $("loginPage").innerHTML=`<div class="login-card">
@@ -125,7 +143,8 @@ function openRequestAccessForm(prefillCourses=""){
     <label>Email Address</label>
     <input id="reqEmail" type="email" placeholder="Email address">
     <label>Phone Number</label>
-    <input id="reqPhone" placeholder="Phone number">
+    <div class="phone-prefix-field"><span>+961</span><input id="reqPhone" inputmode="numeric" autocomplete="tel" placeholder="71 123 456" oninput="cleanRequestPhoneInput()"></div>
+    <p class="field-hint">Enter your Lebanese number without the country code. Example: 71 123 456 or 03 123 456.</p>
     <label>University</label>
     <input id="reqUniversity" placeholder="University">
     <label>Course(s) Needed</label>
@@ -143,7 +162,7 @@ function toggleRequestAccess(){
   }
 }
 
-async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const phone=($("reqPhone")?.value||"").trim();const university=($("reqUniversity")?.value||"").trim();const courses=($("reqCourses")?.value||"").trim();const message=($("reqMessage")?.value||"").trim();if(!name||!email||!phone||!university||!courses){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}await db.ref("accessRequests").push({name,email,phone,university,courses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqUniversity","reqCourses","reqMessage"].forEach(id=>{if($(id))$(id).value=""});notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
+async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const rawPhone=($("reqPhone")?.value||"").trim();const phone=normalizeLebanonPhone(rawPhone);const university=($("reqUniversity")?.value||"").trim();const courses=($("reqCourses")?.value||"").trim();const message=($("reqMessage")?.value||"").trim();if(!name||!email||!rawPhone||!university||!courses){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}if(!phone){return notice("Please enter a valid Lebanese phone number.")}await db.ref("accessRequests").push({name,email,phone,whatsapp:phone,university,courses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqUniversity","reqCourses","reqMessage"].forEach(id=>{if($(id))$(id).value=""});notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
 async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{}}}
@@ -1703,7 +1722,7 @@ Temporary password: ${password}
 You can now log in and book your tutoring sessions.`;
 }
 function showAccessApprovalResult(r,password,msg){
-  const phone=cleanPhone(r.phone||r.whatsapp||"");
+  const phone=phoneForWhatsApp(r.phone||r.whatsapp||"");
   const waUrl=phone?`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`:"";
   const div=document.createElement("div");
   div.className="modal";
@@ -1718,12 +1737,12 @@ async function approveAccessRequest(id){
   if((r.status||"pending")!=="pending")return alert("This request is already processed.");
   const password=tempPass();
   const msg=accessApprovalMessage(r,password);
-  const phone=cleanPhone(r.phone||r.whatsapp||"");
+  const phone=phoneForWhatsApp(r.phone||r.whatsapp||"");
   const waWin=phone?window.open("about:blank","_blank"):null;
   try{
     const c=await secondaryAuth.createUserWithEmailAndPassword(String(r.email||"").trim(),password);
-    await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name:r.name||"",email:r.email||"",phone:r.phone||"",whatsapp:r.phone||"",university:r.university||"",role:"student",type:"individual",requestedCourses:r.courses||"",createdBy:currentUser.uid,createdFromAccessRequest:id,createdAt:Date.now()});
-    await db.ref("accessRequests/"+id).update({status:"approved",approvedAt:Date.now(),createdStudentUid:c.user.uid,generatedPassword:password,whatsappPrepared:true});
+    await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name:r.name||"",email:r.email||"",phone:phone,whatsapp:phone,university:r.university||"",role:"student",type:"individual",requestedCourses:r.courses||"",createdBy:currentUser.uid,createdFromAccessRequest:id,createdAt:Date.now()});
+    await db.ref("accessRequests/"+id).update({status:"approved",approvedAt:Date.now(),createdStudentUid:c.user.uid,generatedPassword:password,phone,whatsapp:phone,whatsappPrepared:true});
     await secondaryAuth.signOut();
     await loadData();
     accessRequestsPage();

@@ -1338,3 +1338,9 @@ html,body{
 .admin-request-access-home .table td:last-child{min-width:190px}
 .admin-request-access-home .table button{margin:3px}
 @media(max-width:720px){.section-head{flex-direction:column}.admin-request-access-home .table{min-width:900px}}
+
+/* v9.10 Request Access Lebanon phone prefix */
+.phone-prefix-field{display:flex;align-items:center;gap:0;border:1px solid rgba(15,23,42,.14);border-radius:14px;background:#fff;overflow:hidden;margin-top:6px}
+.phone-prefix-field span{padding:13px 14px;background:#f1f7ff;color:#0f2a43;font-weight:800;border-right:1px solid rgba(15,23,42,.12);white-space:nowrap}
+.phone-prefix-field input{border:0!important;outline:0!important;box-shadow:none!important;flex:1;margin:0!important;border-radius:0!important;background:#fff!important}
+.field-hint{font-size:12px;color:#64748b;margin:6px 0 10px}
