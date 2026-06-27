@@ -221,24 +221,33 @@ async function getRequestAccessChoices(){
   }catch(_){source=DATA||{}}
   return {universities:currentAvailableUniversities(source),courses:currentAvailableCourses(source),source};
 }
+function updateRequestCourseSummary(){
+  const summary=$("reqCoursesSummary");
+  if(!summary)return;
+  const chosen=selectedRequestCourses();
+  summary.textContent=chosen.length?`${chosen.length} course${chosen.length===1?"":"s"} selected`:"Select course(s) needed";
+}
 function renderRequestCoursesForUniversity(university,source=DATA,prefillCourses=""){
-  const courseSelect=$("reqCourses");
-  if(!courseSelect)return;
+  const list=$("reqCoursesList");
+  if(!list)return;
   const courses=coursesForUniversity(university,source);
-  courseSelect.innerHTML=courses.length?courses.map(c=>`<option value="${safeOptionText(c)}">${safeOptionText(c)}</option>`).join(""):`<option value="" disabled>No courses available for this university</option>`;
   const prefilled=String(prefillCourses||"").split(",").map(x=>prettyOptionLabel(x)).filter(Boolean).map(optionKey);
-  [...courseSelect.options].forEach(o=>{if(prefilled.includes(optionKey(o.value)))o.selected=true});
+  list.innerHTML=courses.length?courses.map((c,i)=>{
+    const checked=prefilled.includes(optionKey(c))?" checked":"";
+    return `<label class="request-course-option"><input type="checkbox" class="req-course-checkbox" value="${safeOptionText(c)}"${checked} onchange="updateRequestCourseSummary()"><span>${safeOptionText(c)}</span></label>`;
+  }).join(""):`<p class="muted request-course-empty">No courses available for this university.</p>`;
+  updateRequestCourseSummary();
 }
 async function populateRequestAccessChoices(prefillCourses=""){
-  const uniSelect=$("reqUniversity"), courseSelect=$("reqCourses");
-  if(!uniSelect||!courseSelect)return;
+  const uniSelect=$("reqUniversity"), courseList=$("reqCoursesList");
+  if(!uniSelect||!courseList)return;
   const {universities,source}=await getRequestAccessChoices();
   uniSelect.innerHTML=`<option value="">Select your university</option>${universities.map(u=>`<option value="${safeOptionText(u)}">${safeOptionText(u)}</option>`).join("")}`;
-  uniSelect.onchange=()=>renderRequestCoursesForUniversity(uniSelect.value,source,prefillCourses);
+  uniSelect.onchange=()=>renderRequestCoursesForUniversity(uniSelect.value,source,"");
   renderRequestCoursesForUniversity(uniSelect.value,source,prefillCourses);
   if(!universities.length){uniSelect.innerHTML=`<option value="">No universities available yet</option>`;}
 }
-function selectedRequestCourses(){return Array.from($("reqCourses")?.selectedOptions||[]).map(o=>o.value).filter(Boolean)}
+function selectedRequestCourses(){return Array.from(document.querySelectorAll(".req-course-checkbox:checked")).map(o=>o.value).filter(Boolean)}
 
 function openRequestAccessForm(prefillCourses=""){
   $("loginPage").innerHTML=`<div class="login-card">
@@ -259,8 +268,11 @@ function openRequestAccessForm(prefillCourses=""){
     <label>University</label>
     <select id="reqUniversity" class="scroll-select"><option value="">Loading universities...</option></select>
     <label>Course(s) Needed</label>
-    <select id="reqCourses" class="scroll-select" multiple size="6"><option value="">Loading courses...</option></select>
-    <p class="field-hint">Pick from the courses already available on Scheduled. Hold Ctrl/Command to choose more than one.</p>
+    <details id="reqCoursesDropdown" class="request-course-dropdown">
+      <summary id="reqCoursesSummary">Select course(s) needed</summary>
+      <div id="reqCoursesList" class="request-course-list"><p class="muted">Loading courses...</p></div>
+    </details>
+    <p class="field-hint">Tap to open the list, then scroll and select one or more courses.</p>
     <label>Message</label>
     <textarea id="reqMessage" placeholder="Message (optional)"></textarea>
     <button onclick="submitAccessRequest()">Submit Request</button>
@@ -275,7 +287,7 @@ function toggleRequestAccess(){
   }
 }
 
-async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const rawPhone=($("reqPhone")?.value||"").trim();const phone=normalizeLebanonPhone(rawPhone);const university=($("reqUniversity")?.value||"").trim();const chosenCourses=selectedRequestCourses();const courses=chosenCourses.join(", ");const message=($("reqMessage")?.value||"").trim();if(!name||!email||!rawPhone||!university||!chosenCourses.length){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}if(!phone){return notice("Please enter a valid Lebanese phone number.")}await db.ref("accessRequests").push({name,email,phone,whatsapp:phone,university,courses,courseList:chosenCourses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqMessage"].forEach(id=>{if($(id))$(id).value=""});if($("reqUniversity"))$("reqUniversity").selectedIndex=0;if($("reqCourses"))[...$("reqCourses").options].forEach(o=>o.selected=false);notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
+async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const rawPhone=($("reqPhone")?.value||"").trim();const phone=normalizeLebanonPhone(rawPhone);const university=($("reqUniversity")?.value||"").trim();const chosenCourses=selectedRequestCourses();const courses=chosenCourses.join(", ");const message=($("reqMessage")?.value||"").trim();if(!name||!email||!rawPhone||!university||!chosenCourses.length){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}if(!phone){return notice("Please enter a valid Lebanese phone number.")}await db.ref("accessRequests").push({name,email,phone,whatsapp:phone,university,courses,courseList:chosenCourses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqMessage"].forEach(id=>{if($(id))$(id).value=""});if($("reqUniversity"))$("reqUniversity").selectedIndex=0;document.querySelectorAll(".req-course-checkbox").forEach(o=>o.checked=false);updateRequestCourseSummary();if($("reqCoursesDropdown"))$("reqCoursesDropdown").open=false;notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
 async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},courseUniversities:v.courseUniversities||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{},optionCatalog:v.optionCatalog||{universities:[],courses:[]}}}

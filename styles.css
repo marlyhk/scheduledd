@@ -1371,3 +1371,15 @@ button.compact{padding:6px 9px;font-size:.8rem;width:auto}
 #orgTutorGrid>[data-tutor-id]{min-width:0}
 #orgTutorGrid>[data-tutor-id]>.org-profile-card{height:100%}
 @media(max-width:760px){.org-picker-grid{grid-template-columns:1fr}}
+
+/* Request Access: compact click-to-open scrollable course selector */
+.request-course-dropdown{width:100%;border:1px solid var(--border,#d8dee8);border-radius:12px;background:#fff;margin-bottom:4px;}
+.request-course-dropdown summary{list-style:none;cursor:pointer;padding:13px 14px;font-weight:600;position:relative;}
+.request-course-dropdown summary::-webkit-details-marker{display:none;}
+.request-course-dropdown summary:after{content:"⌄";position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:18px;}
+.request-course-dropdown[open] summary:after{content:"⌃";}
+.request-course-list{max-height:210px;overflow-y:auto;border-top:1px solid var(--border,#d8dee8);padding:8px;}
+.request-course-option{display:flex;align-items:center;gap:10px;padding:10px 8px;border-radius:9px;cursor:pointer;margin:0;}
+.request-course-option:hover{background:rgba(117,170,255,.10);}
+.request-course-option input{width:auto;margin:0;flex:0 0 auto;}
+.request-course-empty{padding:10px;margin:0;}
