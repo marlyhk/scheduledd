@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v7-0-full-structured",
-  "version": "7.0.0",
+  "name": "scheduled-v7-1-stable-full",
+  "version": "7.1.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"

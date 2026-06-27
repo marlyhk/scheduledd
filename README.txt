@@ -1,19 +1,19 @@
-Scheduled v7.0 — Full Structured Version
+Scheduled v7.1 — Stable Full Version
 
-Built from v6.7 stable sidebar rebuild.
+Built from v6.7 stable sidebar rebuild, not from the broken v7.0.
 
-Includes:
-- Removed WhatsApp “didn’t find a time” prompt while keeping booking confirmation workflow.
-- Internal chat button for student/tutor conversations.
-- My Scheduled planner with booked sessions + manual tasks.
-- Tutor scheduling for individual and group sessions.
-- Group management with semester system, capacity, number of students, and student names.
-- Admin Command Center.
-- Achievement progress, weekly/monthly goals, confetti, and badge unlock animation.
+Included:
+- Safe sidebar preserved from v6.7.
+- Removed WhatsApp 'didn't find a time' prompt from booking page.
+- Internal student/tutor chat button.
+- My Scheduled planner with automatic sessions and manual tasks.
+- Groups and semester system.
+- Tutor can schedule individual or group sessions.
+- Group capacity, number of students, and student names.
+- Command Center for admin.
+- Achievement progress, weekly/monthly goals, animated badge unlock and confetti.
 - This Semester in Numbers.
 - Empty states.
-- Admin-only hide tutor from bookings and hide public profile.
-- Financial export/print actions in financial pages only.
+- Admin-only hide tutor from bookings/public profile controls.
+- Robust route fallback so pages do not go blank.
 - JavaScript syntax check passed.
-
-Upload all files to GitHub and commit. Vercel redeploys automatically.
