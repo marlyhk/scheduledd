@@ -1,8 +1,8 @@
 {
-  "name": "scheduled-v9-4-availability-type-compatibility-fix",
-  "version": "9.4.0",
+  "name": "scheduled-v9-13-emergency-restore",
+  "version": "9.13.0",
   "private": true,
   "scripts": {
-    "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"
+    "build": "rm -rf public && mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"
   }
 }
