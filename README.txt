@@ -1,15 +1,14 @@
-Scheduled v9.3 — Availability Engine Fix
+Scheduled v9.4 — Availability Type Compatibility Fix
 
-Built from Scheduled v9.2.
+Built from v9.3.
 
 Fixes:
-- Online availability no longer appears under On Campus.
-- On Campus availability no longer appears under Online.
-- Availability blocks must explicitly match the selected session type.
-- No fallback assumption that untyped availability supports both.
-- Helpful message appears when the selected day has availability only in the opposite type.
-- Booking stores availabilityId when available.
-- Current v9.2 booking layout preserved.
+- Existing old availability blocks no longer disappear.
+- Untyped old availability is treated as Online only, not both Online and On Campus.
+- Online availability still does not appear under On Campus.
+- On Campus availability still does not appear under Online.
+- Supports multiple possible field names for session type:
+  sessionType, type, mode, availabilityType, locationType, format, online, campus, onCampus, etc.
+- Preserves v9.2/v9.3 booking layout.
 
-Checks:
-- JavaScript syntax check passed.
+JS syntax check passed.

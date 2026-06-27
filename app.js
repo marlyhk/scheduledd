@@ -1271,56 +1271,30 @@ function s93NormalizeTypeLabel(type){
   if(s.includes("online") || s.includes("zoom") || s.includes("teams") || s.includes("remote")) return "Online";
   return "";
 }
+
 function s93AvailabilityType(row){
-  const explicit = row.sessionType ?? row.type ?? row.mode ?? row.availabilityType ?? row.locationType ?? row.format ?? "";
-  if(Array.isArray(explicit)){
-    return explicit.map(s93NormalizeTypeLabel).filter(Boolean);
-  }
-  const text=String(explicit||"").toLowerCase();
-  const types=[];
-  if(text.includes("online") || text.includes("zoom") || text.includes("teams") || text.includes("remote")) types.push("Online");
-  if(text.includes("campus") || text.includes("on campus") || text.includes("in person") || text.includes("in-person") || text.includes("offline")) types.push("On Campus");
-  return [...new Set(types)];
+  return s94AvailabilityTypes(row);
 }
+
+
+
 function s93RowMatchesExactType(row,type){
-  const types=s93AvailabilityType(row);
-  if(!types.length) return false;
-  return types.includes(s93NormalizeTypeLabel(type));
+  return s94RowMatchesExactType(row,type);
 }
+
+
 function s93AvailabilityBlockId(row){
   return row.id || row.availabilityId || row.blockId || row.key || "";
 }
 function s93RowsForType(tutorId,date,type){
   return s92AvailabilityRows(tutorId).filter(row=>s92RowDateMatches(row,date) && s93RowMatchesExactType(row,type));
 }
+
 function s93BaseSlotsFromRows(tutorId,date,type){
-  const rows=s93RowsForType(tutorId,date,type);
-  let starts=[];
-  rows.forEach(r=>{
-    const step=Number(r.step||r.interval||60);
-    const blockId=s93AvailabilityBlockId(r);
-    const addSlot=(raw)=>{
-      let value=raw;
-      if(raw && typeof raw==="object") value=raw.start||raw.time||raw.from||raw.value;
-      if(value) starts.push({time:value, availabilityId:blockId, row:r});
-    };
-    if(Array.isArray(r.slots)) r.slots.forEach(addSlot);
-    else if(Array.isArray(r.times)) r.times.forEach(addSlot);
-    else if(r.start && (r.end||r.to)){
-      const a=s92TimeToMin(r.start), b=s92TimeToMin(r.end||r.to);
-      if(a!==null && b!==null && b>a){
-        for(let x=a; x<b; x+=step) starts.push({time:s92MinToTime(x), availabilityId:blockId, row:r});
-      }
-    }else if(r.start) addSlot(r.start);
-    else if(r.time) addSlot(r.time);
-    else if(r.from) addSlot(r.from);
-  });
-  const seen=new Map();
-  starts.forEach(s=>{
-    if(!seen.has(s.time)) seen.set(s.time,s);
-  });
-  return [...seen.values()].sort((a,b)=>(s92TimeToMin(a.time)??0)-(s92TimeToMin(b.time)??0));
+  return s94BaseSlotsFromRows(tutorId,date,type);
 }
+
+
 function s93BookedRanges(tutorId,date){
   return s92List(DATA.bookings||{}).filter(b=>b.tutorId===tutorId && b.date===date).map(b=>{
     const s=s92TimeToMin(b.start||b.time);
@@ -1376,6 +1350,101 @@ function s93OppositeAvailabilityMessage(){
     return `<div class="s93-type-warning"><b>${icon} Availability note:</b><br>This tutor is available ${opposite.toLowerCase()} on this day, not ${S92_BOOKING.sessionType.toLowerCase()}.<br><button onclick="S92_BOOKING.sessionType='${opposite}';S92_BOOKING.time='';s92RenderBookingPage()">Switch to ${opposite}</button></div>`;
   }
   return `<div class="s93-type-warning"><b>No matching availability:</b><br>This day has no remaining ${S92_BOOKING.sessionType.toLowerCase()} availability for the selected duration.</div>`;
+}
+
+
+
+/* ===== Scheduled v9.4: availability type compatibility fix ===== */
+function s94TruthValue(v){
+  if(v===true || v==="true" || v==="yes" || v==="1" || v===1) return true;
+  return false;
+}
+function s94AvailabilityTypes(row){
+  const types = [];
+
+  // Explicit string fields used by newer blocks
+  const explicit = row.sessionType ?? row.type ?? row.mode ?? row.availabilityType ?? row.locationType ?? row.format ?? row.sessionMode ?? row.teachingMode ?? "";
+  if(Array.isArray(explicit)){
+    explicit.forEach(x=>{
+      const n=s93NormalizeTypeLabel(x);
+      if(n)types.push(n);
+    });
+  }else{
+    const text=String(explicit||"").toLowerCase();
+    if(text.includes("online") || text.includes("zoom") || text.includes("teams") || text.includes("remote")) types.push("Online");
+    if(text.includes("campus") || text.includes("on campus") || text.includes("in person") || text.includes("in-person") || text.includes("offline")) types.push("On Campus");
+  }
+
+  // Boolean fields often used in simple Firebase forms
+  if(s94TruthValue(row.online) || s94TruthValue(row.isOnline) || s94TruthValue(row.availableOnline) || s94TruthValue(row.onlineAvailable)) types.push("Online");
+  if(s94TruthValue(row.campus) || s94TruthValue(row.onCampus) || s94TruthValue(row.isCampus) || s94TruthValue(row.availableCampus) || s94TruthValue(row.campusAvailable)) types.push("On Campus");
+
+  // Array fields
+  const arrays = [row.types, row.sessionTypes, row.modes, row.locations, row.formats].filter(Array.isArray);
+  arrays.forEach(arr=>arr.forEach(x=>{
+    const n=s93NormalizeTypeLabel(x);
+    if(n)types.push(n);
+  }));
+
+  // Slot-level type support: if any slot mentions a type, the row supports that type for those slots.
+  if(Array.isArray(row.slots)){
+    row.slots.forEach(s=>{
+      if(s && typeof s==="object"){
+        const n=s93NormalizeTypeLabel(s.sessionType||s.type||s.mode||s.location||s.format||"");
+        if(n)types.push(n);
+        if(s94TruthValue(s.online))types.push("Online");
+        if(s94TruthValue(s.campus)||s94TruthValue(s.onCampus))types.push("On Campus");
+      }
+    });
+  }
+
+  // Compatibility fallback:
+  // If an old availability block has NO type information at all, treat it as Online only.
+  // This prevents all existing dates from disappearing while still avoiding Online showing as Campus.
+  if(!types.length) types.push("Online");
+
+  return [...new Set(types)];
+}
+function s94RowMatchesExactType(row,type){
+  return s94AvailabilityTypes(row).includes(s93NormalizeTypeLabel(type));
+}
+function s94SlotMatchesType(slot,row,type){
+  if(slot && typeof slot==="object"){
+    const slotTypes=s94AvailabilityTypes(slot);
+    const hasSlotSpecific = !!(slot.sessionType||slot.type||slot.mode||slot.location||slot.format||slot.online||slot.campus||slot.onCampus);
+    if(hasSlotSpecific) return slotTypes.includes(s93NormalizeTypeLabel(type));
+  }
+  return s94RowMatchesExactType(row,type);
+}
+function s94BaseSlotsFromRows(tutorId,date,type){
+  const rows=s92AvailabilityRows(tutorId).filter(row=>s92RowDateMatches(row,date) && s94RowMatchesExactType(row,type));
+  let starts=[];
+  rows.forEach(r=>{
+    const step=Number(r.step||r.interval||60);
+    const blockId=s93AvailabilityBlockId(r);
+    const addSlot=(raw)=>{
+      if(raw && typeof raw==="object"){
+        if(!s94SlotMatchesType(raw,r,type)) return;
+        const value=raw.start||raw.time||raw.from||raw.value;
+        if(value) starts.push({time:value, availabilityId:blockId, row:r});
+      }else if(raw){
+        starts.push({time:raw, availabilityId:blockId, row:r});
+      }
+    };
+    if(Array.isArray(r.slots)) r.slots.forEach(addSlot);
+    else if(Array.isArray(r.times)) r.times.forEach(addSlot);
+    else if(r.start && (r.end||r.to)){
+      const a=s92TimeToMin(r.start), b=s92TimeToMin(r.end||r.to);
+      if(a!==null && b!==null && b>a){
+        for(let x=a; x<b; x+=step) starts.push({time:s92MinToTime(x), availabilityId:blockId, row:r});
+      }
+    }else if(r.start) addSlot(r.start);
+    else if(r.time) addSlot(r.time);
+    else if(r.from) addSlot(r.from);
+  });
+  const seen=new Map();
+  starts.forEach(s=>{ if(!seen.has(s.time)) seen.set(s.time,s); });
+  return [...seen.values()].sort((a,b)=>(s92TimeToMin(a.time)??0)-(s92TimeToMin(b.time)??0));
 }
 
 function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
