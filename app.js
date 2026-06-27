@@ -1682,8 +1682,58 @@ function accessRequestsPage(){
   const requests=list(DATA.accessRequests).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   $("content").innerHTML=`<div class="card"><h2>Access Requests</h2>${requests.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Courses</th><th>Message</th><th>Status</th><th>Actions</th></tr>${requests.map(r=>`<tr><td>${r.name||""}</td><td>${r.email||""}</td><td>${r.phone||""}</td><td>${r.university||""}</td><td>${r.courses||""}</td><td>${r.message||""}</td><td>${r.status||"pending"}</td><td>${(r.status||"pending")==="pending"?`<button onclick="approveAccessRequest('${r.id}')">Approve</button><button class="danger" onclick="rejectAccessRequest('${r.id}')">Reject</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No access requests yet.</p>`}</div>`;
 }
-function tempPass(){return"Scheduled-"+Math.floor(1000+Math.random()*9000)}
-async function approveAccessRequest(id){const r=DATA.accessRequests[id];if(!r)return alert("Request not found.");const password=tempPass();try{let c=await secondaryAuth.createUserWithEmailAndPassword(r.email,password);await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name:r.name,email:r.email,phone:r.phone,university:r.university||"",role:"student",type:"individual",requestedCourses:r.courses,createdBy:currentUser.uid,createdFromAccessRequest:id,createdAt:Date.now()});await db.ref("accessRequests/"+id).update({status:"approved",approvedAt:Date.now(),createdStudentUid:c.user.uid});await secondaryAuth.signOut();await loadData();openWhatsApp(r.phone,`Hi ${r.name}, your Scheduled access request has been approved.\n\nLogin link: ${SITE_URL}\nEmail: ${r.email}\nTemporary password: ${password}\n\nYou can now log in and book your tutoring sessions.`);accessRequestsPage()}catch(e){alert(e.message)}}
+function tempPass(){
+  const chars="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  let out="Scheduled-";
+  for(let i=0;i<8;i++)out+=chars[Math.floor(Math.random()*chars.length)];
+  return out;
+}
+function accessApprovalMessage(r,password){
+  return `Hi ${r.name||""}, your Scheduled access request has been approved.
+
+Login link: ${SITE_URL}
+Email: ${r.email||""}
+Temporary password: ${password}
+
+You can now log in and book your tutoring sessions.`;
+}
+function showAccessApprovalResult(r,password,msg){
+  const phone=cleanPhone(r.phone||r.whatsapp||"");
+  const waUrl=phone?`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`:"";
+  const div=document.createElement("div");
+  div.className="modal";
+  div.innerHTML=`<div class="modal-box"><h2>Student Approved ✅</h2><p>The student account was created and a temporary password was generated.</p><div class="s92-summary"><b>Student:</b> ${r.name||""}<br><b>Email:</b> ${r.email||""}<br><b>Phone:</b> ${r.phone||""}<br><b>Temporary password:</b> ${password}</div><p class="muted">Send this message to the student on WhatsApp:</p><textarea readonly style="width:100%;min-height:150px">${msg}</textarea><div class="row">${waUrl?`<a class="button whatsapp" target="_blank" href="${waUrl}">Send Login Details on WhatsApp</a>`:`<button disabled>No WhatsApp number saved</button>`}<button onclick="navigator.clipboard&&navigator.clipboard.writeText(${JSON.stringify('${msg}')}).then(()=>alert('Copied')).catch(()=>alert('Copy manually from the box above'))">Copy Message</button><button class="ghost" onclick="document.body.removeChild(this.closest('.modal'))">Close</button></div></div>`;
+  const copyBtn=div.querySelector('button:not([disabled])');
+  if(copyBtn && copyBtn.textContent.includes('Copy'))copyBtn.onclick=()=>navigator.clipboard&&navigator.clipboard.writeText(msg).then(()=>alert('Copied')).catch(()=>alert('Copy manually from the box above'));
+  document.body.appendChild(div);
+}
+async function approveAccessRequest(id){
+  const r=DATA.accessRequests[id];
+  if(!r)return alert("Request not found.");
+  if((r.status||"pending")!=="pending")return alert("This request is already processed.");
+  const password=tempPass();
+  const msg=accessApprovalMessage(r,password);
+  const phone=cleanPhone(r.phone||r.whatsapp||"");
+  const waWin=phone?window.open("about:blank","_blank"):null;
+  try{
+    const c=await secondaryAuth.createUserWithEmailAndPassword(String(r.email||"").trim(),password);
+    await db.ref("users/"+c.user.uid).set({uid:c.user.uid,name:r.name||"",email:r.email||"",phone:r.phone||"",whatsapp:r.phone||"",university:r.university||"",role:"student",type:"individual",requestedCourses:r.courses||"",createdBy:currentUser.uid,createdFromAccessRequest:id,createdAt:Date.now()});
+    await db.ref("accessRequests/"+id).update({status:"approved",approvedAt:Date.now(),createdStudentUid:c.user.uid,generatedPassword:password,whatsappPrepared:true});
+    await secondaryAuth.signOut();
+    await loadData();
+    accessRequestsPage();
+    const waUrl=phone?`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`:"";
+    if(waWin&&waUrl){waWin.location.href=waUrl;}else if(phone){window.open(waUrl,"_blank");}
+    showAccessApprovalResult(r,password,msg);
+  }catch(e){
+    if(waWin)waWin.close();
+    if(String(e.code||"").includes("email-already-in-use")){
+      alert("This email already exists in Firebase Authentication, so the website cannot generate a new password for it from here. Delete/reset that Firebase Auth user first, then approve the request again.");
+    }else{
+      alert(e.message||"Could not approve request.");
+    }
+  }
+}
 async function rejectAccessRequest(id){if(!confirm("Reject this access request?"))return;await db.ref("accessRequests/"+id).update({status:"rejected",rejectedAt:Date.now()});await loadData();accessRequestsPage()}
 
 function bookingRows(bs,edit){return bs.length?`<table class="table"><tr><th>Date</th><th>Time</th><th>Course</th><th>Tutor</th><th>Student/Group</th><th>Details</th><th>Payments</th><th>Notes</th><th>Actions</th></tr>${bs.map(b=>`<tr><td>${b.date}</td><td>${formatTime12(b.start)}</td><td>${b.course}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${b.duration}h • ${b.format||"Individual"} ${b.groupSize||1}<br>${b.location}<br>${b.paymentMethod}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${money(total(b))}</td><td>${(b.payments||[]).map((p,i)=>`${p.name}: ${money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">Toggle</button>`:""}`).join("<br>")}</td><td>${b.notes||""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td><td>${edit?`<button onclick="editBooking('${b.id}')">Edit</button><button onclick="markBookingPayment('${b.id}')">Mark Paid</button><button onclick="markDone('${b.id}')">Mark Done</button><button class="danger" onclick="deleteBooking('${b.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No sessions yet.</p>`}
