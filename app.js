@@ -103,7 +103,7 @@ const ADMIN_WHATSAPP="96176174738";
 const SITE_URL="https://scheduledeu.vercel.app/";
 const $=id=>document.getElementById(id);
 const money=n=>"$"+Number(n||0).toFixed(Number.isInteger(Number(n))?0:2);
-let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},courseUniversities:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{}};
+let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{}};
 let preselectTutorId=null;
 
 setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")}, 5100);
@@ -158,84 +158,41 @@ function mergeTextArrayCaseInsensitive(current, additions){
   });
   return out;
 }
-function courseUniRecord(course){
-  const key=safe(course);
-  return (DATA.courseUniversities||{})[key]||{};
-}
-function recordUniversitiesForCourse(course){
-  const r=courseUniRecord(course);
-  const raw=Array.isArray(r.universities)?r.universities:(r.university?[r.university]:[]);
-  return uniqueSorted(raw);
-}
-function activeCourseUniversityPairs(source=DATA){
-  const pairs=[];
-  const activeCourses=new Map();
-  const addActive=(course,university)=>{
-    const c=prettyOptionLabel(course), u=prettyOptionLabel(university);
-    if(!c)return;
-    if(!activeCourses.has(optionKey(c)))activeCourses.set(optionKey(c),c);
-    pairs.push({course:c,university:u});
-  };
-  // Active courses = courses currently assigned to active booking tutors.
-  // We intentionally do NOT use old DATA.courses here, because removed courses can remain cached there.
-  Object.values(source.users||{}).forEach(u=>{
-    if(!u||u.role!=="tutor"||u.removed||u.hiddenFromBookings)return;
-    (Array.isArray(u.courses)?u.courses:[]).forEach(c=>addActive(c,u.university||""));
-  });
-  // Admin Course ↔ University settings refine only active courses; they must not revive deleted courses.
-  Object.entries(source.courseUniversities||{}).forEach(([key,r])=>{
-    const course=prettyOptionLabel(r.name||key.replace(/_/g," "));
-    if(!activeCourses.has(optionKey(course)))return;
-    const unis=Array.isArray(r.universities)?r.universities:(r.university?[r.university]:[]);
-    unis.forEach(u=>pairs.push({course,university:prettyOptionLabel(u)}));
-  });
-  return pairs;
-}
-function currentAvailableCourses(source=DATA){
-  // IMPORTANT: do not read old DATA.courses here, because deleted courses can stay cached there.
-  return uniqueSorted(activeCourseUniversityPairs(source).map(p=>p.course));
-}
-function currentAvailableUniversities(source=DATA){
-  const names=[];
-  Object.values(source.users||{}).forEach(u=>{if(u&&u.university)names.push(u.university)});
-  Object.values(source.publicTutors||{}).forEach(t=>{if(t&&t.university)names.push(t.university)});
-  activeCourseUniversityPairs(source).forEach(p=>{if(p.university)names.push(p.university)});
-  return uniqueSorted(names);
-}
-function coursesForUniversity(university,source=DATA){
-  const uni=optionKey(university);
-  const pairs=activeCourseUniversityPairs(source);
-  if(!uni)return currentAvailableCourses(source);
-  return uniqueSorted(pairs.filter(p=>optionKey(p.university)===uni).map(p=>p.course));
-}
-function courseMatchesUniversity(course,university,source=DATA){
-  if(!university)return true;
-  const ckey=optionKey(course), ukey=optionKey(university);
-  return activeCourseUniversityPairs(source).some(p=>optionKey(p.course)===ckey && optionKey(p.university)===ukey);
-}
 async function getRequestAccessChoices(){
   let source=DATA||{};
   try{
     const snap=await db.ref("/").once("value");
     source=snap.val()||source||{};
   }catch(_){source=DATA||{}}
-  return {universities:currentAvailableUniversities(source),courses:currentAvailableCourses(source),source};
-}
-function renderRequestCoursesForUniversity(university,source=DATA,prefillCourses=""){
-  const courseSelect=$("reqCourses");
-  if(!courseSelect)return;
-  const courses=coursesForUniversity(university,source);
-  courseSelect.innerHTML=courses.length?courses.map(c=>`<option value="${safeOptionText(c)}">${safeOptionText(c)}</option>`).join(""):`<option value="" disabled>No courses available for this university</option>`;
-  const prefilled=String(prefillCourses||"").split(",").map(x=>prettyOptionLabel(x)).filter(Boolean).map(optionKey);
-  [...courseSelect.options].forEach(o=>{if(prefilled.includes(optionKey(o.value)))o.selected=true});
+  const users=Object.values(source.users||{});
+  const publicTutors=Object.values(source.publicTutors||{});
+  const coursesObj=Object.values(source.courses||{});
+  const universities=[];
+  const courses=[];
+  users.forEach(u=>{
+    if(u&&u.university)universities.push(u.university);
+    if(u&&Array.isArray(u.courses))courses.push(...u.courses);
+    if(u&&Array.isArray(u.assignedCourses))courses.push(...u.assignedCourses);
+  });
+  publicTutors.forEach(t=>{
+    if(t&&t.university)universities.push(t.university);
+    if(t&&Array.isArray(t.courses))courses.push(...t.courses);
+  });
+  coursesObj.forEach(c=>{
+    if(!c)return;
+    if(c.name)courses.push(c.name);
+    if(c.university)universities.push(c.university);
+  });
+  return {universities:uniqueSorted(universities),courses:uniqueSorted(courses)};
 }
 async function populateRequestAccessChoices(prefillCourses=""){
   const uniSelect=$("reqUniversity"), courseSelect=$("reqCourses");
   if(!uniSelect||!courseSelect)return;
-  const {universities,source}=await getRequestAccessChoices();
+  const {universities,courses}=await getRequestAccessChoices();
   uniSelect.innerHTML=`<option value="">Select your university</option>${universities.map(u=>`<option value="${safeOptionText(u)}">${safeOptionText(u)}</option>`).join("")}`;
-  uniSelect.onchange=()=>renderRequestCoursesForUniversity(uniSelect.value,source,prefillCourses);
-  renderRequestCoursesForUniversity(uniSelect.value,source,prefillCourses);
+  courseSelect.innerHTML=courses.length?courses.map(c=>`<option value="${safeOptionText(c)}">${safeOptionText(c)}</option>`).join(""):`<option value="" disabled>No courses available yet</option>`;
+  const prefilled=String(prefillCourses||"").split(",").map(x=>x.trim()).filter(Boolean);
+  [...courseSelect.options].forEach(o=>{if(prefilled.includes(o.value))o.selected=true});
   if(!universities.length){uniSelect.innerHTML=`<option value="">No universities available yet</option>`;}
 }
 function selectedRequestCourses(){return Array.from($("reqCourses")?.selectedOptions||[]).map(o=>o.value).filter(Boolean)}
@@ -278,7 +235,7 @@ function toggleRequestAccess(){
 async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const rawPhone=($("reqPhone")?.value||"").trim();const phone=normalizeLebanonPhone(rawPhone);const university=($("reqUniversity")?.value||"").trim();const chosenCourses=selectedRequestCourses();const courses=chosenCourses.join(", ");const message=($("reqMessage")?.value||"").trim();if(!name||!email||!rawPhone||!university||!chosenCourses.length){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}if(!phone){return notice("Please enter a valid Lebanese phone number.")}await db.ref("accessRequests").push({name,email,phone,whatsapp:phone,university,courses,courseList:chosenCourses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqMessage"].forEach(id=>{if($(id))$(id).value=""});if($("reqUniversity"))$("reqUniversity").selectedIndex=0;if($("reqCourses"))[...$("reqCourses").options].forEach(o=>o.selected=false);notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
-async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},courseUniversities:v.courseUniversities||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{}}}
+async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{}}}
 auth.onAuthStateChanged(async u=>{
   if(!u)return;
   currentUser=u;
@@ -621,8 +578,11 @@ function assignedTutorNames(studentId){
 }
 
 
-function allAssignableCourses(university=""){
-  return coursesForUniversity(university,DATA);
+function allAssignableCourses(){
+  let names=[];
+  tutors().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));
+  list(DATA.courses||{}).forEach(c=>{if(c.name)names.push(c.name)});
+  return uniqueSorted(names);
 }
 function assignedCoursesForStudent(studentId){
   const s=user(studentId);
@@ -1085,8 +1045,7 @@ const S92_BOOKING = {
   monthOffset:0,
   date:"",
   time:"",
-  paymentMethod:"Whish",
-  university:""
+  paymentMethod:"Whish"
 };
 let S92_CHAT_ACTIVE = "";
 
@@ -1148,34 +1107,26 @@ function s92TypeText(type){ return String(type||"").toLowerCase().includes("camp
 function s92OppositeType(type){ return s92TypeText(type)==="Online" ? "On Campus" : "Online"; }
 
 function s92Tutors(){
-  const base=(typeof tutors==="function"?tutors():s92List(DATA.users||{}).filter(u=>u.role==="tutor"));
-  return base.filter(t=>!t.removed&&!t.hiddenFromBookings);
-}
-function s92Universities(){return currentAvailableUniversities(DATA)}
-function s92TutorsForUniversity(){
-  const uni=S92_BOOKING.university||"";
-  if(!uni)return s92Tutors();
-  return s92Tutors().filter(t=>optionKey(t.university)===optionKey(uni)||(t.courses||[]).some(c=>courseMatchesUniversity(c,uni,DATA)));
+  if(typeof tutors==="function")return tutors().filter(t=>!t.removed&&!t.hiddenFromBookings);
+  return s92List(DATA.users||{}).filter(u=>u.role==="tutor"&&!u.removed&&!u.hiddenFromBookings);
 }
 function s92Courses(){
-  return currentAvailableCourses(DATA).map(name=>({name,code:name,id:safe(name)}));
+  if(typeof courses==="function")return courses();
+  return s92List(DATA.courses||{});
 }
 function s92TutorCourses(tutor){
   const ids=Array.isArray(tutor?.courses)?tutor.courses:[];
-  const uni=S92_BOOKING.university||"";
-  const out=uniqueSorted(ids.map(prettyOptionLabel).filter(c=>!uni||courseMatchesUniversity(c,uni,DATA)||optionKey(tutor.university)===optionKey(uni)));
+  const all=s92Courses();
+  const out=ids.map(id=>{
+    const c=all.find(x=>x.id===id||x.code===id||x.name===id);
+    return c?.name||c?.code||id;
+  }).filter(Boolean);
   return out.length?out:["General Tutoring"];
 }
-function s92SelectedTutor(){
-  const list=s92TutorsForUniversity();
-  if(!list.some(t=>t.id===S92_BOOKING.tutorId))S92_BOOKING.tutorId=(list[0]&&list[0].id)||"";
-  return user(S92_BOOKING.tutorId)||list[0]||{};
-}
+function s92SelectedTutor(){ return user(S92_BOOKING.tutorId)||s92Tutors()[0]||{}; }
 function s92SelectedCourse(){
   const tutor=s92SelectedTutor();
-  const list=s92TutorCourses(tutor);
-  if(!list.some(c=>optionKey(c)===optionKey(S92_BOOKING.course)))S92_BOOKING.course=list[0]||"General Tutoring";
-  return S92_BOOKING.course || list[0] || "General Tutoring";
+  return S92_BOOKING.course || s92TutorCourses(tutor)[0] || "General Tutoring";
 }
 function s92Total(){ return Number(s92SelectedTutor().rate||0)*Number(S92_BOOKING.duration||1); }
 
@@ -1231,20 +1182,17 @@ function s92AvailabilityMessage(){
 
 
 function s92RenderBookingPanel(){
-  const universities=s92Universities();
-  const tutorList=s92TutorsForUniversity();
+  const tutorList=s92Tutors();
   if(!S92_BOOKING.tutorId && tutorList[0])S92_BOOKING.tutorId=tutorList[0].id;
   const tutor=s92SelectedTutor();
   const courseList=s92TutorCourses(tutor);
   if(!S92_BOOKING.course)S92_BOOKING.course=courseList[0]||"General Tutoring";
   return `<div class="s92-card">
     <h2>Book a Session</h2>
-    <label>University</label>
-    <select onchange="S92_BOOKING.university=this.value;S92_BOOKING.tutorId='';S92_BOOKING.course='';S92_BOOKING.date='';S92_BOOKING.time='';s92RenderBookingPage();"><option value="">All universities</option>${universities.map(u=>`<option value="${safeOptionText(u)}" ${optionKey(S92_BOOKING.university)===optionKey(u)?"selected":""}>${safeOptionText(u)}</option>`).join("")}</select>
     <label>Tutor</label>
     <select onchange="s92SelectTutor(this.value)">${tutorList.map(t=>`<option value="${t.id}" ${S92_BOOKING.tutorId===t.id?"selected":""}>${t.name||t.email}</option>`).join("")}</select>
     <label>Course</label>
-    <select onchange="S92_BOOKING.course=this.value;S92RenderSafe();">${courseList.map(c=>`<option value="${safeOptionText(c)}" ${optionKey(s92SelectedCourse())===optionKey(c)?"selected":""}>${safeOptionText(c)}</option>`).join("")}</select>
+    <select onchange="S92_BOOKING.course=this.value;s92RenderBookingPage();">${courseList.map(c=>`<option value="${c}" ${s92SelectedCourse()===c?"selected":""}>${c}</option>`).join("")}</select>
     <label>Session Type</label>
     <div class="s92-segment">
       <button type="button" class="${S92_BOOKING.sessionType==="Online"?"active":""}" onclick="S92_BOOKING.sessionType='Online';S92_BOOKING.date='';S92_BOOKING.time='';s92RenderBookingPage()">💻 Online</button>
@@ -1256,7 +1204,6 @@ function s92RenderBookingPanel(){
     <select disabled><option>Whish</option></select>
   </div>`;
 }
-function S92RenderSafe(){S92_BOOKING.date='';S92_BOOKING.time='';s92RenderBookingPage();}
 function s92RenderCalendar(){
   const d=s92MonthDate(S92_BOOKING.monthOffset);
   const year=d.getFullYear(), month=d.getMonth();
@@ -1603,8 +1550,8 @@ function s94BaseSlotsFromRows(tutorId,date,type){
   return [...seen.values()].sort((a,b)=>(s92TimeToMin(a.time)??0)-(s92TimeToMin(b.time)??0));
 }
 
-function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Course Universities","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
-async function openTab(tab,btn){await loadData(); if(typeof closeMenu==="function")setTimeout(closeMenu,0);document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Course Universities":courseUniversitySettingsPage,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:tutorAnnouncementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
+function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
+async function openTab(tab,btn){await loadData(); if(typeof closeMenu==="function")setTimeout(closeMenu,0);document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:tutorAnnouncementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}
 
 function adminOverview(){let b=list(DATA.bookings);$("content").innerHTML=`<div class="grid"><div class="card"><h3>Bookings</h3><h1>${b.length}</h1></div><div class="card"><h3>Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>Tutors</h3><h1>${tutors().length}</h1></div></div><div class="card"><h2>Scheduled Admin</h2><p class="muted">Final fixed version active.</p></div>`}
 
@@ -1831,45 +1778,8 @@ async function createAccount(role){
     role==="tutor"?adminTutors():adminStudents();
   }catch(e){alert(e.message)}
 }
-function adminCourses(){
-  $("content").innerHTML=`<div class="card"><h2>Course Management</h2><p class="muted">Courses shown around the website come from active tutor course assignments. Removed courses disappear from Request Access automatically.</p><table class="table"><tr><th>Tutor</th><th>University</th><th>Courses</th></tr>${tutors().map(t=>`<tr><td>${t.name}</td><td>${t.university||""}</td><td>${(t.courses||[]).join(", ")}</td></tr>`).join("")}</table><hr><div class="row"><select id="ct">${tutors().map(t=>`<option value="${t.id}">${t.name}</option>`)}</select><input id="cn" placeholder="Course name exactly: Physics 213"></div><button onclick="assignCourse()">Assign Course</button><button class="ghost" onclick="courseUniversitySettingsPage()">Course ↔ University Settings</button></div>`
-}
-async function assignCourse(){
-  let t=user($("ct").value),c=prettyOptionLabel($("cn").value.trim());
-  if(!c)return alert("Enter a course name.");
-  const cs=mergeTextArrayCaseInsensitive(t.courses||[],[c]);
-  await db.ref("users/"+$("ct").value+"/courses").set(cs);
-  await db.ref("courses/"+safe(c)).set({name:c});
-  if(t.university){
-    const existing=recordUniversitiesForCourse(c);
-    await db.ref("courseUniversities/"+safe(c)).set({name:c,universities:mergeTextArrayCaseInsensitive(existing,[t.university]),updatedAt:Date.now()});
-  }
-  await loadData();adminCourses();
-}
-function courseUniversitySettingsPage(){
-  const courses=currentAvailableCourses();
-  const universities=currentAvailableUniversities();
-  $("content").innerHTML=`<div class="card"><h2>Course ↔ University Settings</h2><p class="muted">Choose which university each active course belongs to. Request Access and Booking will filter courses using this list. If no university is selected for a course, the app uses the tutor's university.</p>${courses.length?`<table class="table"><tr><th>Course</th><th>Assigned university/universities</th><th>Action</th></tr>${courses.map(c=>{const selected=recordUniversitiesForCourse(c);return `<tr><td>${c}</td><td>${selected.join(", ")||"Uses tutor university"}</td><td><button onclick="editCourseUniversities('${String(c).replace(/'/g,"\\'")}')">Edit</button></td></tr>`}).join("")}</table>`:`<p class="muted">No active courses yet.</p>`}<hr><h3>Available Universities</h3><p>${universities.join(", ")||"No universities yet."}</p></div>`;
-}
-function editCourseUniversities(course){
-  const c=prettyOptionLabel(course);
-  const universities=currentAvailableUniversities();
-  const selected=recordUniversitiesForCourse(c).map(optionKey);
-  const modal=document.createElement("div");
-  modal.className="modal";
-  modal.innerHTML=`<div class="modal-box"><h2>Assign University</h2><p><b>${c}</b></p><p class="muted">Select one or more universities where this course is available.</p><div class="checkbox-grid">${universities.length?universities.map(u=>`<label class="check"><input type="checkbox" class="courseUniCheck" value="${safeOptionText(u)}" ${selected.includes(optionKey(u))?"checked":""}>${safeOptionText(u)}</label>`).join(""):"<p class='muted'>No universities available yet.</p>"}</div><label>Add university if missing</label><input id="newCourseUniversity" placeholder="University name"><div class="row"><button onclick="saveCourseUniversities('${String(c).replace(/'/g,"\\'")}')">Save</button><button class="ghost" onclick="this.closest('.modal').remove()">Cancel</button></div></div>`;
-  document.body.appendChild(modal);
-}
-async function saveCourseUniversities(course){
-  const c=prettyOptionLabel(course);
-  const chosen=[...document.querySelectorAll(".courseUniCheck:checked")].map(x=>x.value);
-  const extra=prettyOptionLabel($("newCourseUniversity")?.value||"");
-  const universities=mergeTextArrayCaseInsensitive(chosen,extra?[extra]:[]);
-  await db.ref("courseUniversities/"+safe(c)).set({name:c,universities,updatedAt:Date.now()});
-  document.querySelector(".modal")?.remove();
-  await loadData();
-  courseUniversitySettingsPage();
-}
+function adminCourses(){$("content").innerHTML=`<div class="card"><h2>Course Management</h2><table class="table"><tr><th>Tutor</th><th>Courses</th></tr>${tutors().map(t=>`<tr><td>${t.name}</td><td>${(t.courses||[]).join(", ")}</td></tr>`).join("")}</table><hr><div class="row"><select id="ct">${tutors().map(t=>`<option value="${t.id}">${t.name}</option>`)}</select><input id="cn" placeholder="Course name exactly: Physics 213"></div><button onclick="assignCourse()">Assign Course</button></div>`}
+async function assignCourse(){let t=user($("ct").value),c=$("cn").value.trim(),cs=Array.from(new Set([...(t.courses||[]),c])).filter(Boolean);await db.ref("users/"+$("ct").value+"/courses").set(cs);await db.ref("courses/"+safe(c)).set({name:c});await loadData();adminCourses()}
 
 function accessRequestsPage(){
   const requests=list(DATA.accessRequests).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -2036,10 +1946,6 @@ function showBookingModal(t){const div=document.createElement("div");div.classNa
 function myTutorsPage(){let ts=studentTutors(currentUser.uid);$("content").innerHTML=`<div class="card"><h2>My Tutors</h2>${ts.length?`<div class="grid">${ts.map(t=>{let bs=list(DATA.bookings).filter(b=>b.studentId===currentUser.uid&&b.tutorId===t.id);return`<div class="card"><h3>${t.name}</h3><p>${t.university||""}</p><p>${(t.courses||[]).join(", ")}</p><button onclick="bookWithTutor('${t.id}')">Book a New Session</button><hr><b>Upcoming</b><br>${bs.filter(b=>!b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}<hr><b>Past</b><br>${bs.filter(b=>b.done).map(b=>`${b.date} • ${b.course} • ${formatTime12(b.start)}`).join("<br>")||"<span class='muted'>None</span>"}</div>`}).join("")}</div>`:`<p class="muted">No tutors yet. Book a session first.</p>`}</div>`}
 function bookWithTutor(id, course=""){
   preselectTutorId=id;
-  const t=user(id)||{};
-  S92_BOOKING.university=t.university||S92_BOOKING.university||"";
-  S92_BOOKING.tutorId=id;
-  S92_BOOKING.course=course||"";
   window.preselectCourse=course||"";
   openTab("Book");
 }
@@ -2297,7 +2203,7 @@ async function openTab(tab,btn){
   if(typeof closeMenu==="function")setTimeout(closeMenu,0);
   document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
   if(btn)btn.classList.add("active");
-  const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Course Universities":courseUniversitySettingsPage,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:profile?.role==="student"?paymentsPage:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:profile?.role==="tutor"?tutorAnnouncementsPage:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"Schedule Session":tutorScheduleSessionPage,"My Students":myStudentsPage,Financial:financialPage,Statistics:statsPage,Reviews:reviewsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false)};
+  const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:profile?.role==="student"?paymentsPage:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:profile?.role==="tutor"?tutorAnnouncementsPage:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"Schedule Session":tutorScheduleSessionPage,"My Students":myStudentsPage,Financial:financialPage,Statistics:statsPage,Reviews:reviewsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false)};
   if(routes[tab])return routes[tab]();
   dashboardPage();
 }
@@ -2490,124 +2396,227 @@ async function openTab(tab,btn){
   if(typeof closeMenu==="function")setTimeout(closeMenu,0);
   document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
   if(btn)btn.classList.add("active");
-  const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Course Universities":courseUniversitySettingsPage,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:profile?.role==="student"?paymentsPage:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:profile?.role==="tutor"?tutorAnnouncementsPage:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"Schedule Session":tutorScheduleSessionPage,"My Students":myStudentsPage,Financial:financialPage,Statistics:statsPage,Reviews:reviewsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false)};
+  const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:profile?.role==="student"?paymentsPage:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:profile?.role==="tutor"?tutorAnnouncementsPage:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"Schedule Session":tutorScheduleSessionPage,"My Students":myStudentsPage,Financial:financialPage,Statistics:statsPage,Reviews:reviewsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false)};
   if(routes[tab])return routes[tab]();
   dashboardPage();
 }
 
-/* ===== v9.15 admin organization add-ons — stable overlay =====
-   Scope: keep existing tabs, add filters/summaries/timelines, and strengthen auto assignment.
-*/
-function s915Esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));}
-function s915Key(v){return String(v||"").trim().toLowerCase();}
-function s915UniqueText(arr){const map=new Map();(arr||[]).forEach(x=>{const clean=prettyOptionLabel?prettyOptionLabel(String(x||"").trim()):String(x||"").trim();if(clean&&!map.has(s915Key(clean)))map.set(s915Key(clean),clean)});return [...map.values()];}
-function s915ActiveBookings(){return list(DATA.bookings||{}).filter(b=>{const st=String(b.status||"confirmed").toLowerCase();return st!=="cancelled"&&st!=="deleted"&&!b.done;});}
-function s915BookingsForStudent(studentId){return list(DATA.bookings||{}).filter(b=>b.studentId===studentId);}
-function s915ActiveBookingsForStudent(studentId){return s915ActiveBookings().filter(b=>b.studentId===studentId);}
-function s915ActiveTutorsForStudent(studentId){return s915UniqueText(s915ActiveBookingsForStudent(studentId).map(b=>b.tutorId)).filter(Boolean);}
-function s915ActiveCoursesForStudent(studentId){return s915UniqueText(s915ActiveBookingsForStudent(studentId).map(b=>b.course)).filter(Boolean);}
-function s915StudentBalance(studentId){return s915BookingsForStudent(studentId).reduce((sum,b)=>sum+(b.payments||[]).reduce((s,p)=>s+(p.paid?0:Number(p.amount||0)),0),0);}
-function s915UpcomingCountForStudent(studentId){const today=typeof todayISO==="function"?todayISO():new Date().toISOString().slice(0,10);return s915ActiveBookingsForStudent(studentId).filter(b=>(b.date||"")>=today).length;}
-function s915TutorStudentIds(tutorId){return s915UniqueText(s915ActiveBookings().filter(b=>b.tutorId===tutorId).map(b=>b.studentId)).filter(Boolean);}
-function s915TutorCourseNames(tutorId){return s915UniqueText(s915ActiveBookings().filter(b=>b.tutorId===tutorId).map(b=>b.course).concat((user(tutorId)||{}).courses||[]));}
-function s915TutorUniversityNames(tutorId){const t=user(tutorId)||{};const fromStudents=s915TutorStudentIds(tutorId).map(id=>(user(id)||{}).university);return s915UniqueText([t.university,...fromStudents].filter(Boolean));}
-function s915DateTime(ts){if(!ts)return "";try{return new Date(ts).toLocaleString();}catch(e){return ""}}
-function s915TimelineForStudent(studentId){
-  const s=user(studentId)||{};
-  const events=[];
-  if(s.createdAt)events.push({t:s.createdAt,label:"Account created",detail:s.email||""});
-  if(s.autoAssignedUpdatedAt)events.push({t:s.autoAssignedUpdatedAt,label:"Assignments updated automatically",detail:"Updated from booking activity"});
-  (Array.isArray(s.assignmentHistory)?s.assignmentHistory:[]).forEach(h=>events.push({t:h.at,label:h.type==="auto-booking"?"Auto-assigned from booking":"Assignment update",detail:`${(user(h.tutorId)||{}).name||"Tutor"}${h.course?" • "+h.course:""}`}));
-  s915BookingsForStudent(studentId).forEach(b=>events.push({t:b.createdAt||0,label:b.status==="cancelled"?"Session cancelled":"Session booked",detail:`${b.course||"Session"} with ${(user(b.tutorId)||{}).name||"tutor"} • ${b.date||""} ${b.start||b.time||""}`}));
-  return events.sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,25);
+/* ===== Scheduled v9.13: active course registry + university-specific course filtering ===== */
+function s913Norm(v){return String(v||"").trim().replace(/\s+/g," ").toLowerCase();}
+function s913Label(v){return typeof prettyOptionLabel==="function"?prettyOptionLabel(v):String(v||"").trim();}
+function s913Key(v){return typeof safe==="function"?safe(s913Label(v)):s913Norm(v).replace(/[^a-z0-9]+/g,"_");}
+function s913List(obj){return Object.entries(obj||{}).map(([id,v])=>({id,...(v||{})}));}
+function s913UniMatch(a,b){return !a || a==="__all__" || !b || s913Norm(a)===s913Norm(b);}
+function s913ActiveCourseRows(){
+  const rows=s913List(DATA.courses||{}).filter(c=>c && c.name && c.deleted!==true && c.removed!==true && c.hidden!==true && c.active!==false);
+  const map=new Map();
+  rows.forEach(c=>{const name=s913Label(c.name); const key=s913Norm(name); if(name&&!map.has(key))map.set(key,{...c,name});});
+  return [...map.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"}));
 }
-async function s915AddStudentTimeline(studentId,item){
-  if(!studentId)return;
-  const ref=db.ref("users/"+studentId+"/timeline").push();
-  await ref.set({...item,createdAt:Date.now()});
+function s913FallbackCourseNames(){
+  const names=[];
+  (typeof tutors==="function"?tutors():[]).forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));
+  s913List(DATA.publicTutors||{}).forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));
+  return typeof uniqueSorted==="function"?uniqueSorted(names):[...new Set(names.filter(Boolean))].sort();
 }
-async function autoAssignStudentFromBooking(studentId,tutorId,course){
-  if(!studentId||!tutorId)return;
-  const s=(DATA.users||{})[studentId]||{};
-  const assignedTutorIds=Array.from(new Set([...(Array.isArray(s.assignedTutorIds)?s.assignedTutorIds:[]), tutorId].filter(Boolean)));
-  const assignedCourses=s915UniqueText([...(Array.isArray(s.assignedCourses)?s.assignedCourses:[]), course].filter(Boolean));
-  const history=Array.isArray(s.assignmentHistory)?s.assignmentHistory:[];
-  const already=history.some(h=>h.type==="auto-booking"&&h.tutorId===tutorId&&s915Key(h.course)===s915Key(course));
-  const assignmentHistory=already?history:[...history,{type:"auto-booking",tutorId,course:course||"",at:Date.now()}];
-  await db.ref("users/"+studentId).update({assignedTutorIds,assignedCourses,assignmentHistory,autoAssignedUpdatedAt:Date.now()});
+function s913ActiveCourseNames(){
+  const active=s913ActiveCourseRows().map(c=>c.name);
+  return active.length?active:s913FallbackCourseNames();
 }
-async function s915SyncAssignmentsFromBookings(){
-  if(profile.role!=="admin")return alert("Only admin can sync assignments.");
-  if(!confirm("Sync student assigned tutors/courses from all active and future bookings? Existing manual assignments will be preserved."))return;
-  const updates={};
-  for(const s of students()){
-    const active=s915ActiveBookingsForStudent(s.id);
-    let tutorIds=[...(Array.isArray(s.assignedTutorIds)?s.assignedTutorIds:[])];
-    let courses=[...(Array.isArray(s.assignedCourses)?s.assignedCourses:[])];
-    active.forEach(b=>{if(b.tutorId)tutorIds.push(b.tutorId);if(b.course)courses.push(b.course);});
-    updates[`users/${s.id}/assignedTutorIds`]=Array.from(new Set(tutorIds.filter(Boolean)));
-    updates[`users/${s.id}/assignedCourses`]=s915UniqueText(courses);
-    updates[`users/${s.id}/autoAssignedUpdatedAt`]=Date.now();
-  }
-  await db.ref().update(updates);await loadData();adminStudents();alert("Assignments synced from bookings.");
+function s913CourseUniversityRecord(course){
+  const key=s913Key(course);
+  const rec=(DATA.courseUniversities||{})[key] || (DATA.courses||{})[key] || {};
+  const unis=[];
+  if(Array.isArray(rec.universities))unis.push(...rec.universities);
+  if(rec.university)unis.push(rec.university);
+  s913ActiveCourseRows().filter(c=>s913Norm(c.name)===s913Norm(course)).forEach(c=>{if(c.university)unis.push(c.university); if(Array.isArray(c.universities))unis.push(...c.universities);});
+  return {name:s913Label(rec.name||course),universities:(typeof uniqueSorted==="function"?uniqueSorted(unis):[...new Set(unis)])};
 }
-function s915StudentFiltersHtml(){
-  const unis=s915UniqueText(students().map(s=>s.university).filter(Boolean));
-  const cs=s915UniqueText(currentAvailableCourses?currentAvailableCourses():allAssignableCourses());
-  return `<div class="org-filter-row"><input id="studentSearch" placeholder="Search name, phone, email" oninput="adminStudents()" value="${s915Esc(window.s915StudentSearch||"")}"><select id="studentUniFilter" onchange="window.s915StudentUni=this.value;adminStudents()"><option value="">All universities</option>${unis.map(u=>`<option value="${s915Esc(u)}" ${window.s915StudentUni===u?"selected":""}>${s915Esc(u)}</option>`).join("")}</select><select id="studentTutorFilter" onchange="window.s915StudentTutor=this.value;adminStudents()"><option value="">All tutors</option>${tutors().map(t=>`<option value="${t.id}" ${window.s915StudentTutor===t.id?"selected":""}>${s915Esc(t.name)}</option>`).join("")}</select><select id="studentCourseFilter" onchange="window.s915StudentCourse=this.value;adminStudents()"><option value="">All courses</option>${cs.map(c=>`<option value="${s915Esc(c)}" ${window.s915StudentCourse===c?"selected":""}>${s915Esc(c)}</option>`).join("")}</select><select id="studentBalanceFilter" onchange="window.s915StudentBalance=this.value;adminStudents()"><option value="">All payment statuses</option><option value="unpaid" ${window.s915StudentBalance==="unpaid"?"selected":""}>Has unpaid balance</option><option value="paid" ${window.s915StudentBalance==="paid"?"selected":""}>No unpaid balance</option></select></div>`;
+function s913Universities(){
+  const arr=[];
+  (typeof students==="function"?students():[]).forEach(u=>{if(u.university)arr.push(u.university)});
+  (typeof tutors==="function"?tutors():[]).forEach(u=>{if(u.university)arr.push(u.university)});
+  s913List(DATA.publicTutors||{}).forEach(u=>{if(u.university)arr.push(u.university)});
+  s913ActiveCourseRows().forEach(c=>{if(c.university)arr.push(c.university); if(Array.isArray(c.universities))arr.push(...c.universities)});
+  s913List(DATA.courseUniversities||{}).forEach(c=>{if(c.university)arr.push(c.university); if(Array.isArray(c.universities))arr.push(...c.universities)});
+  return typeof uniqueSorted==="function"?uniqueSorted(arr):[...new Set(arr.filter(Boolean))].sort();
 }
-function s915ReadStudentFilters(){
-  window.s915StudentSearch=document.getElementById("studentSearch")?.value??window.s915StudentSearch??"";
-  window.s915StudentUni=document.getElementById("studentUniFilter")?.value??window.s915StudentUni??"";
-  window.s915StudentTutor=document.getElementById("studentTutorFilter")?.value??window.s915StudentTutor??"";
-  window.s915StudentCourse=document.getElementById("studentCourseFilter")?.value??window.s915StudentCourse??"";
-  window.s915StudentBalance=document.getElementById("studentBalanceFilter")?.value??window.s915StudentBalance??"";
-}
-function s915FilterStudents(rows){
-  const q=s915Key(window.s915StudentSearch||"");
-  return rows.filter(s=>{
-    const tutorsA=assignedTutorIdsForStudent(s.id), coursesA=assignedCoursesForStudent(s.id);
-    if(q&&!s915Key(`${s.name} ${s.email} ${s.phone}`).includes(q))return false;
-    if(window.s915StudentUni&&s.university!==window.s915StudentUni)return false;
-    if(window.s915StudentTutor&&!tutorsA.includes(window.s915StudentTutor))return false;
-    if(window.s915StudentCourse&&!coursesA.map(s915Key).includes(s915Key(window.s915StudentCourse)))return false;
-    const bal=s915StudentBalance(s.id);
-    if(window.s915StudentBalance==="unpaid"&&bal<=0)return false;
-    if(window.s915StudentBalance==="paid"&&bal>0)return false;
-    return true;
+function s913CoursesForUniversity(university, includeAll=true){
+  const active=s913ActiveCourseNames();
+  if(!university || university==="__all__")return active;
+  const filtered=active.filter(course=>{
+    const rec=s913CourseUniversityRecord(course);
+    if(rec.universities.length)return rec.universities.some(u=>s913UniMatch(university,u));
+    return true; // legacy course without mapping remains visible until admin maps it
   });
+  return filtered;
 }
-function s915StudentSummaryRow(s){
-  const tutorCount=assignedTutorIdsForStudent(s.id).length;
-  const courseCount=assignedCoursesForStudent(s.id).length;
-  const upcoming=s915UpcomingCountForStudent(s.id);
-  const bal=s915StudentBalance(s.id);
-  return `<tr><td><b>${s915Esc(s.name||"")}</b><br><span class="muted">${s915Esc(s.email||"")} • ${s915Esc(s.phone||"")}</span></td><td>${s915Esc(s.university||"")}</td><td>${s915Esc(s.type||"individual")}</td><td><b>${tutorCount}</b><br><span class="muted">${s915Esc(assignedTutorNames(s.id)||"None")}</span></td><td><b>${courseCount}</b><br><span class="muted">${s915Esc(assignedCourseNames(s.id)||"None")}</span></td><td>${upcoming}</td><td>${money?money(bal):bal}</td><td>${profile.role==="admin"?`<button onclick="s915ViewStudent('${s.id}')">View</button><button onclick="editStudent('${s.id}')">Edit</button><button onclick="editStudentTutors('${s.id}')">Assign Tutors</button><button onclick="editStudentCourses('${s.id}')">Assign Courses</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button>`:""}</td></tr>`;
+function s913TutorHasCourse(tutor,course){return (tutor.courses||[]).some(c=>s913Norm(c)===s913Norm(course));}
+function s913TutorMatchesUniversity(tutor,university){return !university||university==="__all__"||s913Norm(tutor.university)===s913Norm(university);}
+function allCourseNames(){return s913ActiveCourseNames();}
+function allAssignableCourses(){return s913ActiveCourseNames();}
+function tutorsForCourse(course){return (typeof tutors==="function"?tutors():[]).filter(t=>s913TutorHasCourse(t,course));}
+function tutorsForCourseAndUniversity(course,university){return tutorsForCourse(course).filter(t=>s913TutorMatchesUniversity(t,university)).sort((a,b)=>(a.name||"").localeCompare(b.name||""));}
+async function getRequestAccessChoices(){return {universities:s913Universities(),courses:s913ActiveCourseNames()};}
+async function populateRequestAccessChoices(prefillCourses=""){
+  const uniSelect=$("reqUniversity"), courseSelect=$("reqCourses"); if(!uniSelect||!courseSelect)return;
+  const universities=s913Universities();
+  uniSelect.innerHTML=`<option value="">Select your university</option>${universities.map(u=>`<option value="${safeOptionText(u)}">${safeOptionText(u)}</option>`).join("")}`;
+  uniSelect.onchange=()=>s913RefreshRequestCourses(prefillCourses);
+  s913RefreshRequestCourses(prefillCourses);
+  if(!universities.length)uniSelect.innerHTML=`<option value="">No universities available yet</option>`;
 }
-function adminStudents(){
-  s915ReadStudentFilters();
-  const base=profile.role==="admin"?students():students().filter(s=>studentTutors(s.id).some(t=>t.id===currentUser.uid)||assignedTutorIdsForStudent(s.id).includes(currentUser.uid));
-  const visible=profile.role==="admin"?s915FilterStudents(base):base;
-  const totalBal=visible.reduce((s,x)=>s+s915StudentBalance(x.id),0);
-  $("content").innerHTML=`<div class="card"><div class="section-head"><div><h2>${profile.role==="admin"?"Students / Groups":"My Students / Groups"}</h2><p class="muted">Organized summary view. Click View for full profile, history, payments, and sessions.</p></div>${profile.role==="admin"?`<button class="ghost" onclick="s915SyncAssignmentsFromBookings()">Sync Assignments from Bookings</button>`:""}</div>${profile.role==="admin"?s915StudentFiltersHtml():""}<div class="kpi-grid mini"><div class="kpi-card"><div class="kpi-label">Shown Students</div><div class="kpi-value">${visible.length}</div></div><div class="kpi-card"><div class="kpi-label">Unpaid Balance</div><div class="kpi-value">${money?money(totalBal):totalBal}</div></div></div>${visible.length?`<table class="table"><tr><th>Student</th><th>University</th><th>Type</th><th>Tutors</th><th>Courses</th><th>Upcoming</th><th>Balance</th><th>Actions</th></tr>${visible.map(s915StudentSummaryRow).join("")}</table>`:`<p class="muted">No accounts match these filters.</p>`}<hr><h3>Create Student or Group Account</h3><div class="row"><input id="sn" placeholder="Name"><input id="se" type="email" placeholder="Email"><input id="sp" placeholder="Password"><input id="sphone" placeholder="Phone"><input id="suniversity" placeholder="University"><select id="stype"><option>individual</option><option>group</option></select></div><input id="smembers" placeholder="Group members comma separated"><label>Assign Tutor(s)</label><p class="muted small">New tutors automatically appear here after you create them.</p><div class="checkbox-grid">${tutorCheckboxes("assignedTutor")}</div><label>Assign Course(s)</label><p class="muted small">New courses automatically appear here after you add them.</p><div class="checkbox-grid">${courseCheckboxes("assignedCourse")}</div><button onclick="createAccount('student')">Create Student/Group</button></div>`;
+function s913RefreshRequestCourses(prefillCourses=""){
+  const uni=$("reqUniversity")?.value||""; const courseSelect=$("reqCourses"); if(!courseSelect)return;
+  const courses=s913CoursesForUniversity(uni,false);
+  courseSelect.innerHTML=courses.length?courses.map(c=>`<option value="${safeOptionText(c)}">${safeOptionText(c)}</option>`).join(""):`<option value="" disabled>No courses available for this university</option>`;
+  const prefilled=String(prefillCourses||"").split(",").map(x=>x.trim()).filter(Boolean);
+  [...courseSelect.options].forEach(o=>{if(prefilled.some(p=>s913Norm(p)===s913Norm(o.value)))o.selected=true});
 }
-function s915ViewStudent(id){
-  const s=user(id)||{};const bs=s915BookingsForStudent(id).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.start||b.time||"").localeCompare(a.start||a.time||""));
-  const timeline=s915TimelineForStudent(id);
-  $("content").innerHTML=`<div class="card"><button class="ghost" onclick="adminStudents()">Back to Students</button><h2>${s915Esc(s.name||"Student")}</h2><div class="grid"><div class="card"><h3>Profile</h3><p><b>Email:</b> ${s915Esc(s.email||"")}</p><p><b>Phone:</b> ${s915Esc(s.phone||"")}</p><p><b>University:</b> ${s915Esc(s.university||"")}</p><p><b>Type:</b> ${s915Esc(s.type||"individual")}</p><p><b>Assigned Tutors:</b> ${s915Esc(assignedTutorNames(id)||"None")}</p><p><b>Assigned Courses:</b> ${s915Esc(assignedCourseNames(id)||"None")}</p></div><div class="card"><h3>Tracking</h3><p><b>Upcoming sessions:</b> ${s915UpcomingCountForStudent(id)}</p><p><b>Unpaid balance:</b> ${money?money(s915StudentBalance(id)):s915StudentBalance(id)}</p><p><b>Total sessions:</b> ${bs.length}</p><label>Private admin notes</label><textarea id="s915Notes">${s915Esc(s.adminNotes||"")}</textarea><button onclick="s915SaveStudentNotes('${id}')">Save Notes</button></div></div><div class="card"><h3>Relationship Timeline</h3>${timeline.length?timeline.map(e=>`<div class="timeline-item"><b>${s915Esc(e.label)}</b><br><span class="muted">${s915DateTime(e.t)}</span><br>${s915Esc(e.detail||"")}</div>`).join(""):"<p class='muted'>No timeline yet.</p>"}</div><div class="card"><h3>Session History</h3>${bs.length?bookingRows(bs,profile.role==="admin"):"<p class='muted'>No sessions yet.</p>"}</div></div>`;
+function s92Tutors(){
+  let ts=(typeof tutors==="function"?tutors():s913List(DATA.users||{}).filter(u=>u.role==="tutor")).filter(t=>!t.removed&&!t.hiddenFromBookings);
+  if(S92_BOOKING && S92_BOOKING.university && S92_BOOKING.university!=="__all__")ts=ts.filter(t=>s913TutorMatchesUniversity(t,S92_BOOKING.university));
+  if(S92_BOOKING && S92_BOOKING.course)ts=ts.filter(t=>s913TutorHasCourse(t,S92_BOOKING.course));
+  return ts;
 }
-async function s915SaveStudentNotes(id){await db.ref("users/"+id+"/adminNotes").set($("s915Notes")?.value||"");await loadData();s915ViewStudent(id);}
-function s915TutorFiltersHtml(){
-  const unis=s915UniqueText(tutors().map(t=>t.university).filter(Boolean).concat(students().map(s=>s.university).filter(Boolean)));
-  const cs=s915UniqueText(currentAvailableCourses?currentAvailableCourses():allAssignableCourses());
-  return `<div class="org-filter-row"><input id="tutorSearch" placeholder="Search tutor name/email/phone" oninput="adminTutors()" value="${s915Esc(window.s915TutorSearch||"")}"><select id="tutorUniFilter" onchange="window.s915TutorUni=this.value;adminTutors()"><option value="">All universities</option>${unis.map(u=>`<option value="${s915Esc(u)}" ${window.s915TutorUni===u?"selected":""}>${s915Esc(u)}</option>`).join("")}</select><select id="tutorCourseFilter" onchange="window.s915TutorCourse=this.value;adminTutors()"><option value="">All courses</option>${cs.map(c=>`<option value="${s915Esc(c)}" ${window.s915TutorCourse===c?"selected":""}>${s915Esc(c)}</option>`).join("")}</select></div>`;
+function s92Courses(){return s913ActiveCourseRows();}
+function s92TutorCourses(tutor){
+  const uni=(S92_BOOKING&&S92_BOOKING.university)||"__all__";
+  let allowed=s913CoursesForUniversity(uni,true);
+  if(tutor && Array.isArray(tutor.courses)&&tutor.courses.length)allowed=allowed.filter(c=>s913TutorHasCourse(tutor,c));
+  return allowed.length?allowed:["General Tutoring"];
 }
-function s915ReadTutorFilters(){window.s915TutorSearch=document.getElementById("tutorSearch")?.value??window.s915TutorSearch??"";window.s915TutorUni=document.getElementById("tutorUniFilter")?.value??window.s915TutorUni??"";window.s915TutorCourse=document.getElementById("tutorCourseFilter")?.value??window.s915TutorCourse??"";}
-function s915FilterTutors(rows){const q=s915Key(window.s915TutorSearch||"");return rows.filter(t=>{if(q&&!s915Key(`${t.name} ${t.email} ${t.phone} ${t.whatsapp}`).includes(q))return false;const unis=s915TutorUniversityNames(t.id);const courses=s915TutorCourseNames(t.id);if(window.s915TutorUni&&!unis.map(s915Key).includes(s915Key(window.s915TutorUni)))return false;if(window.s915TutorCourse&&!courses.map(s915Key).includes(s915Key(window.s915TutorCourse)))return false;return true;});}
-function adminTutors(){
-  if(profile.role!=="admin")return myStudentsPage();
-  s915ReadTutorFilters();
-  const visible=s915FilterTutors(tutors());
-  $("content").innerHTML=`<div class="card"><h2>Tutor Accounts</h2><p class="admin-note"><b>This tab creates real booking tutor accounts.</b> Organization filters below do not change existing behavior.</p>${s915TutorFiltersHtml()}${visible.length?`<table class="table"><tr><th>Tutor</th><th>Universities</th><th>Courses</th><th>Active Students</th><th>Upcoming Sessions</th><th>Rate</th><th>Actions</th></tr>${visible.map(t=>{const studs=s915TutorStudentIds(t.id);const upcoming=s915ActiveBookings().filter(b=>b.tutorId===t.id&&(b.date||"")>=(todayISO?todayISO():"")).length;return `<tr><td><b>${s915Esc(t.name||"")}</b><br><span class="muted">${s915Esc(t.email||"")}</span></td><td>${s915Esc(s915TutorUniversityNames(t.id).join(", ")||t.university||"")}</td><td>${s915Esc(s915TutorCourseNames(t.id).join(", ")||"None")}</td><td>${studs.length}</td><td>${upcoming}</td><td>${money?money(t.rate||0):t.rate||0}</td><td><button onclick="s915ViewTutor('${t.id}')">View</button><button onclick="editTutor('${t.id}')">Edit</button><button class="danger" onclick="deleteTutor('${t.id}')">Delete</button></td></tr>`}).join("")}</table>`:`<p class='muted'>No tutors match these filters.</p>`}<hr><h3>Create Tutor Account</h3><div class="row"><input id="tn" placeholder="Name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Password"><input id="tphone" placeholder="Phone / WhatsApp"><input id="tuniversity" placeholder="University"><input id="trate" type="number" placeholder="Rate per hour"></div><button onclick="createAccount('tutor')">Create Tutor</button></div>`;
+function s92RenderBookingPanel(){
+  if(!S92_BOOKING.university)S92_BOOKING.university="__all__";
+  let courseChoices=s913CoursesForUniversity(S92_BOOKING.university,true);
+  if(!S92_BOOKING.course || !courseChoices.some(c=>s913Norm(c)===s913Norm(S92_BOOKING.course)))S92_BOOKING.course=courseChoices[0]||"";
+  let tutorList=(typeof tutors==="function"?tutors():[]).filter(t=>!t.removed&&!t.hiddenFromBookings).filter(t=>s913TutorMatchesUniversity(t,S92_BOOKING.university)).filter(t=>!S92_BOOKING.course||s913TutorHasCourse(t,S92_BOOKING.course));
+  if(!S92_BOOKING.tutorId || !tutorList.some(t=>t.id===S92_BOOKING.tutorId))S92_BOOKING.tutorId=tutorList[0]?.id||"";
+  const tutor=s92SelectedTutor();
+  return `<div class="s92-card">
+    <h2>Book a Session</h2>
+    <label>University</label>
+    <select onchange="S92_BOOKING.university=this.value;S92_BOOKING.course='';S92_BOOKING.tutorId='';S92_BOOKING.date='';S92_BOOKING.time='';s92RenderBookingPage();"><option value="__all__" ${S92_BOOKING.university==="__all__"?"selected":""}>All Universities</option>${s913Universities().map(u=>`<option value="${safeOptionText(u)}" ${s913Norm(S92_BOOKING.university)===s913Norm(u)?"selected":""}>${safeOptionText(u)}</option>`).join("")}</select>
+    <label>Course</label>
+    <select onchange="S92_BOOKING.course=this.value;S92_BOOKING.tutorId='';S92_BOOKING.date='';S92_BOOKING.time='';s92RenderBookingPage();">${courseChoices.map(c=>`<option value="${safeOptionText(c)}" ${s913Norm(s92SelectedCourse())===s913Norm(c)?"selected":""}>${safeOptionText(c)}</option>`).join("")}</select>
+    <label>Tutor</label>
+    <select onchange="s92SelectTutor(this.value)">${tutorList.map(t=>`<option value="${t.id}" ${S92_BOOKING.tutorId===t.id?"selected":""}>${t.name||t.email}</option>`).join("")}</select>
+    ${!tutorList.length?`<p class="muted">No tutors available for this university/course combination.</p>`:""}
+    <label>Session Type</label>
+    <div class="s92-segment"><button type="button" class="${S92_BOOKING.sessionType==="Online"?"active":""}" onclick="S92_BOOKING.sessionType='Online';S92_BOOKING.date='';S92_BOOKING.time='';s92RenderBookingPage()">💻 Online</button><button type="button" class="${S92_BOOKING.sessionType==="On Campus"?"active":""}" onclick="S92_BOOKING.sessionType='On Campus';S92_BOOKING.date='';S92_BOOKING.time='';s92RenderBookingPage()">🏫 On Campus</button></div>
+    <label>Duration</label><select onchange="S92_BOOKING.duration=Number(this.value);S92_BOOKING.time='';s92RenderBookingPage();"><option value="1" ${S92_BOOKING.duration==1?"selected":""}>1 hour</option><option value="1.5" ${S92_BOOKING.duration==1.5?"selected":""}>1.5 hours</option><option value="2" ${S92_BOOKING.duration==2?"selected":""}>2 hours</option><option value="3" ${S92_BOOKING.duration==3?"selected":""}>3 hours</option></select>
+    <label>Payment</label><select disabled><option>Whish</option></select>
+  </div>`;
 }
-function s915ViewTutor(id){const t=user(id)||{};const studs=s915TutorStudentIds(id).map(user).filter(Boolean);const bs=list(DATA.bookings||{}).filter(b=>b.tutorId===id).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.start||b.time||"").localeCompare(a.start||a.time||""));$("content").innerHTML=`<div class="card"><button class="ghost" onclick="adminTutors()">Back to Tutors</button><h2>${s915Esc(t.name||"Tutor")}</h2><div class="grid"><div class="card"><h3>Profile</h3><p><b>Email:</b> ${s915Esc(t.email||"")}</p><p><b>Phone:</b> ${s915Esc(t.phone||t.whatsapp||"")}</p><p><b>Universities:</b> ${s915Esc(s915TutorUniversityNames(id).join(", ")||t.university||"")}</p><p><b>Courses:</b> ${s915Esc(s915TutorCourseNames(id).join(", ")||"None")}</p><p><b>Rate:</b> ${money?money(t.rate||0):t.rate||0}</p></div><div class="card"><h3>Teaching Summary</h3><p><b>Active students:</b> ${studs.length}</p><p><b>Upcoming sessions:</b> ${s915ActiveBookings().filter(b=>b.tutorId===id&&(b.date||"")>=(todayISO?todayISO():"")).length}</p><p><b>Total sessions:</b> ${bs.length}</p></div></div><div class="card"><h3>Assigned / Active Students</h3>${studs.length?`<table class="table"><tr><th>Name</th><th>University</th><th>Courses</th><th>Actions</th></tr>${studs.map(s=>`<tr><td>${s915Esc(s.name||"")}</td><td>${s915Esc(s.university||"")}</td><td>${s915Esc(s915UniqueText(s915ActiveBookings().filter(b=>b.tutorId===id&&b.studentId===s.id).map(b=>b.course)).join(", "))}</td><td><button onclick="s915ViewStudent('${s.id}')">View Student</button></td></tr>`).join("")}</table>`:"<p class='muted'>No active students yet.</p>"}</div><div class="card"><h3>Sessions</h3>${bs.length?bookingRows(bs,true):"<p class='muted'>No sessions yet.</p>"}</div></div>`;}
+function s92SelectedCourse(){return S92_BOOKING.course || s913CoursesForUniversity(S92_BOOKING.university||"__all__",true)[0] || "General Tutoring";}
+function adminCourseUniversitySettingsPage(){
+  const courses=s913ActiveCourseNames(); const unis=s913Universities();
+  $("content").innerHTML=`<div class="card"><h2>Course ↔ University Settings</h2><p class="muted">Assign each course to the university/universities where it should appear. Request Access, bookings, tutor course lists, and availability filters use this mapping.</p>
+  ${courses.length?`<table class="table"><tr><th>Course</th><th>Assigned Universities</th><th>Update</th></tr>${courses.map(c=>{const rec=s913CourseUniversityRecord(c);return `<tr><td>${c}</td><td><div class="checkbox-grid">${unis.map(u=>`<label class="check"><input type="checkbox" class="cu-${s913Key(c)}" value="${safeOptionText(u)}" ${rec.universities.some(x=>s913Norm(x)===s913Norm(u))?"checked":""}>${safeOptionText(u)}</label>`).join("")}</div></td><td><button onclick="saveCourseUniversities('${s913Key(c)}','${String(c).replace(/'/g,"\\'")}')">Save</button></td></tr>`}).join("")}</table>`:`<p class="muted">No active courses yet. Add a course first.</p>`}</div>`;
+}
+async function saveCourseUniversities(key,courseName){
+  const universities=[...document.querySelectorAll(`.cu-${key}:checked`)].map(x=>x.value);
+  await db.ref("courseUniversities/"+key).set({name:courseName,universities,updatedAt:Date.now(),updatedBy:currentUser.uid});
+  await db.ref("courses/"+key).update({name:courseName,universities,updatedAt:Date.now()});
+  await loadData(); adminCourseUniversitySettingsPage();
+}
+function adminCourses(){
+  const cs=s913ActiveCourseNames();
+  $("content").innerHTML=`<div class="card"><h2>Course Management</h2><p class="muted">Courses shown here are the active courses used across Scheduled.</p><table class="table"><tr><th>Course</th><th>Universities</th><th>Tutors Teaching It</th><th>Actions</th></tr>${cs.map(c=>`<tr><td>${c}</td><td>${s913CourseUniversityRecord(c).universities.join(", ")||"All / not assigned yet"}</td><td>${(typeof tutors==="function"?tutors():[]).filter(t=>s913TutorHasCourse(t,c)).map(t=>t.name).join(", ")||"None"}</td><td><button onclick="openTab('Course Universities')">Assign University</button><button class="danger" onclick="deleteCourseEverywhere('${String(c).replace(/'/g,"\\'")}')">Remove Course</button></td></tr>`).join("")||`<tr><td colspan="4">No active courses.</td></tr>`}</table><hr><h3>Assign Course to Tutor</h3><div class="row"><select id="ct">${(typeof tutors==="function"?tutors():[]).map(t=>`<option value="${t.id}">${t.name}</option>`)}</select><input id="cn" placeholder="Course name exactly: Physics 213"></div><button onclick="assignCourse()">Assign Course</button></div>`;
+}
+async function assignCourse(){
+  let t=user($("ct").value), c=s913Label($("cn").value); if(!c)return alert("Enter a course name.");
+  const cs=mergeTextArrayCaseInsensitive(t.courses||[],[c]); const key=s913Key(c);
+  await db.ref("users/"+$("ct").value+"/courses").set(cs);
+  const existing=s913CourseUniversityRecord(c); const universities=mergeTextArrayCaseInsensitive(existing.universities||[], t.university?[t.university]:[]);
+  await db.ref("courses/"+key).set({name:c,universities,active:true,updatedAt:Date.now()});
+  await db.ref("courseUniversities/"+key).set({name:c,universities,updatedAt:Date.now(),updatedBy:currentUser.uid});
+  await loadData(); adminCourses();
+}
+async function deleteCourseEverywhere(course){
+  if(!confirm(`Remove ${course} from active courses, tutors, public profiles, and future availability choices? Existing bookings stay saved for history.`))return;
+  const key=s913Key(course); const updates={};
+  updates["courses/"+key]=null; updates["courseUniversities/"+key]=null;
+  Object.entries(DATA.users||{}).forEach(([uid,u])=>{if(Array.isArray(u.courses))updates[`users/${uid}/courses`]=u.courses.filter(c=>s913Norm(c)!==s913Norm(course)); if(Array.isArray(u.assignedCourses))updates[`users/${uid}/assignedCourses`]=u.assignedCourses.filter(c=>s913Norm(c)!==s913Norm(course));});
+  Object.entries(DATA.publicTutors||{}).forEach(([id,p])=>{if(Array.isArray(p.courses))updates[`publicTutors/${id}/courses`]=p.courses.filter(c=>s913Norm(c)!==s913Norm(course));});
+  Object.entries(DATA.availability||{}).forEach(([id,a])=>{if(Array.isArray(a.courses))updates[`availability/${id}/courses`]=a.courses.filter(c=>s913Norm(c)!==s913Norm(course)); if(a.course&&s913Norm(a.course)===s913Norm(course))updates[`availability/${id}/course`]=null;});
+  await db.ref().update(updates); await loadData(); adminCourses();
+}
+function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Course Universities","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"));}
+async function openTab(tab,btn){await loadData(); if(typeof closeMenu==="function")setTimeout(closeMenu,0);document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Course Universities":adminCourseUniversitySettingsPage,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:profile.role==="student"?paymentsPage:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:profile.role==="tutor"?tutorAnnouncementsPage:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Statistics:statsPage,Reviews:reviewsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),"Schedule Session":scheduleSessionPage};(routes[tab]||dashboardPage)();}
+
+/* ===== Scheduled v9.16 safe admin organization patch built on v9.13 =====
+   Purpose: keep existing tabs/settings, add safer tracking + auto-assignment without breaking filters/balances. */
+(function(){
+  function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));}
+  function arr(obj){try{return Object.entries(obj||{}).map(([id,v])=>({id,...(v||{})}));}catch(e){return []}}
+  function key(v){return String(v||"").trim().toLowerCase().replace(/\s+/g," ");}
+  function uniqText(a){const m=new Map();(a||[]).forEach(x=>{const s=String(x||"").trim();if(s&&!m.has(key(s)))m.set(key(s),s)});return [...m.values()].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));}
+  function activeBookings(){return arr((window.DATA||{}).bookings).filter(b=>!b.deleted&&!b.done&&!['cancelled','canceled','rescheduled'].includes(key(b.status)));}
+  function studentRows(){try{return typeof students==='function'?students():arr(DATA.users).filter(u=>u.role==='student'&&!u.removed)}catch(e){return []}}
+  function tutorRows(){try{return typeof tutors==='function'?tutors():arr(DATA.users).filter(u=>u.role==='tutor'&&!u.removed)}catch(e){return []}}
+  function fmtMoney(v){try{return typeof money==='function'?money(Number(v||0)):`$${Number(v||0).toFixed(2)}`}catch(e){return `$${Number(v||0).toFixed(2)}`}}
+  function today(){try{return typeof todayISO==='function'?todayISO():new Date().toISOString().slice(0,10)}catch(e){return new Date().toISOString().slice(0,10)}}
+  function courseNames(){
+    try{if(typeof allAssignableCourses==='function')return uniqText(allAssignableCourses())}catch(e){}
+    const names=[];arr(DATA.courses).forEach(c=>{if(c.name&&c.active!==false&&!c.removed&&!c.deleted)names.push(c.name)});tutorRows().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));return uniqText(names);
+  }
+  function assignedTutorIds(studentId){
+    const s=(DATA.users||{})[studentId]||{};const ids=[...(Array.isArray(s.assignedTutorIds)?s.assignedTutorIds:[])];
+    activeBookings().filter(b=>b.studentId===studentId).forEach(b=>{if(b.tutorId)ids.push(b.tutorId)});
+    return [...new Set(ids.filter(Boolean))];
+  }
+  function assignedCourses(studentId){
+    const s=(DATA.users||{})[studentId]||{};const names=[...(Array.isArray(s.assignedCourses)?s.assignedCourses:[])];
+    activeBookings().filter(b=>b.studentId===studentId).forEach(b=>{if(b.course)names.push(b.course)});
+    return uniqText(names);
+  }
+  function tutorNames(studentId){return assignedTutorIds(studentId).map(id=>(DATA.users||{})[id]?.name).filter(Boolean).join(', ')}
+  function balance(studentId){
+    let total=0;activeBookings().filter(b=>b.studentId===studentId).forEach(b=>{
+      if(Array.isArray(b.payments)&&b.payments.length){b.payments.forEach(p=>{if(!p.paid)total+=Number(p.amount||0)})}
+      else if(!b.paid){const t=(DATA.users||{})[b.tutorId]||{};total+=Number(b.total||0)||Number(t.rate||0)*Number(b.duration||1)}
+    });return total;
+  }
+  function upcomingStudent(studentId){return activeBookings().filter(b=>b.studentId===studentId&&(b.date||'')>=today()).length}
+  function upcomingTutor(tutorId){return activeBookings().filter(b=>b.tutorId===tutorId&&(b.date||'')>=today()).length}
+  function tutorStudents(tutorId){return [...new Set(activeBookings().filter(b=>b.tutorId===tutorId).map(b=>b.studentId).filter(Boolean).concat(studentRows().filter(s=>Array.isArray(s.assignedTutorIds)&&s.assignedTutorIds.includes(tutorId)).map(s=>s.id)))];}
+  function tutorUniversities(tutorId){const t=(DATA.users||{})[tutorId]||{};const vals=[t.university];tutorStudents(tutorId).forEach(id=>vals.push((DATA.users||{})[id]?.university));return uniqText(vals)}
+  function tutorCourses(tutorId){const t=(DATA.users||{})[tutorId]||{};const vals=[...(Array.isArray(t.courses)?t.courses:[])];activeBookings().filter(b=>b.tutorId===tutorId&&b.course).forEach(b=>vals.push(b.course));return uniqText(vals)}
+  async function syncAssignments(){
+    const updates={};
+    studentRows().forEach(s=>{updates[`users/${s.id}/assignedTutorIds`]=assignedTutorIds(s.id);updates[`users/${s.id}/assignedCourses`]=assignedCourses(s.id);updates[`users/${s.id}/autoAssignedSyncedAt`]=Date.now();});
+    await db.ref().update(updates);await loadData();
+  }
+  window.s916SyncAssignments=async function(){try{await syncAssignments();alert('Assignments synced successfully.');adminStudents();}catch(e){console.error(e);alert('Could not sync assignments. Please try again.')}};
+  window.s916SetStudentFilter=function(k,v){window.s916StudentFilters=window.s916StudentFilters||{};window.s916StudentFilters[k]=v;try{adminStudents()}catch(e){console.error(e)}};
+  window.s916SetTutorFilter=function(k,v){window.s916TutorFilters=window.s916TutorFilters||{};window.s916TutorFilters[k]=v;try{adminTutors()}catch(e){console.error(e)}};
+  const oldAutoAssign=window.autoAssignStudentFromBooking;
+  window.autoAssignStudentFromBooking=async function(studentId,tutorId,course){
+    try{
+      if(oldAutoAssign)await oldAutoAssign(studentId,tutorId,course);
+      const s=(DATA.users||{})[studentId]||{};const nextTutors=uniqText([...(Array.isArray(s.assignedTutorIds)?s.assignedTutorIds:[]),tutorId]).filter(Boolean);
+      const nextCourses=uniqText([...(Array.isArray(s.assignedCourses)?s.assignedCourses:[]),course]).filter(Boolean);
+      await db.ref('users/'+studentId).update({assignedTutorIds:nextTutors,assignedCourses:nextCourses,autoAssignedUpdatedAt:Date.now()});
+    }catch(e){console.error('autoAssignStudentFromBooking safe patch failed',e)}
+  };
+  window.adminStudents=function(){
+    try{
+      const f=window.s916StudentFilters||{};const all=profile?.role==='admin'?studentRows():studentRows().filter(s=>assignedTutorIds(s.id).includes(currentUser.uid));
+      const unis=uniqText(all.map(s=>s.university));const tutorsList=tutorRows();const courses=courseNames();
+      const visible=all.filter(s=>{const text=key(`${s.name} ${s.email} ${s.phone}`);if(f.q&&!text.includes(key(f.q)))return false;if(f.university&&key(s.university)!==key(f.university))return false;if(f.tutor&&!assignedTutorIds(s.id).includes(f.tutor))return false;if(f.course&&!assignedCourses(s.id).map(key).includes(key(f.course)))return false;if(f.balance==='unpaid'&&balance(s.id)<=0)return false;if(f.balance==='paid'&&balance(s.id)>0)return false;return true;});
+      const totalBal=visible.reduce((sum,s)=>sum+balance(s.id),0);
+      $('content').innerHTML=`<div class="card"><h2>${profile?.role==='admin'?'Students / Groups':'My Students / Groups'}</h2><p class="muted">Auto-assignment is active: every successful booking links the student with that tutor and course automatically.</p>${profile?.role==='admin'?`<div class="row"><input placeholder="Search student" value="${esc(f.q||'')}" oninput="s916SetStudentFilter('q',this.value)"><select onchange="s916SetStudentFilter('university',this.value)"><option value="">All universities</option>${unis.map(u=>`<option value="${esc(u)}" ${key(f.university)===key(u)?'selected':''}>${esc(u)}</option>`).join('')}</select><select onchange="s916SetStudentFilter('tutor',this.value)"><option value="">All tutors</option>${tutorsList.map(t=>`<option value="${t.id}" ${f.tutor===t.id?'selected':''}>${esc(t.name||t.email||'Tutor')}</option>`).join('')}</select><select onchange="s916SetStudentFilter('course',this.value)"><option value="">All courses</option>${courses.map(c=>`<option value="${esc(c)}" ${key(f.course)===key(c)?'selected':''}>${esc(c)}</option>`).join('')}</select><select onchange="s916SetStudentFilter('balance',this.value)"><option value="">All balances</option><option value="unpaid" ${f.balance==='unpaid'?'selected':''}>Unpaid only</option><option value="paid" ${f.balance==='paid'?'selected':''}>No balance</option></select><button class="ghost" onclick="s916SyncAssignments()">Sync auto-assignments</button></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Shown</div><div class="kpi-value">${visible.length}</div></div><div class="kpi-card"><div class="kpi-label">Unpaid Balance</div><div class="kpi-value">${fmtMoney(totalBal)}</div></div></div>`:''}${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Type</th><th>Assigned Tutors</th><th>Assigned Courses</th><th>Upcoming</th><th>Balance</th><th>Actions</th></tr>${visible.map(s=>`<tr><td><b>${esc(s.name||'')}</b></td><td>${esc(s.email||'')}</td><td>${esc(s.phone||'')}</td><td>${esc(s.university||'')}</td><td>${esc(s.type||'individual')}</td><td class="assigned-list">${esc(tutorNames(s.id)||'None')}</td><td class="course-list">${esc(assignedCourses(s.id).join(', ')||'None')}</td><td>${upcomingStudent(s.id)}</td><td>${fmtMoney(balance(s.id))}</td><td>${profile?.role==='admin'?`<button onclick="editStudent('${s.id}')">Edit</button><button onclick="editStudentTutors('${s.id}')">Assign Tutors</button><button onclick="editStudentCourses('${s.id}')">Assign Courses</button><button onclick="s916ViewStudent('${s.id}')">View</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button>`:''}</td></tr>`).join('')}</table>`:`<p class="muted">No accounts match these filters.</p>`}<hr><h3>Create Student or Group Account</h3><div class="row"><input id="sn" placeholder="Name"><input id="se" type="email" placeholder="Email"><input id="sp" placeholder="Password"><input id="sphone" placeholder="Phone"><input id="suniversity" placeholder="University"><select id="stype"><option>individual</option><option>group</option></select></div><input id="smembers" placeholder="Group members comma separated"><label>Assign Tutor(s)</label><div class="checkbox-grid">${typeof tutorCheckboxes==='function'?tutorCheckboxes('assignedTutor'):''}</div><label>Assign Course(s)</label><div class="checkbox-grid">${typeof courseCheckboxes==='function'?courseCheckboxes('assignedCourse'):''}</div><button onclick="createAccount('student')">Create Student/Group</button></div>`;
+    }catch(e){console.error(e);$('content').innerHTML=`<div class="card"><h2>Students / Groups</h2><p class="muted">The organization view could not load safely. Existing student tools are still preserved.</p><button onclick="location.reload()">Reload</button></div>`}
+  };
+  window.s916ViewStudent=function(id){try{const s=(DATA.users||{})[id]||{};const bs=arr(DATA.bookings).filter(b=>b.studentId===id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));$('content').innerHTML=`<div class="card"><button class="ghost" onclick="adminStudents()">Back to Students</button><h2>${esc(s.name||'Student')}</h2><div class="grid"><div class="card"><h3>Profile</h3><p><b>Email:</b> ${esc(s.email||'')}</p><p><b>Phone:</b> ${esc(s.phone||'')}</p><p><b>University:</b> ${esc(s.university||'')}</p><p><b>Assigned Tutors:</b> ${esc(tutorNames(id)||'None')}</p><p><b>Assigned Courses:</b> ${esc(assignedCourses(id).join(', ')||'None')}</p></div><div class="card"><h3>Tracking</h3><p><b>Upcoming sessions:</b> ${upcomingStudent(id)}</p><p><b>Unpaid balance:</b> ${fmtMoney(balance(id))}</p><label>Private admin notes</label><textarea id="s916Notes">${esc(s.adminNotes||'')}</textarea><button onclick="s916SaveStudentNotes('${id}')">Save Notes</button></div></div><div class="card"><h3>Session History</h3>${bs.length&&typeof bookingRows==='function'?bookingRows(bs,true):'<p class="muted">No sessions yet.</p>'}</div></div>`}catch(e){console.error(e);adminStudents()}};
+  window.s916SaveStudentNotes=async function(id){await db.ref('users/'+id+'/adminNotes').set($('s916Notes')?.value||'');await loadData();s916ViewStudent(id)};
+  window.adminTutors=function(){
+    try{
+      const f=window.s916TutorFilters||{};const all=tutorRows();const unis=uniqText(all.flatMap(t=>tutorUniversities(t.id)));const courses=courseNames();
+      const visible=all.filter(t=>{const text=key(`${t.name} ${t.email} ${t.phone} ${t.whatsapp}`);if(f.q&&!text.includes(key(f.q)))return false;if(f.university&&!tutorUniversities(t.id).map(key).includes(key(f.university)))return false;if(f.course&&!tutorCourses(t.id).map(key).includes(key(f.course)))return false;return true;});
+      $('content').innerHTML=`<div class="card"><h2>Booking Tutor Accounts</h2><p class="admin-note"><b>This tab creates real booking tutor accounts.</b> Filters are view-only and do not change existing tutor behavior.</p><div class="row"><input placeholder="Search tutor" value="${esc(f.q||'')}" oninput="s916SetTutorFilter('q',this.value)"><select onchange="s916SetTutorFilter('university',this.value)"><option value="">All universities</option>${unis.map(u=>`<option value="${esc(u)}" ${key(f.university)===key(u)?'selected':''}>${esc(u)}</option>`).join('')}</select><select onchange="s916SetTutorFilter('course',this.value)"><option value="">All courses</option>${courses.map(c=>`<option value="${esc(c)}" ${key(f.course)===key(c)?'selected':''}>${esc(c)}</option>`).join('')}</select></div>${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Universities</th><th>Courses</th><th>Students</th><th>Upcoming</th><th>Rate</th><th>WhatsApp</th><th>Actions</th></tr>${visible.map(t=>`<tr><td><b>${esc(t.name||'')}</b></td><td>${esc(t.email||'')}</td><td>${esc(tutorUniversities(t.id).join(', ')||t.university||'')}</td><td>${esc(tutorCourses(t.id).join(', ')||'None')}</td><td>${tutorStudents(t.id).length}</td><td>${upcomingTutor(t.id)}</td><td>${fmtMoney(t.rate||0)}/h/person</td><td>${esc(t.whatsapp||'')}</td><td><button onclick="s916ViewTutor('${t.id}')">View</button><button onclick="editTutor('${t.id}')">Edit</button><button class="danger" onclick="deleteTutor('${t.id}')">Remove Access</button></td></tr>`).join('')}</table>`:`<p class="muted">No tutor accounts match these filters.</p>`}<hr><h3>Create Booking Tutor Account</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"><input id="tuiv" placeholder="University e.g. University of Balamand"></div><input id="tl" placeholder="General locations: Online, On Campus (Koura Campus)"><button onclick="createAccount('tutor')">Create / Link Booking Tutor</button></div>`;
+    }catch(e){console.error(e);$('content').innerHTML=`<div class="card"><h2>Booking Tutor Accounts</h2><p class="muted">The tutor organization view could not load safely.</p><button onclick="location.reload()">Reload</button></div>`}
+  };
+  window.s916ViewTutor=function(id){try{const t=(DATA.users||{})[id]||{};const ids=tutorStudents(id);const bs=arr(DATA.bookings).filter(b=>b.tutorId===id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));$('content').innerHTML=`<div class="card"><button class="ghost" onclick="adminTutors()">Back to Tutors</button><h2>${esc(t.name||'Tutor')}</h2><div class="grid"><div class="card"><h3>Profile</h3><p><b>Email:</b> ${esc(t.email||'')}</p><p><b>WhatsApp:</b> ${esc(t.whatsapp||t.phone||'')}</p><p><b>Universities:</b> ${esc(tutorUniversities(id).join(', ')||t.university||'')}</p><p><b>Courses:</b> ${esc(tutorCourses(id).join(', ')||'None')}</p></div><div class="card"><h3>Teaching Summary</h3><p><b>Active students:</b> ${ids.length}</p><p><b>Upcoming sessions:</b> ${upcomingTutor(id)}</p><p><b>Total sessions:</b> ${bs.length}</p></div></div><div class="card"><h3>Students linked to this tutor</h3>${ids.length?`<table class="table"><tr><th>Name</th><th>University</th><th>Courses with tutor</th><th>Action</th></tr>${ids.map(sid=>{const s=(DATA.users||{})[sid]||{};const cs=uniqText(activeBookings().filter(b=>b.tutorId===id&&b.studentId===sid).map(b=>b.course));return `<tr><td>${esc(s.name||'')}</td><td>${esc(s.university||'')}</td><td>${esc(cs.join(', ')||'None')}</td><td><button onclick="s916ViewStudent('${sid}')">View Student</button></td></tr>`}).join('')}</table>`:'<p class="muted">No linked students yet.</p>'}</div><div class="card"><h3>Sessions</h3>${bs.length&&typeof bookingRows==='function'?bookingRows(bs,true):'<p class="muted">No sessions yet.</p>'}</div></div>`}catch(e){console.error(e);adminTutors()}};
+})();

@@ -1348,10 +1348,3 @@ html,body{
 /* v9.11 Request Access dropdowns */
 .scroll-select{width:100%;max-height:170px;overflow-y:auto;}
 select.scroll-select[multiple]{min-height:140px;}
-
-/* v9.15 organization add-ons */
-.org-filter-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
-.kpi-grid.mini{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:10px 0}
-.timeline-item{border-left:3px solid rgba(50,120,220,.25);padding:8px 12px;margin:8px 0;background:rgba(255,255,255,.55);border-radius:10px}
-textarea#s915Notes{min-height:90px;width:100%;resize:vertical}
-.assigned-list,.course-list{max-width:240px;white-space:normal}
