@@ -1048,3 +1048,16 @@ html,body{
 .chat-directory-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
 .chat-target-card{border:1px solid var(--border);border-radius:20px;background:#fff;padding:14px}
 .semester-chip{display:inline-flex;border-radius:999px;background:var(--blue2);padding:6px 10px;font-weight:900;font-size:12px;margin:4px 4px 4px 0}
+
+
+/* v7.6 student creation semester/course + organized admin chat */
+.admin-chat-layout{display:grid;grid-template-columns:minmax(210px,280px) 1fr;gap:14px}
+.admin-chat-sidebar{border:1px solid var(--border);border-radius:24px;background:#fff;padding:14px;max-height:70vh;overflow:auto}
+.admin-chat-main{border:1px solid var(--border);border-radius:24px;background:#fff;padding:16px;min-height:420px}
+.chat-list-section{margin:12px 0}
+.chat-list-title{font-weight:950;color:var(--navy);margin:10px 0 6px}
+.chat-list-button{width:100%;text-align:left;margin:4px 0;display:flex;justify-content:space-between;align-items:center}
+.chat-list-button small{color:var(--muted);font-weight:800}
+.semester-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.semester-filter-row button.active{background:var(--blue);color:#fff}
+@media(max-width:780px){.admin-chat-layout{grid-template-columns:1fr}.admin-chat-sidebar{max-height:none}}

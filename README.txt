@@ -1,14 +1,13 @@
-Scheduled v7.5 — Admin Tutor/Semester/Chat Fix
+Scheduled v7.6 — Student Semester/Course + Organized Admin Chat
 
-Built from v7.4.
+Built from v7.5.
 
 Fixes/adds:
-- Admin Tutors page rebuilt: add tutors, edit tutor info, assign courses, assign students, hide/show from bookings.
-- Public Tutor Profiles admin page: hide/show public profile separately.
-- Hidden tutor from bookings no longer should appear in booking/availability lists.
-- Motivation Banner Manager has more options: icon, theme, time, subtitle, exam mode.
-- Admin Chat tab to message any tutor or student.
-- Students can be assigned to semesters.
-- Preserves v6.7 features and v7.4 additions.
+- New student/group creation form now includes semester assignment.
+- New student/group creation form now includes course assignment.
+- Admin Chat is organized into Tutors and Students lists.
+- Admin Chat can be filtered by semester.
+- Selecting a tutor/student opens the chat directly in the same page.
+- Everything else from v7.5 preserved.
 
 JS syntax check passed.

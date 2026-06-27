@@ -1197,6 +1197,130 @@ function extendedMotivationBannerSettingsPage(){
   </div>`;
 }
 
+
+
+/* ===== v7.6 student creation semester/course + organized admin chat ===== */
+function v76CourseOptions(selected=""){
+  const list=typeof courses==="function"?courses():v74List(DATA.courses||{});
+  return `<option value="">Select course</option>`+list.map(c=>{
+    const val=c.id||c.code||c.name||"";
+    const label=c.name||c.code||val;
+    return `<option value="${val}" ${selected===val?"selected":""}>${label}</option>`;
+  }).join("");
+}
+function v76SemesterName(id){return (DATA.semesters||{})[id]?.name||""}
+function v76SemesterButtons(current="all"){
+  const sems=v74List(DATA.semesters||{}).filter(s=>!s.archived);
+  return `<div class="semester-filter-row">
+    <button class="${current==="all"?"active":""}" onclick="adminChatPage('all')">All</button>
+    <button class="${current==="none"?"active":""}" onclick="adminChatPage('none')">No Semester</button>
+    ${sems.map(s=>`<button class="${current===s.id?"active":""}" onclick="adminChatPage('${s.id}')">${s.name}</button>`).join("")}
+  </div>`;
+}
+function v76FilterBySemester(users, semesterId){
+  if(semesterId==="all")return users;
+  if(semesterId==="none")return users.filter(u=>!u.semesterId);
+  return users.filter(u=>u.semesterId===semesterId);
+}
+
+/* Override adminStudents to include semester + course in CREATE form while preserving existing assignment/edit tools */
+function adminStudents(){
+  if(profile.role!=="admin")return v74Safe("Students","Admin only.");
+  const visible=typeof students==="function"?students():v74List(DATA.users||{}).filter(u=>u.role==="student"&&!u.removed);
+  $("content").innerHTML=`<div class="card"><h2>Students / Groups</h2>
+  ${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Semester</th><th>Type</th><th>Assigned Tutors</th><th>Assigned Courses</th><th>Actions</th></tr>${visible.map(s=>`<tr><td>${s.name||""}</td><td>${s.email||""}</td><td>${s.phone||""}</td><td>${s.university||""}</td><td>${v76SemesterName(s.semesterId)||""}</td><td>${s.type||"individual"}</td><td class="assigned-list">${typeof assignedTutorNames==="function"?assignedTutorNames(s.id):"None"}</td><td class="course-list">${typeof assignedCourseNames==="function"?assignedCourseNames(s.id):v74Arr(s.assignedCourseIds).join(", ")}</td><td><button onclick="editStudent('${s.id}')">Edit</button><button onclick="editStudentTutors('${s.id}')">Assign Tutors</button><button onclick="editStudentCourses('${s.id}')">Assign Courses</button><button onclick="assignStudentSemester('${s.id}')">Assign Semester</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button></td></tr>`).join("")}</table>`:v74Empty("👩‍🎓","No students yet","Create your first student below.")}
+
+  <hr><h3>Create Student or Group Account</h3>
+  <div class="row">
+    <input id="sn" placeholder="Name">
+    <input id="se" placeholder="Email">
+    <input id="sp" placeholder="Password">
+    <input id="sphone" placeholder="Phone">
+    <input id="suniversity" placeholder="University">
+  </div>
+  <div class="row">
+    <select id="stype"><option value="individual">Individual Student</option><option value="group">Group Account</option></select>
+    <select id="newStudentSemester">${v75SemestersOptions("")}</select>
+    <select id="newStudentCourse">${v76CourseOptions("")}</select>
+  </div>
+  <p class="muted">You can assign more tutors/courses after creating the account.</p>
+  <button onclick="addStudentWithSemesterCourse()">Create Student / Group</button>
+  </div>`;
+}
+async function addStudentWithSemesterCourse(){
+  if(profile.role!=="admin")return alert("Admin only.");
+  const name=($("sn").value||"").trim();
+  const email=($("se").value||"").trim();
+  const password=($("sp").value||"").trim()||"123456";
+  const phone=($("sphone").value||"").trim();
+  const university=($("suniversity").value||"").trim();
+  const type=$("stype").value||"individual";
+  const semesterId=$("newStudentSemester").value||"";
+  const courseId=$("newStudentCourse").value||"";
+  if(!name||!email)return alert("Name and email are required.");
+  const existing=v74List(DATA.users||{}).find(u=>(u.email||"").toLowerCase()===email.toLowerCase());
+  const payload={
+    name,email,password,phone,university,type,role:"student",
+    semesterId,
+    assignedCourseIds:courseId?[courseId]:[],
+    assignedTutorIds:existing?.assignedTutorIds||[],
+    removed:false,
+    updatedAt:Date.now()
+  };
+  if(existing){
+    await db.ref("users/"+existing.id).update(payload);
+  }else{
+    const id="student_"+Date.now();
+    await db.ref("users/"+id).set({...payload,createdAt:Date.now()});
+  }
+  await loadData();
+  adminStudents();
+}
+
+/* Override admin chat: grouped as lists by tutors/students and semester, not cards */
+function adminChatPage(semesterId="all"){
+  if(profile.role!=="admin")return;
+  const allUsers=v74List(DATA.users||{}).filter(u=>!u.removed&&(u.role==="student"||u.role==="tutor"));
+  const filtered=v76FilterBySemester(allUsers,semesterId);
+  const tutorsList=filtered.filter(u=>u.role==="tutor");
+  const studentsList=filtered.filter(u=>u.role==="student");
+  $("content").innerHTML=`<div class="card"><h2>Admin Chat</h2><p class="muted">Choose a semester, then select a tutor or student from the list.</p>${v76SemesterButtons(semesterId)}
+    <div class="admin-chat-layout">
+      <div class="admin-chat-sidebar">
+        <div class="chat-list-section">
+          <div class="chat-list-title">Tutors ${semesterId==="all"?"":`• ${semesterId==="none"?"No Semester":v76SemesterName(semesterId)}`}</div>
+          ${tutorsList.length?tutorsList.map(t=>`<button class="ghost chat-list-button" onclick="openAdminChat('${t.id}')"><span>${t.name||t.email}</span><small>${v76SemesterName(t.semesterId)||"No semester"}</small></button>`).join(""):`<p class="muted">No tutors in this semester.</p>`}
+        </div>
+        <hr>
+        <div class="chat-list-section">
+          <div class="chat-list-title">Students ${semesterId==="all"?"":`• ${semesterId==="none"?"No Semester":v76SemesterName(semesterId)}`}</div>
+          ${studentsList.length?studentsList.map(s=>`<button class="ghost chat-list-button" onclick="openAdminChat('${s.id}')"><span>${s.name||s.email}</span><small>${v76SemesterName(s.semesterId)||"No semester"}</small></button>`).join(""):`<p class="muted">No students in this semester.</p>`}
+        </div>
+      </div>
+      <div id="adminChatMain" class="admin-chat-main">${v74Empty("💬","Select a conversation","Choose a tutor or student from the list to start chatting.")}</div>
+    </div>
+  </div>`;
+}
+function openAdminChat(otherId){
+  const cid=v74ChatId(v74Uid(),otherId), other=user(otherId)||{};
+  const msgs=v74List((DATA.chats||{})[cid]?.messages||{}).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+  const target=$("adminChatMain")||$("content");
+  target.innerHTML=`<div class="section-title-row"><h2>${other.name||other.email||"User"}</h2><span class="status-badge">${other.role||""}</span></div>
+    <p class="muted">${v76SemesterName(other.semesterId)||"No semester assigned"}</p>
+    <div id="adminChatMessages">${msgs.length?msgs.map(m=>`<div class="message-bubble ${m.from===v74Uid()?"me":"them"}">${m.text||""}<br><span class="muted small">${new Date(m.createdAt||Date.now()).toLocaleString()}</span></div>`).join(""):v74Empty("💬","No messages yet","Start the conversation.")}</div>
+    <div class="row"><input id="adminChatInput" placeholder="Write a message..."><button onclick="sendAdminChatMessage('${otherId}')">Send</button></div>`;
+}
+async function sendAdminChatMessage(otherId){
+  const input=$("adminChatInput");
+  const text=(input?.value||"").trim();
+  if(!text)return;
+  const cid=v74ChatId(v74Uid(),otherId);
+  await db.ref("chats/"+cid+"/participants").set({[v74Uid()]:true,[otherId]:true});
+  await db.ref("chats/"+cid+"/messages").push({from:v74Uid(),to:otherId,text,createdAt:Date.now()});
+  await loadData();
+  openAdminChat(otherId);
+}
+
 function renderTabs(){let t=profile.role==="admin"?["Dashboard","Command Center","Admin Chat","Tutors","Tutor Profiles","Students","Groups","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Groups","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","My Scheduled","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Achievements","Semester Recap","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button type="button" class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 
 async function openTab(tab,btn){
