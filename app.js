@@ -1032,74 +1032,53 @@ function s92Total(){ return Number(s92SelectedTutor().rate||0)*Number(S92_BOOKIN
 function s92AvailabilityRows(tutorId){
   return s92List(DATA.availability||{}).filter(a=>a.tutorId===tutorId || a.uid===tutorId || a.userId===tutorId);
 }
+
 function s92RowTypeMatches(row,type){
-  const raw=String(row.type||row.sessionType||row.mode||row.location||row.availabilityType||"").toLowerCase();
-  if(!raw)return true;
-  const wanted=String(type||"").toLowerCase();
-  if(wanted.includes("online"))return raw.includes("online")||raw.includes("zoom")||raw.includes("teams")||raw.includes("remote");
-  if(wanted.includes("campus"))return raw.includes("campus")||raw.includes("on campus")||raw.includes("in person")||raw.includes("in-person")||raw.includes("offline");
-  return true;
+  return s93RowMatchesExactType(row,type);
 }
+
+
 function s92RowDateMatches(row,date){
   const d=row.date||row.day||row.availableDate||row.slotDate||"";
   if(!d)return true;
   return d===date;
 }
+
 function s92BaseSlotsFromRows(tutorId,date,type){
-  const rows=s92AvailabilityRows(tutorId).filter(r=>s92RowDateMatches(r,date)&&s92RowTypeMatches(r,type));
-  let starts=[];
-  rows.forEach(r=>{
-    const step=Number(r.step||r.interval||60);
-    if(Array.isArray(r.slots))r.slots.forEach(s=>starts.push(s.start||s.time||s.from||s));
-    else if(Array.isArray(r.times))r.times.forEach(s=>starts.push(s.start||s.time||s.from||s));
-    else if(r.start && (r.end||r.to)){
-      const a=s92TimeToMin(r.start), b=s92TimeToMin(r.end||r.to);
-      if(a!==null&&b!==null&&b>a){ for(let x=a;x<b;x+=step)starts.push(s92MinToTime(x)); }
-    }else if(r.start)starts.push(r.start);
-    else if(r.time)starts.push(r.time);
-    else if(r.from)starts.push(r.from);
-  });
-  return [...new Set(starts.filter(Boolean))].sort((a,b)=>(s92TimeToMin(a)??0)-(s92TimeToMin(b)??0));
+  return s93BaseSlotsFromRows(tutorId,date,type).map(s=>s.time);
 }
+
+
 function s92BookedRanges(tutorId,date){
   return s92List(DATA.bookings||{}).filter(b=>b.tutorId===tutorId && b.date===date).map(b=>{
     const s=s92TimeToMin(b.start||b.time);
     return {start:s,end:s+Number(b.duration||1)*60,id:b.id};
   }).filter(r=>r.start!==null && !isNaN(r.end));
 }
+
 function s92SlotAvailableForDuration(tutorId,date,start,duration,type){
-  if(s92SlotExpired(date,start))return false;
-  const startMin=s92TimeToMin(start);
-  if(startMin===null)return false;
-  const endMin=startMin+Number(duration||1)*60;
-  const base=s92BaseSlotsFromRows(tutorId,date,type).map(s92TimeToMin).filter(x=>x!==null);
-  const step=60;
-  for(let m=startMin;m<endMin;m+=step){
-    if(!base.includes(m))return false;
-  }
-  const booked=s92BookedRanges(tutorId,date);
-  if(booked.some(r=>s92RangesOverlap(startMin,endMin,r.start,r.end)))return false;
-  return true;
+  return s93SlotAvailableForDuration(tutorId,date,start,duration,type);
 }
+
+
+
 function s92AvailableStarts(tutorId,date,type,duration){
-  return s92BaseSlotsFromRows(tutorId,date,type).filter(t=>s92SlotAvailableForDuration(tutorId,date,t,duration,type));
+  return s93AvailableStarts(tutorId,date,type,duration);
 }
+
+
+
 function s92DateHasSlots(tutorId,date,type,duration){
-  if(s92DatePast(date))return false;
-  return s92AvailableStarts(tutorId,date,type,duration).length>0;
+  return s93DateHasSlots(tutorId,date,type,duration);
 }
+
+
+
 function s92AvailabilityMessage(){
-  if(!S92_BOOKING.date)return "";
-  const same=s92AvailableStarts(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.sessionType,S92_BOOKING.duration);
-  if(same.length)return "";
-  const oppositeType=s92OppositeType(S92_BOOKING.sessionType);
-  const opposite=s92AvailableStarts(S92_BOOKING.tutorId,S92_BOOKING.date,oppositeType,S92_BOOKING.duration);
-  if(opposite.length){
-    const icon=oppositeType==="Online"?"💻":"🏫";
-    return `<div class="s92-note">${icon} This tutor is available ${oppositeType.toLowerCase()} on this day.<br><button onclick="S92_BOOKING.sessionType='${oppositeType}';S92_BOOKING.time='';s92RenderBookingPage()">Switch to ${oppositeType}</button></div>`;
-  }
-  return `<div class="s92-note">This day has no remaining available times for the selected session type and duration. Choose another day.</div>`;
+  return s93OppositeAvailabilityMessage();
 }
+
+
 
 function s92RenderBookingPanel(){
   const tutorList=s92Tutors();
@@ -1194,7 +1173,7 @@ async function confirmBooking(){
     if(!S92_BOOKING.date)return alert("Please choose a date.");
     if(!S92_BOOKING.time)return alert("Please choose a time.");
     if(!s92SlotAvailableForDuration(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.time,S92_BOOKING.duration,S92_BOOKING.sessionType))return alert("This time is no longer available.");
-    const booking={studentId:currentUser.uid,tutorId:S92_BOOKING.tutorId,course:s92SelectedCourse(),date:S92_BOOKING.date,start:S92_BOOKING.time,duration:Number(S92_BOOKING.duration||1),sessionType:S92_BOOKING.sessionType,paymentMethod:"Whish",paid:false,status:"confirmed",done:false,createdAt:Date.now()};
+    const booking={studentId:currentUser.uid,tutorId:S92_BOOKING.tutorId,availabilityId:s93AvailabilityIdForBooking(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.time,S92_BOOKING.duration,S92_BOOKING.sessionType),course:s92SelectedCourse(),date:S92_BOOKING.date,start:S92_BOOKING.time,duration:Number(S92_BOOKING.duration||1),sessionType:S92_BOOKING.sessionType,paymentMethod:"Whish",paid:false,status:"confirmed",done:false,createdAt:Date.now()};
     const ref=await db.ref("bookings").push(booking);
     await loadData();
     if(typeof checkMilestonesAfterBooking==="function")await checkMilestonesAfterBooking();
@@ -1282,6 +1261,122 @@ async function s92SendBroadcast(){
   await loadData(); alert("Message sent."); injectChatButton();
 }
 setInterval(()=>{ if(currentUser&&profile)loadData().then(()=>{injectChatButton(); if(S92_CHAT_ACTIVE&&document.getElementById("s92ChatMain"))openChatWith(S92_CHAT_ACTIVE);}).catch(()=>{}); },10000);
+
+
+
+/* ===== Scheduled v9.3: exact availability-block engine ===== */
+function s93NormalizeTypeLabel(type){
+  const s=String(type||"").toLowerCase().trim();
+  if(s.includes("campus") || s.includes("on campus") || s.includes("in person") || s.includes("in-person") || s.includes("offline")) return "On Campus";
+  if(s.includes("online") || s.includes("zoom") || s.includes("teams") || s.includes("remote")) return "Online";
+  return "";
+}
+function s93AvailabilityType(row){
+  const explicit = row.sessionType ?? row.type ?? row.mode ?? row.availabilityType ?? row.locationType ?? row.format ?? "";
+  if(Array.isArray(explicit)){
+    return explicit.map(s93NormalizeTypeLabel).filter(Boolean);
+  }
+  const text=String(explicit||"").toLowerCase();
+  const types=[];
+  if(text.includes("online") || text.includes("zoom") || text.includes("teams") || text.includes("remote")) types.push("Online");
+  if(text.includes("campus") || text.includes("on campus") || text.includes("in person") || text.includes("in-person") || text.includes("offline")) types.push("On Campus");
+  return [...new Set(types)];
+}
+function s93RowMatchesExactType(row,type){
+  const types=s93AvailabilityType(row);
+  if(!types.length) return false;
+  return types.includes(s93NormalizeTypeLabel(type));
+}
+function s93AvailabilityBlockId(row){
+  return row.id || row.availabilityId || row.blockId || row.key || "";
+}
+function s93RowsForType(tutorId,date,type){
+  return s92AvailabilityRows(tutorId).filter(row=>s92RowDateMatches(row,date) && s93RowMatchesExactType(row,type));
+}
+function s93BaseSlotsFromRows(tutorId,date,type){
+  const rows=s93RowsForType(tutorId,date,type);
+  let starts=[];
+  rows.forEach(r=>{
+    const step=Number(r.step||r.interval||60);
+    const blockId=s93AvailabilityBlockId(r);
+    const addSlot=(raw)=>{
+      let value=raw;
+      if(raw && typeof raw==="object") value=raw.start||raw.time||raw.from||raw.value;
+      if(value) starts.push({time:value, availabilityId:blockId, row:r});
+    };
+    if(Array.isArray(r.slots)) r.slots.forEach(addSlot);
+    else if(Array.isArray(r.times)) r.times.forEach(addSlot);
+    else if(r.start && (r.end||r.to)){
+      const a=s92TimeToMin(r.start), b=s92TimeToMin(r.end||r.to);
+      if(a!==null && b!==null && b>a){
+        for(let x=a; x<b; x+=step) starts.push({time:s92MinToTime(x), availabilityId:blockId, row:r});
+      }
+    }else if(r.start) addSlot(r.start);
+    else if(r.time) addSlot(r.time);
+    else if(r.from) addSlot(r.from);
+  });
+  const seen=new Map();
+  starts.forEach(s=>{
+    if(!seen.has(s.time)) seen.set(s.time,s);
+  });
+  return [...seen.values()].sort((a,b)=>(s92TimeToMin(a.time)??0)-(s92TimeToMin(b.time)??0));
+}
+function s93BookedRanges(tutorId,date){
+  return s92List(DATA.bookings||{}).filter(b=>b.tutorId===tutorId && b.date===date).map(b=>{
+    const s=s92TimeToMin(b.start||b.time);
+    return {
+      start:s,
+      end:s + Number(b.duration||1)*60,
+      id:b.id,
+      availabilityId:b.availabilityId||"",
+      sessionType:s93NormalizeTypeLabel(b.sessionType||"")
+    };
+  }).filter(r=>r.start!==null && !isNaN(r.end));
+}
+function s93SlotAvailableForDuration(tutorId,date,start,duration,type){
+  if(s92SlotExpired(date,start)) return false;
+  const wantedType=s93NormalizeTypeLabel(type);
+  const startMin=s92TimeToMin(start);
+  if(startMin===null) return false;
+  const endMin=startMin + Number(duration||1)*60;
+  const base=s93BaseSlotsFromRows(tutorId,date,wantedType);
+  const baseMinutes=base.map(s=>s92TimeToMin(s.time)).filter(x=>x!==null);
+  const step=60;
+  for(let m=startMin; m<endMin; m+=step){
+    if(!baseMinutes.includes(m)) return false;
+  }
+  const booked=s93BookedRanges(tutorId,date);
+  if(booked.some(r=>s92RangesOverlap(startMin,endMin,r.start,r.end))) return false;
+  return true;
+}
+function s93AvailableStarts(tutorId,date,type,duration){
+  const seen=new Set();
+  return s93BaseSlotsFromRows(tutorId,date,type)
+    .filter(s=>!seen.has(s.time) && seen.add(s.time))
+    .filter(s=>s93SlotAvailableForDuration(tutorId,date,s.time,duration,type))
+    .map(s=>s.time);
+}
+function s93AvailabilityIdForBooking(tutorId,date,start,duration,type){
+  const base=s93BaseSlotsFromRows(tutorId,date,type);
+  const row=base.find(s=>s.time===start);
+  return row?.availabilityId || "";
+}
+function s93DateHasSlots(tutorId,date,type,duration){
+  if(s92DatePast(date)) return false;
+  return s93AvailableStarts(tutorId,date,type,duration).length>0;
+}
+function s93OppositeAvailabilityMessage(){
+  if(!S92_BOOKING.date) return "";
+  const chosen=s93AvailableStarts(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.sessionType,S92_BOOKING.duration);
+  if(chosen.length) return "";
+  const opposite=s92OppositeType(S92_BOOKING.sessionType);
+  const oppositeSlots=s93AvailableStarts(S92_BOOKING.tutorId,S92_BOOKING.date,opposite,S92_BOOKING.duration);
+  if(oppositeSlots.length){
+    const icon=opposite==="Online" ? "💻" : "🏫";
+    return `<div class="s93-type-warning"><b>${icon} Availability note:</b><br>This tutor is available ${opposite.toLowerCase()} on this day, not ${S92_BOOKING.sessionType.toLowerCase()}.<br><button onclick="S92_BOOKING.sessionType='${opposite}';S92_BOOKING.time='';s92RenderBookingPage()">Switch to ${opposite}</button></div>`;
+  }
+  return `<div class="s93-type-warning"><b>No matching availability:</b><br>This day has no remaining ${S92_BOOKING.sessionType.toLowerCase()} availability for the selected duration.</div>`;
+}
 
 function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 async function openTab(tab,btn){await loadData(); if(typeof closeMenu==="function")setTimeout(closeMenu,0);document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Financial:financialPage,Payments:financialPage,Statistics:statsPage,Reviews:reviewsPage,Announcements:tutorAnnouncementsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),Payments:paymentsPage};routes[tab]()}

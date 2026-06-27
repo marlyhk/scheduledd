@@ -1316,3 +1316,17 @@ html,body{
   .s92-chat-list{max-height:220px;border-right:0;border-bottom:1px solid var(--border)}
   .s92-day{font-size:12px;border-radius:12px}
 }
+
+
+/* v9.3 availability engine exact session-type fix */
+.s93-type-warning{
+  margin-top:12px;
+  border:1px solid var(--border);
+  border-radius:18px;
+  background:#FFF7ED;
+  color:#9A3412;
+  padding:12px;
+  line-height:1.45;
+}
+.s93-type-warning b{color:#7C2D12}
+.s93-type-warning button{margin-top:8px}

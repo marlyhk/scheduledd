@@ -1,43 +1,15 @@
-Scheduled v9.2 — Booking System Redesign
+Scheduled v9.3 — Availability Engine Fix
 
-Built from Scheduled v6.7 stable only.
+Built from Scheduled v9.2.
 
-Rebuilt:
-- Booking system
-- Calendar/availability engine
-- Payment permissions
-- Internal chat
-
-Kept:
-- Existing v6.7 structure, dashboard, sidebar, auth, Firebase, animation assets, and other working pages.
-
-Booking:
-- Flow: Tutor → Course → Session Type → Duration → Calendar → Times → Summary → Confirm.
-- Online / On Campus segmented buttons.
-- Monthly calendar with previous/next month.
-- Calendar is contained inside its card.
-- Past dates disabled with red strike.
-- All valid available times shown in a scrollable grid.
-- Booked, expired, unavailable, and overlapping slots hidden.
-- Duration-based validation.
-- Whish only.
-- WhatsApp confirmation with booking details.
-- Auto-refresh every minute.
-
-Payments:
-- Students view only.
-- Tutor can edit own students.
-- Admin can edit all.
-- Paid green, unpaid red.
-- Student payment page refreshes every minute.
-
-Chat:
-- Floating chat button with unread badge.
-- Students chat with assigned tutors.
-- Tutors chat with assigned students and can broadcast to all assigned students.
-- Admin can chat with students/tutors.
-- Realtime polling refresh.
+Fixes:
+- Online availability no longer appears under On Campus.
+- On Campus availability no longer appears under Online.
+- Availability blocks must explicitly match the selected session type.
+- No fallback assumption that untyped availability supports both.
+- Helpful message appears when the selected day has availability only in the opposite type.
+- Booking stores availabilityId when available.
+- Current v9.2 booking layout preserved.
 
 Checks:
 - JavaScript syntax check passed.
-- Critical duplicate function check passed.
