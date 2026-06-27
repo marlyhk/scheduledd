@@ -2494,3 +2494,120 @@ async function openTab(tab,btn){
   if(routes[tab])return routes[tab]();
   dashboardPage();
 }
+
+/* ===== v9.15 admin organization add-ons — stable overlay =====
+   Scope: keep existing tabs, add filters/summaries/timelines, and strengthen auto assignment.
+*/
+function s915Esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));}
+function s915Key(v){return String(v||"").trim().toLowerCase();}
+function s915UniqueText(arr){const map=new Map();(arr||[]).forEach(x=>{const clean=prettyOptionLabel?prettyOptionLabel(String(x||"").trim()):String(x||"").trim();if(clean&&!map.has(s915Key(clean)))map.set(s915Key(clean),clean)});return [...map.values()];}
+function s915ActiveBookings(){return list(DATA.bookings||{}).filter(b=>{const st=String(b.status||"confirmed").toLowerCase();return st!=="cancelled"&&st!=="deleted"&&!b.done;});}
+function s915BookingsForStudent(studentId){return list(DATA.bookings||{}).filter(b=>b.studentId===studentId);}
+function s915ActiveBookingsForStudent(studentId){return s915ActiveBookings().filter(b=>b.studentId===studentId);}
+function s915ActiveTutorsForStudent(studentId){return s915UniqueText(s915ActiveBookingsForStudent(studentId).map(b=>b.tutorId)).filter(Boolean);}
+function s915ActiveCoursesForStudent(studentId){return s915UniqueText(s915ActiveBookingsForStudent(studentId).map(b=>b.course)).filter(Boolean);}
+function s915StudentBalance(studentId){return s915BookingsForStudent(studentId).reduce((sum,b)=>sum+(b.payments||[]).reduce((s,p)=>s+(p.paid?0:Number(p.amount||0)),0),0);}
+function s915UpcomingCountForStudent(studentId){const today=typeof todayISO==="function"?todayISO():new Date().toISOString().slice(0,10);return s915ActiveBookingsForStudent(studentId).filter(b=>(b.date||"")>=today).length;}
+function s915TutorStudentIds(tutorId){return s915UniqueText(s915ActiveBookings().filter(b=>b.tutorId===tutorId).map(b=>b.studentId)).filter(Boolean);}
+function s915TutorCourseNames(tutorId){return s915UniqueText(s915ActiveBookings().filter(b=>b.tutorId===tutorId).map(b=>b.course).concat((user(tutorId)||{}).courses||[]));}
+function s915TutorUniversityNames(tutorId){const t=user(tutorId)||{};const fromStudents=s915TutorStudentIds(tutorId).map(id=>(user(id)||{}).university);return s915UniqueText([t.university,...fromStudents].filter(Boolean));}
+function s915DateTime(ts){if(!ts)return "";try{return new Date(ts).toLocaleString();}catch(e){return ""}}
+function s915TimelineForStudent(studentId){
+  const s=user(studentId)||{};
+  const events=[];
+  if(s.createdAt)events.push({t:s.createdAt,label:"Account created",detail:s.email||""});
+  if(s.autoAssignedUpdatedAt)events.push({t:s.autoAssignedUpdatedAt,label:"Assignments updated automatically",detail:"Updated from booking activity"});
+  (Array.isArray(s.assignmentHistory)?s.assignmentHistory:[]).forEach(h=>events.push({t:h.at,label:h.type==="auto-booking"?"Auto-assigned from booking":"Assignment update",detail:`${(user(h.tutorId)||{}).name||"Tutor"}${h.course?" • "+h.course:""}`}));
+  s915BookingsForStudent(studentId).forEach(b=>events.push({t:b.createdAt||0,label:b.status==="cancelled"?"Session cancelled":"Session booked",detail:`${b.course||"Session"} with ${(user(b.tutorId)||{}).name||"tutor"} • ${b.date||""} ${b.start||b.time||""}`}));
+  return events.sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,25);
+}
+async function s915AddStudentTimeline(studentId,item){
+  if(!studentId)return;
+  const ref=db.ref("users/"+studentId+"/timeline").push();
+  await ref.set({...item,createdAt:Date.now()});
+}
+async function autoAssignStudentFromBooking(studentId,tutorId,course){
+  if(!studentId||!tutorId)return;
+  const s=(DATA.users||{})[studentId]||{};
+  const assignedTutorIds=Array.from(new Set([...(Array.isArray(s.assignedTutorIds)?s.assignedTutorIds:[]), tutorId].filter(Boolean)));
+  const assignedCourses=s915UniqueText([...(Array.isArray(s.assignedCourses)?s.assignedCourses:[]), course].filter(Boolean));
+  const history=Array.isArray(s.assignmentHistory)?s.assignmentHistory:[];
+  const already=history.some(h=>h.type==="auto-booking"&&h.tutorId===tutorId&&s915Key(h.course)===s915Key(course));
+  const assignmentHistory=already?history:[...history,{type:"auto-booking",tutorId,course:course||"",at:Date.now()}];
+  await db.ref("users/"+studentId).update({assignedTutorIds,assignedCourses,assignmentHistory,autoAssignedUpdatedAt:Date.now()});
+}
+async function s915SyncAssignmentsFromBookings(){
+  if(profile.role!=="admin")return alert("Only admin can sync assignments.");
+  if(!confirm("Sync student assigned tutors/courses from all active and future bookings? Existing manual assignments will be preserved."))return;
+  const updates={};
+  for(const s of students()){
+    const active=s915ActiveBookingsForStudent(s.id);
+    let tutorIds=[...(Array.isArray(s.assignedTutorIds)?s.assignedTutorIds:[])];
+    let courses=[...(Array.isArray(s.assignedCourses)?s.assignedCourses:[])];
+    active.forEach(b=>{if(b.tutorId)tutorIds.push(b.tutorId);if(b.course)courses.push(b.course);});
+    updates[`users/${s.id}/assignedTutorIds`]=Array.from(new Set(tutorIds.filter(Boolean)));
+    updates[`users/${s.id}/assignedCourses`]=s915UniqueText(courses);
+    updates[`users/${s.id}/autoAssignedUpdatedAt`]=Date.now();
+  }
+  await db.ref().update(updates);await loadData();adminStudents();alert("Assignments synced from bookings.");
+}
+function s915StudentFiltersHtml(){
+  const unis=s915UniqueText(students().map(s=>s.university).filter(Boolean));
+  const cs=s915UniqueText(currentAvailableCourses?currentAvailableCourses():allAssignableCourses());
+  return `<div class="org-filter-row"><input id="studentSearch" placeholder="Search name, phone, email" oninput="adminStudents()" value="${s915Esc(window.s915StudentSearch||"")}"><select id="studentUniFilter" onchange="window.s915StudentUni=this.value;adminStudents()"><option value="">All universities</option>${unis.map(u=>`<option value="${s915Esc(u)}" ${window.s915StudentUni===u?"selected":""}>${s915Esc(u)}</option>`).join("")}</select><select id="studentTutorFilter" onchange="window.s915StudentTutor=this.value;adminStudents()"><option value="">All tutors</option>${tutors().map(t=>`<option value="${t.id}" ${window.s915StudentTutor===t.id?"selected":""}>${s915Esc(t.name)}</option>`).join("")}</select><select id="studentCourseFilter" onchange="window.s915StudentCourse=this.value;adminStudents()"><option value="">All courses</option>${cs.map(c=>`<option value="${s915Esc(c)}" ${window.s915StudentCourse===c?"selected":""}>${s915Esc(c)}</option>`).join("")}</select><select id="studentBalanceFilter" onchange="window.s915StudentBalance=this.value;adminStudents()"><option value="">All payment statuses</option><option value="unpaid" ${window.s915StudentBalance==="unpaid"?"selected":""}>Has unpaid balance</option><option value="paid" ${window.s915StudentBalance==="paid"?"selected":""}>No unpaid balance</option></select></div>`;
+}
+function s915ReadStudentFilters(){
+  window.s915StudentSearch=document.getElementById("studentSearch")?.value??window.s915StudentSearch??"";
+  window.s915StudentUni=document.getElementById("studentUniFilter")?.value??window.s915StudentUni??"";
+  window.s915StudentTutor=document.getElementById("studentTutorFilter")?.value??window.s915StudentTutor??"";
+  window.s915StudentCourse=document.getElementById("studentCourseFilter")?.value??window.s915StudentCourse??"";
+  window.s915StudentBalance=document.getElementById("studentBalanceFilter")?.value??window.s915StudentBalance??"";
+}
+function s915FilterStudents(rows){
+  const q=s915Key(window.s915StudentSearch||"");
+  return rows.filter(s=>{
+    const tutorsA=assignedTutorIdsForStudent(s.id), coursesA=assignedCoursesForStudent(s.id);
+    if(q&&!s915Key(`${s.name} ${s.email} ${s.phone}`).includes(q))return false;
+    if(window.s915StudentUni&&s.university!==window.s915StudentUni)return false;
+    if(window.s915StudentTutor&&!tutorsA.includes(window.s915StudentTutor))return false;
+    if(window.s915StudentCourse&&!coursesA.map(s915Key).includes(s915Key(window.s915StudentCourse)))return false;
+    const bal=s915StudentBalance(s.id);
+    if(window.s915StudentBalance==="unpaid"&&bal<=0)return false;
+    if(window.s915StudentBalance==="paid"&&bal>0)return false;
+    return true;
+  });
+}
+function s915StudentSummaryRow(s){
+  const tutorCount=assignedTutorIdsForStudent(s.id).length;
+  const courseCount=assignedCoursesForStudent(s.id).length;
+  const upcoming=s915UpcomingCountForStudent(s.id);
+  const bal=s915StudentBalance(s.id);
+  return `<tr><td><b>${s915Esc(s.name||"")}</b><br><span class="muted">${s915Esc(s.email||"")} • ${s915Esc(s.phone||"")}</span></td><td>${s915Esc(s.university||"")}</td><td>${s915Esc(s.type||"individual")}</td><td><b>${tutorCount}</b><br><span class="muted">${s915Esc(assignedTutorNames(s.id)||"None")}</span></td><td><b>${courseCount}</b><br><span class="muted">${s915Esc(assignedCourseNames(s.id)||"None")}</span></td><td>${upcoming}</td><td>${money?money(bal):bal}</td><td>${profile.role==="admin"?`<button onclick="s915ViewStudent('${s.id}')">View</button><button onclick="editStudent('${s.id}')">Edit</button><button onclick="editStudentTutors('${s.id}')">Assign Tutors</button><button onclick="editStudentCourses('${s.id}')">Assign Courses</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button>`:""}</td></tr>`;
+}
+function adminStudents(){
+  s915ReadStudentFilters();
+  const base=profile.role==="admin"?students():students().filter(s=>studentTutors(s.id).some(t=>t.id===currentUser.uid)||assignedTutorIdsForStudent(s.id).includes(currentUser.uid));
+  const visible=profile.role==="admin"?s915FilterStudents(base):base;
+  const totalBal=visible.reduce((s,x)=>s+s915StudentBalance(x.id),0);
+  $("content").innerHTML=`<div class="card"><div class="section-head"><div><h2>${profile.role==="admin"?"Students / Groups":"My Students / Groups"}</h2><p class="muted">Organized summary view. Click View for full profile, history, payments, and sessions.</p></div>${profile.role==="admin"?`<button class="ghost" onclick="s915SyncAssignmentsFromBookings()">Sync Assignments from Bookings</button>`:""}</div>${profile.role==="admin"?s915StudentFiltersHtml():""}<div class="kpi-grid mini"><div class="kpi-card"><div class="kpi-label">Shown Students</div><div class="kpi-value">${visible.length}</div></div><div class="kpi-card"><div class="kpi-label">Unpaid Balance</div><div class="kpi-value">${money?money(totalBal):totalBal}</div></div></div>${visible.length?`<table class="table"><tr><th>Student</th><th>University</th><th>Type</th><th>Tutors</th><th>Courses</th><th>Upcoming</th><th>Balance</th><th>Actions</th></tr>${visible.map(s915StudentSummaryRow).join("")}</table>`:`<p class="muted">No accounts match these filters.</p>`}<hr><h3>Create Student or Group Account</h3><div class="row"><input id="sn" placeholder="Name"><input id="se" type="email" placeholder="Email"><input id="sp" placeholder="Password"><input id="sphone" placeholder="Phone"><input id="suniversity" placeholder="University"><select id="stype"><option>individual</option><option>group</option></select></div><input id="smembers" placeholder="Group members comma separated"><label>Assign Tutor(s)</label><p class="muted small">New tutors automatically appear here after you create them.</p><div class="checkbox-grid">${tutorCheckboxes("assignedTutor")}</div><label>Assign Course(s)</label><p class="muted small">New courses automatically appear here after you add them.</p><div class="checkbox-grid">${courseCheckboxes("assignedCourse")}</div><button onclick="createAccount('student')">Create Student/Group</button></div>`;
+}
+function s915ViewStudent(id){
+  const s=user(id)||{};const bs=s915BookingsForStudent(id).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.start||b.time||"").localeCompare(a.start||a.time||""));
+  const timeline=s915TimelineForStudent(id);
+  $("content").innerHTML=`<div class="card"><button class="ghost" onclick="adminStudents()">Back to Students</button><h2>${s915Esc(s.name||"Student")}</h2><div class="grid"><div class="card"><h3>Profile</h3><p><b>Email:</b> ${s915Esc(s.email||"")}</p><p><b>Phone:</b> ${s915Esc(s.phone||"")}</p><p><b>University:</b> ${s915Esc(s.university||"")}</p><p><b>Type:</b> ${s915Esc(s.type||"individual")}</p><p><b>Assigned Tutors:</b> ${s915Esc(assignedTutorNames(id)||"None")}</p><p><b>Assigned Courses:</b> ${s915Esc(assignedCourseNames(id)||"None")}</p></div><div class="card"><h3>Tracking</h3><p><b>Upcoming sessions:</b> ${s915UpcomingCountForStudent(id)}</p><p><b>Unpaid balance:</b> ${money?money(s915StudentBalance(id)):s915StudentBalance(id)}</p><p><b>Total sessions:</b> ${bs.length}</p><label>Private admin notes</label><textarea id="s915Notes">${s915Esc(s.adminNotes||"")}</textarea><button onclick="s915SaveStudentNotes('${id}')">Save Notes</button></div></div><div class="card"><h3>Relationship Timeline</h3>${timeline.length?timeline.map(e=>`<div class="timeline-item"><b>${s915Esc(e.label)}</b><br><span class="muted">${s915DateTime(e.t)}</span><br>${s915Esc(e.detail||"")}</div>`).join(""):"<p class='muted'>No timeline yet.</p>"}</div><div class="card"><h3>Session History</h3>${bs.length?bookingRows(bs,profile.role==="admin"):"<p class='muted'>No sessions yet.</p>"}</div></div>`;
+}
+async function s915SaveStudentNotes(id){await db.ref("users/"+id+"/adminNotes").set($("s915Notes")?.value||"");await loadData();s915ViewStudent(id);}
+function s915TutorFiltersHtml(){
+  const unis=s915UniqueText(tutors().map(t=>t.university).filter(Boolean).concat(students().map(s=>s.university).filter(Boolean)));
+  const cs=s915UniqueText(currentAvailableCourses?currentAvailableCourses():allAssignableCourses());
+  return `<div class="org-filter-row"><input id="tutorSearch" placeholder="Search tutor name/email/phone" oninput="adminTutors()" value="${s915Esc(window.s915TutorSearch||"")}"><select id="tutorUniFilter" onchange="window.s915TutorUni=this.value;adminTutors()"><option value="">All universities</option>${unis.map(u=>`<option value="${s915Esc(u)}" ${window.s915TutorUni===u?"selected":""}>${s915Esc(u)}</option>`).join("")}</select><select id="tutorCourseFilter" onchange="window.s915TutorCourse=this.value;adminTutors()"><option value="">All courses</option>${cs.map(c=>`<option value="${s915Esc(c)}" ${window.s915TutorCourse===c?"selected":""}>${s915Esc(c)}</option>`).join("")}</select></div>`;
+}
+function s915ReadTutorFilters(){window.s915TutorSearch=document.getElementById("tutorSearch")?.value??window.s915TutorSearch??"";window.s915TutorUni=document.getElementById("tutorUniFilter")?.value??window.s915TutorUni??"";window.s915TutorCourse=document.getElementById("tutorCourseFilter")?.value??window.s915TutorCourse??"";}
+function s915FilterTutors(rows){const q=s915Key(window.s915TutorSearch||"");return rows.filter(t=>{if(q&&!s915Key(`${t.name} ${t.email} ${t.phone} ${t.whatsapp}`).includes(q))return false;const unis=s915TutorUniversityNames(t.id);const courses=s915TutorCourseNames(t.id);if(window.s915TutorUni&&!unis.map(s915Key).includes(s915Key(window.s915TutorUni)))return false;if(window.s915TutorCourse&&!courses.map(s915Key).includes(s915Key(window.s915TutorCourse)))return false;return true;});}
+function adminTutors(){
+  if(profile.role!=="admin")return myStudentsPage();
+  s915ReadTutorFilters();
+  const visible=s915FilterTutors(tutors());
+  $("content").innerHTML=`<div class="card"><h2>Tutor Accounts</h2><p class="admin-note"><b>This tab creates real booking tutor accounts.</b> Organization filters below do not change existing behavior.</p>${s915TutorFiltersHtml()}${visible.length?`<table class="table"><tr><th>Tutor</th><th>Universities</th><th>Courses</th><th>Active Students</th><th>Upcoming Sessions</th><th>Rate</th><th>Actions</th></tr>${visible.map(t=>{const studs=s915TutorStudentIds(t.id);const upcoming=s915ActiveBookings().filter(b=>b.tutorId===t.id&&(b.date||"")>=(todayISO?todayISO():"")).length;return `<tr><td><b>${s915Esc(t.name||"")}</b><br><span class="muted">${s915Esc(t.email||"")}</span></td><td>${s915Esc(s915TutorUniversityNames(t.id).join(", ")||t.university||"")}</td><td>${s915Esc(s915TutorCourseNames(t.id).join(", ")||"None")}</td><td>${studs.length}</td><td>${upcoming}</td><td>${money?money(t.rate||0):t.rate||0}</td><td><button onclick="s915ViewTutor('${t.id}')">View</button><button onclick="editTutor('${t.id}')">Edit</button><button class="danger" onclick="deleteTutor('${t.id}')">Delete</button></td></tr>`}).join("")}</table>`:`<p class='muted'>No tutors match these filters.</p>`}<hr><h3>Create Tutor Account</h3><div class="row"><input id="tn" placeholder="Name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Password"><input id="tphone" placeholder="Phone / WhatsApp"><input id="tuniversity" placeholder="University"><input id="trate" type="number" placeholder="Rate per hour"></div><button onclick="createAccount('tutor')">Create Tutor</button></div>`;
+}
+function s915ViewTutor(id){const t=user(id)||{};const studs=s915TutorStudentIds(id).map(user).filter(Boolean);const bs=list(DATA.bookings||{}).filter(b=>b.tutorId===id).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.start||b.time||"").localeCompare(a.start||a.time||""));$("content").innerHTML=`<div class="card"><button class="ghost" onclick="adminTutors()">Back to Tutors</button><h2>${s915Esc(t.name||"Tutor")}</h2><div class="grid"><div class="card"><h3>Profile</h3><p><b>Email:</b> ${s915Esc(t.email||"")}</p><p><b>Phone:</b> ${s915Esc(t.phone||t.whatsapp||"")}</p><p><b>Universities:</b> ${s915Esc(s915TutorUniversityNames(id).join(", ")||t.university||"")}</p><p><b>Courses:</b> ${s915Esc(s915TutorCourseNames(id).join(", ")||"None")}</p><p><b>Rate:</b> ${money?money(t.rate||0):t.rate||0}</p></div><div class="card"><h3>Teaching Summary</h3><p><b>Active students:</b> ${studs.length}</p><p><b>Upcoming sessions:</b> ${s915ActiveBookings().filter(b=>b.tutorId===id&&(b.date||"")>=(todayISO?todayISO():"")).length}</p><p><b>Total sessions:</b> ${bs.length}</p></div></div><div class="card"><h3>Assigned / Active Students</h3>${studs.length?`<table class="table"><tr><th>Name</th><th>University</th><th>Courses</th><th>Actions</th></tr>${studs.map(s=>`<tr><td>${s915Esc(s.name||"")}</td><td>${s915Esc(s.university||"")}</td><td>${s915Esc(s915UniqueText(s915ActiveBookings().filter(b=>b.tutorId===id&&b.studentId===s.id).map(b=>b.course)).join(", "))}</td><td><button onclick="s915ViewStudent('${s.id}')">View Student</button></td></tr>`).join("")}</table>`:"<p class='muted'>No active students yet.</p>"}</div><div class="card"><h3>Sessions</h3>${bs.length?bookingRows(bs,true):"<p class='muted'>No sessions yet.</p>"}</div></div>`;}
