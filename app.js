@@ -986,7 +986,218 @@ function printCurrentPage(){window.print()}
 function exportFinancialExcel(){if(typeof exportTutorBookingsCSV==="function")return exportTutorBookingsCSV(profile.role==="tutor"?v74Uid():undefined,"");alert("CSV export is available from financial reports.")}
 function exportFinancialPDF(){alert("Use Print, then choose Save as PDF.");window.print()}
 
-function renderTabs(){let t=profile.role==="admin"?["Dashboard","Command Center","Tutors","Tutor Profiles","Students","Groups","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Groups","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","My Scheduled","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Achievements","Semester Recap","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button type="button" class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
+
+
+/* ===== v7.5 admin tutor page, visibility, chat, banner options, student semesters ===== */
+function v75SemestersOptions(selected=""){
+  return `<option value="">No semester</option>`+v74List(DATA.semesters||{}).filter(s=>!s.archived).map(s=>`<option value="${s.id}" ${selected===s.id?"selected":""}>${s.name}</option>`).join("");
+}
+function v75CourseCheckboxes(selected=[]){
+  const coursesList=typeof courses==="function"?courses():v74List(DATA.courses||{});
+  const sel=v74Arr(selected);
+  return coursesList.map(c=>{
+    const id=c.id||c.code||c.name;
+    const label=c.name||c.code||id;
+    return `<label class="check"><input type="checkbox" class="course-check" value="${id}" ${sel.includes(id)||sel.includes(label)?"checked":""}> ${label}</label>`;
+  }).join("")||`<p class="muted">No courses yet.</p>`;
+}
+function v75StudentCheckboxes(selected=[]){
+  const list=typeof students==="function"?students():v74List(DATA.users||{}).filter(u=>u.role==="student");
+  const sel=v74Arr(selected);
+  return list.map(s=>`<label class="check"><input type="checkbox" class="student-check" value="${s.id}" ${sel.includes(s.id)?"checked":""}> ${s.name||s.email}</label>`).join("")||`<p class="muted">No students yet.</p>`;
+}
+function v75TutorRow(t){
+  const assignedStudents=(typeof students==="function"?students():[]).filter(s=>v74Arr(s.assignedTutorIds).includes(t.id)||v74Arr(s.tutorIds).includes(t.id)).map(s=>s.name).join(", ");
+  const courseNames=v74Arr(t.courses).join(", ");
+  return `<tr class="${t.hiddenFromBookings?"hidden-row":""}">
+    <td><b>${t.name||""}</b><br><span class="muted">${t.email||""}</span></td>
+    <td>${t.university||""}</td>
+    <td>${courseNames||"<span class='muted'>No courses</span>"}</td>
+    <td>${assignedStudents||"<span class='muted'>None</span>"}</td>
+    <td>${t.rate?money(t.rate)+"/h":""}</td>
+    <td><span class="status-badge ${t.hiddenFromBookings?"red":"green"}">${t.hiddenFromBookings?"Hidden from bookings":"Visible in bookings"}</span></td>
+    <td><div class="admin-mini-actions">
+      <button onclick="editTutorAdmin('${t.id}')">Edit</button>
+      <button onclick="assignTutorCourses('${t.id}')">Assign Courses</button>
+      <button onclick="assignTutorStudents('${t.id}')">Assign Students</button>
+      <button onclick="toggleTutorBookingVisibility('${t.id}')">${t.hiddenFromBookings?"Show":"Hide"}</button>
+    </div></td>
+  </tr>`;
+}
+function adminTutors(){
+  if(profile.role!=="admin")return v74Safe("Tutors","Admin only.");
+  const ts=(typeof tutors==="function"?tutors():v74List(DATA.users||{}).filter(u=>u.role==="tutor"&&!u.removed));
+  $("content").innerHTML=`<div class="card">
+    <div class="section-title-row"><h2>Tutors</h2><span class="muted">Create, edit, assign courses/students, and control visibility.</span></div>
+    <table class="table"><tr><th>Tutor</th><th>University</th><th>Courses</th><th>Assigned Students</th><th>Rate</th><th>Status</th><th>Actions</th></tr>${ts.length?ts.map(v75TutorRow).join(""):`<tr><td colspan="7">${v74Empty("👨‍🏫","No tutors yet","Add your first tutor below.")}</td></tr>`}</table>
+  </div>
+  <div class="card"><h3>Add Tutor Account</h3>
+    <div class="admin-edit-grid">
+      <input id="tn" placeholder="Tutor name">
+      <input id="te" placeholder="Tutor email">
+      <input id="tp" placeholder="Password">
+      <input id="tu" placeholder="University">
+      <input id="tw" placeholder="WhatsApp">
+      <input id="tr" type="number" placeholder="Hourly rate">
+    </div>
+    <p class="muted">Courses can be assigned after creating the tutor.</p>
+    <button onclick="addTutorAdmin()">Add Tutor</button>
+  </div>`;
+}
+async function addTutorAdmin(){
+  if(profile.role!=="admin")return alert("Admin only.");
+  const name=$("tn").value.trim(), email=$("te").value.trim(), password=$("tp").value.trim()||"123456", university=$("tu").value.trim(), whatsapp=$("tw").value.trim(), rate=Number($("tr").value||0);
+  if(!name||!email)return alert("Name and email are required.");
+  const existing=v74List(DATA.users||{}).find(u=>(u.email||"").toLowerCase()===email.toLowerCase());
+  const payload={name,email,role:"tutor",university,whatsapp,phone:whatsapp,rate,courses:existing?.courses||[],hiddenFromBookings:false,removed:false,updatedAt:Date.now()};
+  if(existing){
+    await db.ref("users/"+existing.id).update(payload);
+  }else{
+    const id="tutor_"+Date.now();
+    await db.ref("users/"+id).set({...payload,password,createdAt:Date.now()});
+  }
+  await loadData();adminTutors();
+}
+function editTutorAdmin(id){
+  const t=user(id)||{};
+  $("content").innerHTML=`<div class="card"><h2>Edit Tutor</h2>
+    <div class="admin-edit-grid">
+      <input id="editTutorName" value="${t.name||""}" placeholder="Name">
+      <input id="editTutorEmail" value="${t.email||""}" placeholder="Email">
+      <input id="editTutorUniversity" value="${t.university||""}" placeholder="University">
+      <input id="editTutorWhatsapp" value="${t.whatsapp||t.phone||""}" placeholder="WhatsApp">
+      <input id="editTutorRate" type="number" value="${t.rate||""}" placeholder="Rate">
+    </div>
+    <label class="check"><input id="editTutorHidden" type="checkbox" ${t.hiddenFromBookings?"checked":""}> Hide from booking/availability inside website</label>
+    <button onclick="saveTutorAdmin('${id}')">Save Tutor</button>
+    <button class="ghost" onclick="adminTutors()">Back</button>
+  </div>`;
+}
+async function saveTutorAdmin(id){
+  await db.ref("users/"+id).update({
+    name:$("editTutorName").value.trim(),
+    email:$("editTutorEmail").value.trim(),
+    university:$("editTutorUniversity").value.trim(),
+    whatsapp:$("editTutorWhatsapp").value.trim(),
+    phone:$("editTutorWhatsapp").value.trim(),
+    rate:Number($("editTutorRate").value||0),
+    hiddenFromBookings:$("editTutorHidden").checked,
+    updatedAt:Date.now()
+  });
+  await loadData();adminTutors();
+}
+function assignTutorCourses(id){
+  const t=user(id)||{};
+  $("content").innerHTML=`<div class="card"><h2>Assign Courses to ${t.name||"Tutor"}</h2>
+    <div class="admin-edit-grid">${v75CourseCheckboxes(t.courses||[])}</div>
+    <button onclick="saveTutorCourses('${id}')">Save Courses</button>
+    <button class="ghost" onclick="adminTutors()">Back</button>
+  </div>`;
+}
+async function saveTutorCourses(id){
+  const selected=[...document.querySelectorAll(".course-check:checked")].map(x=>x.value);
+  await db.ref("users/"+id+"/courses").set(selected);
+  await loadData();adminTutors();
+}
+function assignTutorStudents(id){
+  const assigned=(typeof students==="function"?students():[]).filter(s=>v74Arr(s.assignedTutorIds).includes(id)||v74Arr(s.tutorIds).includes(id)).map(s=>s.id);
+  $("content").innerHTML=`<div class="card"><h2>Assign Students to ${(user(id)||{}).name||"Tutor"}</h2>
+    <div class="admin-edit-grid">${v75StudentCheckboxes(assigned)}</div>
+    <button onclick="saveTutorStudents('${id}')">Save Students</button>
+    <button class="ghost" onclick="adminTutors()">Back</button>
+  </div>`;
+}
+async function saveTutorStudents(tutorId){
+  const selected=[...document.querySelectorAll(".student-check:checked")].map(x=>x.value);
+  const all=typeof students==="function"?students():[];
+  for(const s of all){
+    let ids=v74Arr(s.assignedTutorIds||s.tutorIds).filter(x=>x!==tutorId);
+    if(selected.includes(s.id))ids.push(tutorId);
+    await db.ref("users/"+s.id+"/assignedTutorIds").set([...new Set(ids)]);
+  }
+  await loadData();adminTutors();
+}
+
+/* public tutor profile visibility */
+function publicTutorProfilesPage(){
+  if(profile.role!=="admin")return v74Safe("Tutor Profiles","Admin only.");
+  const ps=v74List(DATA.publicTutors||{});
+  $("content").innerHTML=`<div class="card"><h2>Public Tutor Profiles</h2>
+    <p class="muted">This is separate from tutor accounts. Hide a public profile if the tutor did not renew their public listing.</p>
+    ${ps.length?ps.map(p=>`<div class="group-card ${p.hiddenPublicProfile?"hidden-row":""}">
+      <div class="section-title-row"><h3>${p.name||"Tutor"}</h3><span class="status-badge ${p.hiddenPublicProfile?"red":"green"}">${p.hiddenPublicProfile?"Hidden Publicly":"Public"}</span></div>
+      <p>${p.university||""}<br>${p.courses||""}<br>${p.rate||""}</p>
+      <div class="admin-mini-actions">
+        <button onclick="editPublicTutor('${p.id}')">Edit</button>
+        <button onclick="togglePublicProfileVisibility('${p.id}')">${p.hiddenPublicProfile?"Show Public":"Hide Public"}</button>
+      </div>
+    </div>`).join(""):v74Empty("🌐","No public profiles","Add tutor public profiles from your existing profile tools.")}
+  </div>`;
+}
+
+/* semester assignment for students */
+function assignStudentSemester(studentId){
+  const s=user(studentId)||{};
+  $("content").innerHTML=`<div class="card"><h2>Assign Semester</h2>
+    <p><b>${s.name||"Student"}</b></p>
+    <select id="studentSemester">${v75SemestersOptions(s.semesterId||"")}</select>
+    <button onclick="saveStudentSemester('${studentId}')">Save Semester</button>
+    <button class="ghost" onclick="adminStudents()">Back</button>
+  </div>`;
+}
+async function saveStudentSemester(studentId){
+  await db.ref("users/"+studentId+"/semesterId").set($("studentSemester").value||"");
+  await loadData();adminStudents();
+}
+
+/* admin chat directory */
+function adminChatPage(){
+  if(profile.role!=="admin")return;
+  const people=v74List(DATA.users||{}).filter(u=>!u.removed&&(u.role==="student"||u.role==="tutor"));
+  $("content").innerHTML=`<div class="card"><h2>Admin Chat</h2><p class="muted">Chat with any tutor or student inside Scheduled.</p>
+    <div class="chat-directory-grid">${people.map(p=>`<div class="chat-target-card"><b>${p.name||p.email}</b><br><span class="muted">${p.role}</span><br><button onclick="openAdminChat('${p.id}')">Message</button></div>`).join("")||v74Empty("💬","No users yet","Students and tutors will appear here.")}</div>
+  </div>`;
+}
+function openAdminChat(otherId){
+  const cid=v74ChatId(v74Uid(),otherId), other=user(otherId)||{};
+  const msgs=v74List((DATA.chats||{})[cid]?.messages||{}).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+  $("content").innerHTML=`<div class="card"><div class="section-title-row"><h2>Chat with ${other.name||other.email||"User"}</h2><button class="ghost" onclick="adminChatPage()">Back</button></div>
+    ${msgs.length?msgs.map(m=>`<div class="message-bubble ${m.from===v74Uid()?"me":"them"}">${m.text||""}<br><span class="muted small">${new Date(m.createdAt||Date.now()).toLocaleString()}</span></div>`).join(""):v74Empty("💬","No messages yet","Start the conversation.")}
+    <div class="row"><input id="adminChatInput" placeholder="Write a message..."><button onclick="sendAdminChatMessage('${otherId}')">Send</button></div>
+  </div>`;
+}
+async function sendAdminChatMessage(otherId){
+  const text=($("adminChatInput").value||"").trim();if(!text)return;
+  const cid=v74ChatId(v74Uid(),otherId);
+  await db.ref("chats/"+cid+"/participants").set({[v74Uid()]:true,[otherId]:true});
+  await db.ref("chats/"+cid+"/messages").push({from:v74Uid(),to:otherId,text,createdAt:Date.now()});
+  await loadData();openAdminChat(otherId);
+}
+
+/* extended motivation banner options */
+function extendedMotivationBannerSettingsPage(){
+  if(profile.role!=="admin")return v74Safe("Motivation Banner","Admin only.");
+  const quotes=v74List(DATA.motivationQuotes||{}).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const settings=DATA.bannerSettings||{};
+  $("content").innerHTML=`<div class="card"><h2>Motivation Banner Manager</h2>
+    <p class="muted">Create richer banners with theme, time, subtitle, and icon.</p>
+    <label class="check"><input id="examMode" type="checkbox" ${settings.examMode?"checked":""}> Exam Week Mode</label>
+    <button onclick="saveBannerSettings()">Save Banner Settings</button>
+    <hr>
+    <div class="banner-option-grid">
+      <div class="banner-option"><label>Icon</label><input id="motivationIcon" value="✨"></div>
+      <div class="banner-option"><label>Theme</label><select id="motivationTheme"><option value="focus">Focus Blue</option><option value="minimal">Minimal</option><option value="night">Night</option><option value="energy">Energy</option><option value="growth">Growth</option><option value="exam">Exam</option><option value="rainbow">Rainbow</option><option value="achieve">Achievement</option></select></div>
+      <div class="banner-option"><label>Time</label><select id="motivationTime"><option value="anytime">Anytime</option><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option><option value="exam">Exam Week</option></select></div>
+    </div>
+    <textarea id="motivationText" placeholder="Main quote..."></textarea>
+    <input id="motivationSub" placeholder="Subtitle e.g. Small steps still count.">
+    <button onclick="addMotivationQuote()">Add Banner Card</button>
+    <hr><h3>Current Cards</h3>
+    ${quotes.length?quotes.map(q=>`<div class="banner-table-row"><div><b>${q.icon||"✨"} ${q.text}</b><div class="banner-meta">${q.theme||"focus"} • ${q.time||"anytime"} • ${q.sub||""}</div></div><button class="ghost" onclick="deleteMotivationQuote('${q.id}')">Delete</button></div>`).join(""):v74Empty("✨","No custom cards","Default Scheduled quotes are being used.")}
+  </div>`;
+}
+
+function renderTabs(){let t=profile.role==="admin"?["Dashboard","Command Center","Admin Chat","Tutors","Tutor Profiles","Students","Groups","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Groups","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","My Scheduled","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Achievements","Semester Recap","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button type="button" class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"))}
 
 async function openTab(tab,btn){
   try{
@@ -997,6 +1208,7 @@ async function openTab(tab,btn){
     if(btn)btn.classList.add("active");
     if(tab==="Dashboard")return typeof dashboardPage==="function"?dashboardPage():v74Safe("Dashboard","Use the sidebar to continue.");
     if(tab==="Command Center")return commandCenterPage();
+    if(tab==="Admin Chat")return adminChatPage();
     if(tab==="Tutors")return typeof adminTutors==="function"?adminTutors():v74Safe("Tutors","Coming soon.");
     if(tab==="Tutor Profiles")return typeof publicTutorProfilesPage==="function"?publicTutorProfilesPage():v74Safe("Tutor Profiles","Coming soon.");
     if(tab==="Students")return typeof adminStudents==="function"?adminStudents():v74Safe("Students","Coming soon.");
@@ -1008,7 +1220,7 @@ async function openTab(tab,btn){
     if(tab==="Payments")return typeof financialPage==="function"?financialPage():v74Safe("Payments","Coming soon.");
     if(tab==="Tutor Reports")return typeof adminTutorReportsPage==="function"?adminTutorReportsPage():v74Safe("Tutor Reports","Coming soon.");
     if(tab==="Announcements"){if(profile.role==="tutor"&&typeof tutorAnnouncementsPage==="function")return tutorAnnouncementsPage();if(typeof announcementsPage==="function")return announcementsPage();return v74Safe("Announcements","No announcements yet.");}
-    if(tab==="Motivation Banner")return typeof motivationBannerSettingsPage==="function"?motivationBannerSettingsPage():v74Safe("Motivation Banner","Coming soon.");
+    if(tab==="Motivation Banner")return extendedMotivationBannerSettingsPage();
     if(tab==="Documents")return typeof docsPage==="function"?docsPage():v74Safe("Documents","Coming soon.");
     if(tab==="Export")return typeof exportPage==="function"?exportPage():v74Safe("Export","Exports are available in financial pages.");
     if(tab==="Schedule Session"){if(typeof tutorScheduleGroupOrStudentPage==="function")return tutorScheduleGroupOrStudentPage();if(typeof tutorScheduleSessionPage==="function")return tutorScheduleSessionPage();return v74Safe("Schedule Session","Coming soon.");}
@@ -1043,7 +1255,7 @@ function adminStudents(){
     : students().filter(s=>studentTutors(s.id).some(t=>t.id===currentUser.uid)||assignedTutorIdsForStudent(s.id).includes(currentUser.uid));
 
   $("content").innerHTML=`<div class="card"><h2>${profile.role==="admin"?"Students / Groups":"My Students / Groups"}</h2>
-  ${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Type</th><th>Assigned Tutors</th><th>Assigned Courses</th><th>Actions</th></tr>${visible.map(s=>`<tr><td>${s.name||""}</td><td>${s.email||""}</td><td>${s.phone||""}</td><td>${s.university||""}</td><td>${s.type||"individual"}</td><td class="assigned-list">${assignedTutorNames(s.id)||"None"}</td><td class="course-list">${assignedCourseNames(s.id)||"None"}</td><td>${profile.role==="admin"?`<button onclick="editStudent('${s.id}')">Edit</button><button onclick="editStudentTutors('${s.id}')">Assign Tutors</button><button onclick="editStudentCourses('${s.id}')">Assign Courses</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
+  ${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Semester</th><th>Type</th><th>Assigned Tutors</th><th>Assigned Courses</th><th>Actions</th></tr>${visible.map(s=>`<tr><td>${s.name||""}</td><td>${s.email||""}</td><td>${s.phone||""}</td><td>${s.university||""}</td><td>${(DATA.semesters||{})[s.semesterId]?.name||""}</td><td>${s.type||"individual"}</td><td class="assigned-list">${assignedTutorNames(s.id)||"None"}</td><td class="course-list">${assignedCourseNames(s.id)||"None"}</td><td>${profile.role==="admin"?`<button onclick="editStudent('${s.id}')">Edit</button><button onclick="editStudentTutors('${s.id}')">Assign Tutors</button><button onclick="editStudentCourses('${s.id}')">Assign Courses</button><button onclick="assignStudentSemester('${s.id}')">Assign Semester</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button>`:""}</td></tr>`).join("")}</table>`:`<p class="muted">No accounts yet.</p>`}
 
   <hr><h3>Create Student or Group Account</h3>
   <div class="row">
@@ -1194,7 +1406,7 @@ async function createAccount(role){
     role==="tutor"?adminTutors():adminStudents();
   }catch(e){alert(e.message)}
 }
-function adminCourses(){$("content").innerHTML=`<div class="card"><h2>Course Management</h2><table class="table"><tr><th>Tutor</th><th>Courses</th></tr>${tutors().map(t=>`<tr><td>${t.name}</td><td>${(t.courses||[]).join(", ")}</td></tr>`).join("")}</table><hr><div class="row"><select id="ct">${tutors().map(t=>`<option value="${t.id}">${t.name}</option>`)}</select><input id="cn" placeholder="Course name exactly: Physics 213"></div><button onclick="assignCourse()">Assign Course</button></div>`}
+function adminCourses(){$("content").innerHTML=`<div class="card"><h2>Course Management</h2><table class="table"><tr><th>Tutor</th><th>Courses</th></tr>${tutors().map(t=>`<tr><td>${t.name}</td><td>${(t.courses||[]).join(", ")}</td></tr>`).join("")}</table><hr><div class="row"><select id="ct">${tutors().filter(t=>!t.hiddenFromBookings).map(t=>`<option value="${t.id}">${t.name}</option>`)}</select><input id="cn" placeholder="Course name exactly: Physics 213"></div><button onclick="assignCourse()">Assign Course</button></div>`}
 async function assignCourse(){let t=user($("ct").value),c=$("cn").value.trim(),cs=Array.from(new Set([...(t.courses||[]),c])).filter(Boolean);await db.ref("users/"+$("ct").value+"/courses").set(cs);await db.ref("courses/"+safe(c)).set({name:c});await loadData();adminCourses()}
 
 function accessRequestsPage(){

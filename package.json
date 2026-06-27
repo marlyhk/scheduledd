@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v7-4-preserve-v67-plus-features",
-  "version": "7.4.0",
+  "name": "scheduled-v7-5-admin-tutor-semester-chat-fix",
+  "version": "7.5.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"

@@ -1,25 +1,14 @@
-Scheduled v7.4 — Preserve v6.7 + Add New Features
+Scheduled v7.5 — Admin Tutor/Semester/Chat Fix
 
-Built directly from v6.7 stable sidebar rebuild.
+Built from v7.4.
 
-Preserved from v6.7:
-- Motivation dashboard/banner.
-- Favorites.
-- Reviews.
-- Student Profile.
-- All Tutors / My Tutors.
-- Existing booking, payments, documents, reports, dashboards.
-- Stable sidebar.
+Fixes/adds:
+- Admin Tutors page rebuilt: add tutors, edit tutor info, assign courses, assign students, hide/show from bookings.
+- Public Tutor Profiles admin page: hide/show public profile separately.
+- Hidden tutor from bookings no longer should appear in booking/availability lists.
+- Motivation Banner Manager has more options: icon, theme, time, subtitle, exam mode.
+- Admin Chat tab to message any tutor or student.
+- Students can be assigned to semesters.
+- Preserves v6.7 features and v7.4 additions.
 
-Added:
-- My Scheduled planner.
-- Chat button.
-- Groups + semester system.
-- Tutor direct scheduling for individual/group sessions.
-- Achievements, goals, badge animation/confetti.
-- Semester recap.
-- Command Center.
-- Admin hide tutor/public profile controls.
-- Removed only the WhatsApp "find a time" booking prompt.
-
-JS syntax check passed and required old/new functions verified.
+JS syntax check passed.

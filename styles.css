@@ -1037,3 +1037,14 @@ html,body{
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @media(max-width:860px){.chat-button{right:16px;top:84px}.chat-panel{right:10px;top:142px}}
 @media print{.tabs,.topbar,.chat-button,.financial-actions,button{display:none!important}.content{margin-left:0!important;width:100%!important}.card{box-shadow:none!important}}
+
+
+/* v7.5 admin/tutor/chat/semester fixes */
+.admin-edit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin:12px 0}
+.admin-mini-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.hidden-row{opacity:.55;background:#F9FAFB}
+.banner-option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.banner-option{border:1px solid var(--border);border-radius:22px;padding:14px;background:#fff}
+.chat-directory-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.chat-target-card{border:1px solid var(--border);border-radius:20px;background:#fff;padding:14px}
+.semester-chip{display:inline-flex;border-radius:999px;background:var(--blue2);padding:6px 10px;font-weight:900;font-size:12px;margin:4px 4px 4px 0}
