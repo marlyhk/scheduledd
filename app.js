@@ -130,7 +130,34 @@ function cleanRequestPhoneInput(){
 function openWhatsApp(phone,msg){const p=phoneForWhatsApp(phone);if(!p)return alert("No WhatsApp number saved.");window.open(`https://wa.me/${p}?text=${encodeURIComponent(msg)}`,"_blank")}
 
 function safeOptionText(v){return String(v||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
-function uniqueSorted(arr){return [...new Set((arr||[]).map(x=>String(x||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b))}
+function optionKey(v){return String(v||"").trim().replace(/\s+/g," ").toLocaleLowerCase()}
+function prettyOptionLabel(v){
+  let raw=String(v||"").trim().replace(/\s+/g," ");
+  if(!raw)return "";
+  const allCaps=raw===raw.toUpperCase();
+  const allLower=raw===raw.toLowerCase();
+  if(allCaps||allLower){
+    raw=raw.toLowerCase().replace(/\b\w/g,ch=>ch.toUpperCase()).replace(/\b(Of|And|The|De|Du|La|Le)\b/g,m=>m.toLowerCase());
+  }
+  raw=raw.replace(/^University of balamand$/i,"University of Balamand");
+  return raw;
+}
+function uniqueSorted(arr){
+  const map=new Map();
+  (arr||[]).forEach(x=>{
+    const label=prettyOptionLabel(x), key=optionKey(label);
+    if(label&&!map.has(key))map.set(key,label);
+  });
+  return [...map.values()].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+}
+function mergeTextArrayCaseInsensitive(current, additions){
+  const out=[]; const seen=new Set();
+  [...(Array.isArray(current)?current:[]), ...(Array.isArray(additions)?additions:[additions])].forEach(x=>{
+    const label=prettyOptionLabel(x), key=optionKey(label);
+    if(label&&!seen.has(key)){seen.add(key); out.push(label)}
+  });
+  return out;
+}
 async function getRequestAccessChoices(){
   let source=DATA||{};
   try{
@@ -246,8 +273,8 @@ function paid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>p.paid).reduce(
 function unpaid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>!p.paid).reduce((s,p)=>s+Number(p.amount||0),0)}
 function badge(p){return`<span class="badge ${p?'paid':'unpaid'}">${p?'Paid':'Unpaid'}</span>`}
 function method(l){return String(l||"").toLowerCase().includes("online")?"Whish":"Cash"}
-function allCourseNames(){let names=[];tutors().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));return[...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b))}
-function allUniversityNames(){let names=tutors().map(t=>t.university).filter(Boolean);return[...new Set(names)].sort((a,b)=>a.localeCompare(b))}
+function allCourseNames(){let names=[];tutors().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));return uniqueSorted(names)}
+function allUniversityNames(){let names=tutors().map(t=>t.university).filter(Boolean);return uniqueSorted(names)}
 function tutorsForCourse(course){return tutors().filter(t=>(t.courses||[]).includes(course))}
 function tutorsForCourseAndUniversity(course,university){return tutorsForCourse(course).filter(t=>!university||t.university===university).sort((a,b)=>(a.name||"").localeCompare(b.name||""))}
 function myBookings(){let b=list(DATA.bookings);if(profile.role==="admin")return b;if(profile.role==="tutor")return b.filter(x=>x.tutorId===currentUser.uid);return b.filter(x=>x.studentId===currentUser.uid)}
@@ -381,10 +408,10 @@ function getPublicProfiles(){
 function publicPhoto(p){return (p&&p.photoUrl)||"scheduled-icon.jpeg"}
 function publicCourses(){
   let names=[]; getPublicProfiles().forEach(p=>(p.courses||[]).forEach(c=>names.push(c)));
-  return [...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  return uniqueSorted(names);
 }
 function publicUniversities(){
-  return [...new Set(getPublicProfiles().map(p=>p.university).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  return uniqueSorted(getPublicProfiles().map(p=>p.university).filter(Boolean));
 }
 function publicFilterHTML(renderFn){
   const courses=publicCourses(), universities=publicUniversities();
@@ -555,7 +582,7 @@ function allAssignableCourses(){
   let names=[];
   tutors().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));
   list(DATA.courses||{}).forEach(c=>{if(c.name)names.push(c.name)});
-  return [...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  return uniqueSorted(names);
 }
 function assignedCoursesForStudent(studentId){
   const s=user(studentId);
@@ -581,6 +608,13 @@ function getAnnouncementsForRole(){return list(DATA.announcements||{}).filter(a=
 function getReviewsForTutor(tutorId){return list(DATA.reviews||{}).filter(r=>r.tutorId===tutorId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))}function avgRating(tutorId){const rs=getReviewsForTutor(tutorId);return rs.length?(rs.reduce((s,r)=>s+Number(r.rating||0),0)/rs.length).toFixed(1):"—"}
 function isFavoriteTutor(tutorId){return Array.isArray(profile.favoriteTutorIds)&&profile.favoriteTutorIds.includes(tutorId)}async function toggleFavoriteTutor(tutorId){const current=Array.isArray(profile.favoriteTutorIds)?profile.favoriteTutorIds:[];const next=current.includes(tutorId)?current.filter(id=>id!==tutorId):[...current,tutorId];await db.ref("users/"+currentUser.uid+"/favoriteTutorIds").set(next);await loadData();profile={...profile,...(DATA.users[currentUser.uid]||{})};allTutorsPage()}
 function assignedCourseBadges(studentId){const courses=typeof assignedCoursesForStudent==="function"?assignedCoursesForStudent(studentId):[];return courses.length?courses.join(", "):"None"}
+async function autoAssignStudentFromBooking(studentId,tutorId,course){
+  if(!studentId||!tutorId)return;
+  const s=(DATA.users||{})[studentId]||{};
+  const assignedTutorIds=Array.from(new Set([...(Array.isArray(s.assignedTutorIds)?s.assignedTutorIds:[]), tutorId].filter(Boolean)));
+  const assignedCourses=mergeTextArrayCaseInsensitive(Array.isArray(s.assignedCourses)?s.assignedCourses:[], course?[course]:[]);
+  await db.ref("users/"+studentId).update({assignedTutorIds,assignedCourses,autoAssignedUpdatedAt:Date.now()});
+}
 function markBookingPayment(bookingId){const b=DATA.bookings[bookingId];if(!b)return alert("Booking not found.");const method=prompt("Payment method: Cash or Whish",(b.paymentMethod||"Cash"));if(method===null)return;const cleanMethod=(method.toLowerCase().includes("whish")||method.toLowerCase().includes("wish"))?"Whish":"Cash";const date=prompt("Payment date YYYY-MM-DD:",todayISO());if(date===null)return;const payments=(b.payments||[]).map(p=>({...p,paid:true,method:cleanMethod,paymentDate:date}));db.ref("bookings/"+bookingId).update({paymentMethod:cleanMethod,payments}).then(async()=>{await loadData();bookingsPage(profile.role!=="student")})}
 function calendarLinkForBooking(b){const t=user(b.tutorId),s=user(b.studentId);const title=encodeURIComponent(`Scheduled: ${b.course||"Tutoring"}`);const details=encodeURIComponent(`Course: ${b.course||""}\nTutor: ${t.name||""}\nStudent: ${s.name||""}\nLocation: ${b.location||""}`);const date=(b.date||"").replaceAll("-","");const start=(b.start||"00:00").replace(":","");const dur=Math.round(Number(b.duration||1)*60), sh=Number((b.start||"00:00").split(":")[0]), sm=Number((b.start||"00:00").split(":")[1]||0);const end=sh*60+sm+dur,eh=String(Math.floor(end/60)).padStart(2,"0"),em=String(end%60).padStart(2,"0");return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${date}T${start}00/${date}T${eh}${em}00&details=${details}`}
 function contactSelectedTutorForTime(){const t=user($("bt")?.value);openWhatsApp(t.whatsapp||"","Hi, I couldn't find a time that suits me on Scheduled. Can we arrange a session time?")}
@@ -1240,13 +1274,15 @@ async function confirmBooking(){
     if(!S92_BOOKING.date)return alert("Please choose a date.");
     if(!S92_BOOKING.time)return alert("Please choose a time.");
     if(!s92SlotAvailableForDuration(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.time,S92_BOOKING.duration,S92_BOOKING.sessionType))return alert("This time is no longer available.");
-    const booking={studentId:currentUser.uid,tutorId:S92_BOOKING.tutorId,availabilityId:s93AvailabilityIdForBooking(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.time,S92_BOOKING.duration,S92_BOOKING.sessionType),course:s92SelectedCourse(),date:S92_BOOKING.date,start:S92_BOOKING.time,duration:Number(S92_BOOKING.duration||1),sessionType:S92_BOOKING.sessionType,paymentMethod:"Whish",paid:false,status:"confirmed",done:false,createdAt:Date.now()};
+    const booking={studentId:currentUser.uid,tutorId:S92_BOOKING.tutorId,availabilityId:s93AvailabilityIdForBooking(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.time,S92_BOOKING.duration,S92_BOOKING.sessionType),course:s92SelectedCourse(),date:S92_BOOKING.date,start:S92_BOOKING.time,duration:Number(S92_BOOKING.duration||1),sessionType:S92_BOOKING.sessionType,paymentMethod:"Whish",paid:false,status:"confirmed",done:false,createdAt:Date.now(),autoAssigned:true};
     const ref=await db.ref("bookings").push(booking);
+    await autoAssignStudentFromBooking(currentUser.uid,S92_BOOKING.tutorId,booking.course);
     await loadData();
     if(typeof checkMilestonesAfterBooking==="function")await checkMilestonesAfterBooking();
     document.getElementById("content").innerHTML=s92Confirmation(ref.key);
   }catch(e){console.error(e);alert("Booking could not be confirmed. Please try again.");}
 }
+
 setInterval(()=>{ if(document.getElementById("content")?.querySelector(".s92-booking-shell"))s92RenderBookingPage(); },60000);
 
 /* Payments */
@@ -2106,6 +2142,7 @@ async function createTutorScheduledSession(){
   const booking={tutorId:currentUser.uid,studentId,course,date,start,duration,location,paymentMethod,payments:[{name:student.name||"Student",amount,paid:paidNow,method:paymentMethod,paymentDate:payDate}],status:"confirmed",done:false,createdAt:Date.now(),createdBy:currentUser.uid,createdByRole:"tutor",tutorScheduled:true};
   const ref=await db.ref("bookings").push(booking);
   booking.id=ref.key;
+  await autoAssignStudentFromBooking(studentId,currentUser.uid,course);
   await s96NotifyStudentForBooking(booking,"scheduled",null,true);
   await loadData();
   showToast("✓ Session created successfully.","The student was notified in website chat and WhatsApp.");
@@ -2285,6 +2322,7 @@ async function createTutorScheduledSession(){
   const payDate=paidNow?(typeof todayISO==="function"?todayISO():new Date().toISOString().slice(0,10)):"";
   const booking={tutorId:currentUser.uid,studentId,course,date,start,duration,location,paymentMethod,payments:[{name:student.name||"Student",amount,paid:paidNow,method:paymentMethod,paymentDate:payDate}],status:"confirmed",done:false,createdAt:Date.now(),createdBy:currentUser.uid,createdByRole:"tutor",tutorScheduled:true};
   const ref=await db.ref("bookings").push(booking); booking.id=ref.key;
+  await autoAssignStudentFromBooking(studentId,currentUser.uid,course);
   await s97NotifyStudent(booking,"scheduled",null,"",true);
   await loadData(); showToast("✓ Session created successfully.","The time is now blocked globally and the student was notified."); tutorScheduleSessionPage();
 }
