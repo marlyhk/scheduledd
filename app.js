@@ -2568,3 +2568,100 @@ function orgFilterCourseCards(){
   });
 }
 function myTutorsPage(){const ts=studentTutors(currentUser.uid);$('content').innerHTML=`<div class="card"><h2>My Tutors</h2>${ts.length?`<div class="org-card-grid">${ts.map(t=>{const active=orgBookingActive(t),bs=orgStudentBookings(currentUser.uid).filter(b=>b.tutorId===t.id);return `<article class="org-profile-card"><div class="org-card-head"><div class="org-avatar">${orgInitials(t.name)}</div><div><h3>${orgEsc(t.name)}</h3><p>${orgEsc(t.university||'')}</p></div>${orgBadge(active?'Available':'Unavailable',active?'ok':'off')}</div><p>${orgArr(t.courses).map(c=>orgBadge(c)).join(' ')}</p>${active?`<button onclick="bookWithTutor('${t.id}')">Book a New Session</button>`:`<p class="admin-note">This tutor is currently unavailable for new bookings. Your history remains saved.</p>`}<hr><b>Upcoming</b><br>${orgUpcoming(bs).map(b=>`${orgEsc(b.date)} · ${orgEsc(b.course)}`).join('<br>')||'<span class="muted">None</span>'}</article>`}).join('')}</div>`:'<p class="muted">No tutors yet.</p>'}</div>`;}
+
+/* ===== v9.14 Dynamic selectors + tutor filters update ===== */
+function orgCatalog(){return DATA.optionCatalog||{};}
+const _orgBaseAvailableUniversities=currentAvailableUniversities;
+const _orgBaseAvailableCourses=currentAvailableCourses;
+currentAvailableUniversities=function(source=DATA){
+  return uniqueSorted([...
+    _orgBaseAvailableUniversities(source),
+    ...((source.optionCatalog&&source.optionCatalog.universities)||[])
+  ]);
+};
+currentAvailableCourses=function(source=DATA){
+  return uniqueSorted([...
+    _orgBaseAvailableCourses(source),
+    ...((source.optionCatalog&&source.optionCatalog.courses)||[])
+  ]);
+};
+function orgOptionRows(items,selected=[],name){
+  const chosen=new Set(orgArr(selected).map(optionKey));
+  return `<div class="org-scroll-options">${items.map((x,i)=>`<label class="org-option-check"><input type="checkbox" name="${name}" value="${orgEsc(x)}" ${chosen.has(optionKey(x))?'checked':''}><span>${orgEsc(x)}</span></label>`).join('')||'<p class="muted">No options yet.</p>'}</div>`;
+}
+function orgSelected(name){return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(x=>x.value);}
+async function orgAddUniversityFromForm(refreshFn){
+  const value=prompt('University name:',''); if(value===null)return;
+  const name=prettyOptionLabel(value); if(!name)return alert('Please enter a university name.');
+  const list=uniqueSorted([...currentAvailableUniversities(),name]);
+  await db.ref('optionCatalog/universities').set(list);
+  await loadData(); refreshFn();
+}
+async function orgAddCourseFromForm(refreshFn){
+  const value=prompt('Course name or code:',''); if(value===null)return;
+  const name=prettyOptionLabel(value); if(!name)return alert('Please enter a course name.');
+  const list=uniqueSorted([...currentAvailableCourses(),name]);
+  await db.ref('optionCatalog/courses').set(list);
+  await loadData(); refreshFn();
+}
+function orgDynamicPicker(title,name,items,selected=[],addAction=''){
+  return `<div class="org-picker"><div class="org-picker-head"><b>${orgEsc(title)}</b>${addAction?`<button type="button" class="ghost compact" onclick="${addAction}">+ Add ${orgEsc(title.replace(/s$/,''))}</button>`:''}</div>${orgOptionRows(items,selected,name)}</div>`;
+}
+function adminTutors(){
+  const ts=tutors().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const universities=currentAvailableUniversities(),courses=currentAvailableCourses();
+  $('content').innerHTML=`<section class="org-page"><div class="org-page-title"><div><h2>Booking Tutors</h2><p>Filter tutors using the live university and course lists. Booking status remains separate from public profile visibility.</p></div></div>
+  <div class="org-toolbar org-select-toolbar"><label>University<select id="orgTutorUniFilter" onchange="orgFilterTutorCards()"><option value="">All universities</option>${universities.map(u=>`<option value="${orgEsc(u)}">${orgEsc(u)}</option>`).join('')}</select></label><label>Course<select id="orgTutorCourseFilter" onchange="orgFilterTutorCards()"><option value="">All courses</option>${courses.map(c=>`<option value="${orgEsc(c)}">${orgEsc(c)}</option>`).join('')}</select></label><label>Status<select id="orgTutorStatus" onchange="orgFilterTutorCards()"><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label></div>
+  <div id="orgTutorGrid" class="org-card-grid">${ts.map(t=>`<div data-tutor-id="${t.id}" data-universities="${orgEsc(uniqueSorted([t.university,...orgArr(t.universities)]).join('|'))}" data-courses="${orgEsc(orgArr(t.courses).join('|'))}" data-active="${orgBookingActive(t)?'active':'inactive'}">${orgTutorCard(t)}</div>`).join('')||'<p class="muted">No tutors yet.</p>'}</div>
+  <details class="org-create-panel"><summary>Add booking tutor</summary><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp"><input id="tr" type="number" placeholder="Hourly rate"></div>
+  <input id="tuiv" type="hidden"><input id="tl" placeholder="General locations, comma separated">
+  <div class="org-picker-grid">${orgDynamicPicker('Universities','orgNewTutorUniversities',universities,[],`orgAddUniversityFromForm(adminTutors)`)}${orgDynamicPicker('Courses','orgNewTutorCourses',courses,[],`orgAddCourseFromForm(adminTutors)`)}</div>
+  <button onclick="orgCreateAccount('tutor')">Create / Link Booking Tutor</button></details></section>`;
+}
+function orgFilterTutorCards(){
+  const uni=$('orgTutorUniFilter')?.value||'',course=$('orgTutorCourseFilter')?.value||'',status=$('orgTutorStatus')?.value||'';
+  document.querySelectorAll('#orgTutorGrid > [data-tutor-id]').forEach(el=>{
+    const unis=(el.dataset.universities||'').split('|').filter(Boolean),courses=(el.dataset.courses||'').split('|').filter(Boolean);
+    el.style.display=(!uni||unis.includes(uni))&&(!course||courses.includes(course))&&(!status||el.dataset.active===status)?'':'none';
+  });
+}
+function adminStudents(){
+  const ss=students().sort((a,b)=>(a.name||'').localeCompare(b.name||'')),universities=currentAvailableUniversities(),courses=currentAvailableCourses();
+  $('content').innerHTML=`<section class="org-page"><div class="org-page-title"><div><h2>Students</h2><p>Filter students by university or course. New options appear automatically.</p></div></div><div class="org-toolbar org-select-toolbar"><label>University<select id="orgStudentUni" onchange="orgFilterStudentCards()"><option value="">All universities</option>${universities.map(u=>`<option value="${orgEsc(u)}">${orgEsc(u)}</option>`).join('')}</select></label><label>Course<select id="orgStudentCourse" onchange="orgFilterStudentCards()"><option value="">All courses</option>${courses.map(c=>`<option value="${orgEsc(c)}">${orgEsc(c)}</option>`).join('')}</select></label></div><div id="orgStudentGrid" class="org-card-grid">${ss.map(orgStudentCard).join('')||'<p class="muted">No students yet.</p>'}</div>
+  <details class="org-create-panel"><summary>Add student</summary><div class="row"><input id="sn" placeholder="Full name"><input id="se" type="email" placeholder="Email"><input id="sp" placeholder="Temporary password"><input id="sphone" placeholder="Phone"><select id="stype"><option value="individual">Individual</option><option value="group">Group</option></select><input id="smembers" placeholder="Group members, comma separated"></div><input id="suniversity" type="hidden">
+  <div class="org-picker-grid">${orgDynamicPicker('Universities','orgNewStudentUniversity',universities,[],`orgAddUniversityFromForm(adminStudents)`)}${orgDynamicPicker('Courses','orgNewStudentCourses',courses,[],`orgAddCourseFromForm(adminStudents)`)}</div>
+  <p class="muted">Choose one university for the student. Multiple courses may be selected.</p><button onclick="orgCreateAccount('student')">Add Student</button></details></section>`;
+}
+function publicTutorProfilesPage(){
+  const ps=list(DATA.publicTutors||{}).sort((a,b)=>(a.name||'').localeCompare(b.name||'')),universities=currentAvailableUniversities(),courses=currentAvailableCourses();
+  $('content').innerHTML=`<section class="org-page"><div class="org-page-title"><div><h2>Public Tutor Profiles</h2><p>Public visibility is separate from booking tutor status.</p></div></div><div class="org-card-grid">${ps.map(p=>`<article class="org-profile-card"><div class="org-card-head"><img class="org-photo" src="${orgEsc(publicPhoto(p))}" onerror="this.src='scheduled-icon.jpeg'"><div><h3>${orgEsc(p.name)}</h3><p>${orgEsc(p.university||'')}</p></div>${orgBadge(orgPublicActive(p)?'Visible':'Hidden',orgPublicActive(p)?'ok':'off')}</div><div class="org-card-body"><p>${orgArr(p.courses).map(c=>orgBadge(c)).join(' ')}</p><p>${money(p.rate)}/h · ${p.linkedTutorId?orgEsc((user(p.linkedTutorId)||{}).name||'Linked'):'Not linked'}</p></div><div class="org-card-actions"><button onclick="editPublicTutorProfile('${p.id}')">Edit info</button><button class="ghost" onclick="editPublicTutorPhoto('${p.id}')">Photo</button><button class="${orgPublicActive(p)?'danger':'ghost'}" onclick="togglePublicTutorStatus('${p.id}')">${orgPublicActive(p)?'Hide profile':'Show profile'}</button><button class="danger" onclick="deletePublicTutorProfile('${p.id}')">Delete</button></div></article>`).join('')||'<p class="muted">No public profiles yet.</p>'}</div>
+  <details class="org-create-panel"><summary>Add public tutor profile</summary><div class="row"><input id="pname" placeholder="Tutor name"><input id="prate" type="number" placeholder="Hourly rate"><select id="plink"><option value="">No linked booking tutor</option>${tutors().map(t=>`<option value="${t.id}">${orgEsc(t.name)}</option>`).join('')}</select><input id="plocations" placeholder="Locations, comma separated"></div><input id="puniversity" type="hidden"><input id="pcourses" type="hidden">
+  <div class="org-picker-grid">${orgDynamicPicker('Universities','orgNewPublicUniversity',universities,[],`orgAddUniversityFromForm(publicTutorProfilesPage)`)}${orgDynamicPicker('Courses','orgNewPublicCourses',courses,[],`orgAddCourseFromForm(publicTutorProfilesPage)`)}</div>
+  <label>Profile picture</label><input id="pphotoFile" type="file" accept="image/*"><textarea id="pdesc" placeholder="Description / teaching style"></textarea><button onclick="orgAddPublicTutorProfile()">Add Public Profile</button></details></section>`;
+}
+async function orgCreateAccount(role){
+  const email=(role==='tutor'?$('te'):$('se'))?.value.trim()||'';
+  const selectedUniversities=orgSelected(role==='tutor'?'orgNewTutorUniversities':'orgNewStudentUniversity');
+  const selectedCourses=orgSelected(role==='tutor'?'orgNewTutorCourses':'orgNewStudentCourses');
+  if(selectedUniversities.length!==1)return alert('Please select exactly one university.');
+  if(!selectedCourses.length)return alert('Please select at least one course.');
+  if(role==='tutor')$('tuiv').value=selectedUniversities[0]; else $('suniversity').value=selectedUniversities[0];
+  await createAccount(role);
+  await loadData();
+  const found=students().concat(tutors()).find(x=>optionKey(x.email)===optionKey(email));
+  if(found){
+    const patch={university:selectedUniversities[0],courses:selectedCourses};
+    if(role==='tutor')patch.universities=selectedUniversities;
+    else patch.assignedCourses=selectedCourses;
+    await db.ref(`users/${found.id}`).update(patch);
+    await loadData();
+  }
+  role==='tutor'?adminTutors():adminStudents();
+}
+async function orgAddPublicTutorProfile(){
+  const universities=orgSelected('orgNewPublicUniversity'),courses=orgSelected('orgNewPublicCourses');
+  if(universities.length!==1)return alert('Please select exactly one university.');
+  if(!courses.length)return alert('Please select at least one course.');
+  $('puniversity').value=universities[0];$('pcourses').value=courses.join(', ');
+  await addPublicTutorProfile();
+}
