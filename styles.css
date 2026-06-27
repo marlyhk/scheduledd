@@ -1066,3 +1066,18 @@ html,body{
 /* v7.7 booking confirmation + past availability filter */
 .confirm-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .past-slot{opacity:.45;pointer-events:none}
+
+
+/* v7.8 booking confirmation + calendar hard filter */
+.calendar-day.past,
+.day.past,
+.date-card.past{
+  opacity:.35!important;
+  pointer-events:none!important;
+  text-decoration:line-through!important;
+}
+.slot-button.past,
+.time-slot.past,
+button.past-slot{
+  display:none!important;
+}
