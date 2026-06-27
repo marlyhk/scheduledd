@@ -2545,78 +2545,128 @@ async function deleteCourseEverywhere(course){
 function renderTabs(){let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Course Universities","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];$("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");openTab(t[0],$("tabs button"));}
 async function openTab(tab,btn){await loadData(); if(typeof closeMenu==="function")setTimeout(closeMenu,0);document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Course Universities":adminCourseUniversitySettingsPage,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:profile.role==="student"?paymentsPage:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:profile.role==="tutor"?tutorAnnouncementsPage:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"My Students":myStudentsPage,Statistics:statsPage,Reviews:reviewsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false),"Schedule Session":scheduleSessionPage};(routes[tab]||dashboardPage)();}
 
-/* ===== Scheduled v9.16 safe admin organization patch built on v9.13 =====
-   Purpose: keep existing tabs/settings, add safer tracking + auto-assignment without breaking filters/balances. */
-(function(){
-  function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));}
-  function arr(obj){try{return Object.entries(obj||{}).map(([id,v])=>({id,...(v||{})}));}catch(e){return []}}
-  function key(v){return String(v||"").trim().toLowerCase().replace(/\s+/g," ");}
-  function uniqText(a){const m=new Map();(a||[]).forEach(x=>{const s=String(x||"").trim();if(s&&!m.has(key(s)))m.set(key(s),s)});return [...m.values()].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));}
-  function activeBookings(){return arr((window.DATA||{}).bookings).filter(b=>!b.deleted&&!b.done&&!['cancelled','canceled','rescheduled'].includes(key(b.status)));}
-  function studentRows(){try{return typeof students==='function'?students():arr(DATA.users).filter(u=>u.role==='student'&&!u.removed)}catch(e){return []}}
-  function tutorRows(){try{return typeof tutors==='function'?tutors():arr(DATA.users).filter(u=>u.role==='tutor'&&!u.removed)}catch(e){return []}}
-  function fmtMoney(v){try{return typeof money==='function'?money(Number(v||0)):`$${Number(v||0).toFixed(2)}`}catch(e){return `$${Number(v||0).toFixed(2)}`}}
-  function today(){try{return typeof todayISO==='function'?todayISO():new Date().toISOString().slice(0,10)}catch(e){return new Date().toISOString().slice(0,10)}}
-  function courseNames(){
-    try{if(typeof allAssignableCourses==='function')return uniqText(allAssignableCourses())}catch(e){}
-    const names=[];arr(DATA.courses).forEach(c=>{if(c.name&&c.active!==false&&!c.removed&&!c.deleted)names.push(c.name)});tutorRows().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));return uniqText(names);
-  }
-  function assignedTutorIds(studentId){
-    const s=(DATA.users||{})[studentId]||{};const ids=[...(Array.isArray(s.assignedTutorIds)?s.assignedTutorIds:[])];
-    activeBookings().filter(b=>b.studentId===studentId).forEach(b=>{if(b.tutorId)ids.push(b.tutorId)});
-    return [...new Set(ids.filter(Boolean))];
-  }
-  function assignedCourses(studentId){
-    const s=(DATA.users||{})[studentId]||{};const names=[...(Array.isArray(s.assignedCourses)?s.assignedCourses:[])];
-    activeBookings().filter(b=>b.studentId===studentId).forEach(b=>{if(b.course)names.push(b.course)});
-    return uniqText(names);
-  }
-  function tutorNames(studentId){return assignedTutorIds(studentId).map(id=>(DATA.users||{})[id]?.name).filter(Boolean).join(', ')}
-  function balance(studentId){
-    let total=0;activeBookings().filter(b=>b.studentId===studentId).forEach(b=>{
-      if(Array.isArray(b.payments)&&b.payments.length){b.payments.forEach(p=>{if(!p.paid)total+=Number(p.amount||0)})}
-      else if(!b.paid){const t=(DATA.users||{})[b.tutorId]||{};total+=Number(b.total||0)||Number(t.rate||0)*Number(b.duration||1)}
-    });return total;
-  }
-  function upcomingStudent(studentId){return activeBookings().filter(b=>b.studentId===studentId&&(b.date||'')>=today()).length}
-  function upcomingTutor(tutorId){return activeBookings().filter(b=>b.tutorId===tutorId&&(b.date||'')>=today()).length}
-  function tutorStudents(tutorId){return [...new Set(activeBookings().filter(b=>b.tutorId===tutorId).map(b=>b.studentId).filter(Boolean).concat(studentRows().filter(s=>Array.isArray(s.assignedTutorIds)&&s.assignedTutorIds.includes(tutorId)).map(s=>s.id)))];}
-  function tutorUniversities(tutorId){const t=(DATA.users||{})[tutorId]||{};const vals=[t.university];tutorStudents(tutorId).forEach(id=>vals.push((DATA.users||{})[id]?.university));return uniqText(vals)}
-  function tutorCourses(tutorId){const t=(DATA.users||{})[tutorId]||{};const vals=[...(Array.isArray(t.courses)?t.courses:[])];activeBookings().filter(b=>b.tutorId===tutorId&&b.course).forEach(b=>vals.push(b.course));return uniqText(vals)}
-  async function syncAssignments(){
+/* ===== Scheduled v9.17 SAFE STABILITY LAYER built from v9.13 =====
+   Goal: preserve v9.13 behavior, avoid crashes, keep existing admin tabs,
+   and add only safe organization features requested by admin. */
+function s917Arr(v){return Array.isArray(v)?v:[];}
+function s917Norm(v){return String(v||"").trim().replace(/\s+/g," ").toLowerCase();}
+function s917Label(v){return (typeof prettyOptionLabel==="function"?prettyOptionLabel(v):String(v||"").trim().replace(/\s+/g," "));}
+function s917MergeText(current, additions){return (typeof mergeTextArrayCaseInsensitive==="function")?mergeTextArrayCaseInsensitive(current,additions):(function(){const out=[],seen=new Set();[...s917Arr(current),...s917Arr(additions)].forEach(x=>{const lab=s917Label(x),key=s917Norm(lab);if(lab&&!seen.has(key)){seen.add(key);out.push(lab)}});return out;})();}
+function s917CourseKey(c){return (typeof s913Key==="function")?s913Key(c):(typeof safe==="function"?safe(c):s917Norm(c).replace(/[^a-z0-9]+/g,"_"));}
+function s917ActiveBookings(){return list(DATA.bookings||{}).filter(b=>b&&!b.deleted&&!b.done&&!["cancelled","canceled","deleted"].includes(String(b.status||"").toLowerCase())&&!b.cancelledAt&&!b.canceledAt);}
+
+async function syncStudentAssignmentsFromBookings(showAlert=true){
+  try{
+    await loadData();
     const updates={};
-    studentRows().forEach(s=>{updates[`users/${s.id}/assignedTutorIds`]=assignedTutorIds(s.id);updates[`users/${s.id}/assignedCourses`]=assignedCourses(s.id);updates[`users/${s.id}/autoAssignedSyncedAt`]=Date.now();});
-    await db.ref().update(updates);await loadData();
-  }
-  window.s916SyncAssignments=async function(){try{await syncAssignments();alert('Assignments synced successfully.');adminStudents();}catch(e){console.error(e);alert('Could not sync assignments. Please try again.')}};
-  window.s916SetStudentFilter=function(k,v){window.s916StudentFilters=window.s916StudentFilters||{};window.s916StudentFilters[k]=v;try{adminStudents()}catch(e){console.error(e)}};
-  window.s916SetTutorFilter=function(k,v){window.s916TutorFilters=window.s916TutorFilters||{};window.s916TutorFilters[k]=v;try{adminTutors()}catch(e){console.error(e)}};
-  const oldAutoAssign=window.autoAssignStudentFromBooking;
-  window.autoAssignStudentFromBooking=async function(studentId,tutorId,course){
+    const perStudent={};
+    s917ActiveBookings().forEach(b=>{
+      if(!b.studentId)return;
+      if(!perStudent[b.studentId])perStudent[b.studentId]={tutors:[],courses:[]};
+      if(b.tutorId)perStudent[b.studentId].tutors.push(b.tutorId);
+      if(b.course)perStudent[b.studentId].courses.push(b.course);
+    });
+    Object.entries(perStudent).forEach(([studentId,rel])=>{
+      const s=(DATA.users||{})[studentId]||{};
+      const tutorIds=Array.from(new Set([...s917Arr(s.assignedTutorIds),...rel.tutors].filter(Boolean)));
+      const courses=s917MergeText(s.assignedCourses||[],rel.courses||[]);
+      updates[`users/${studentId}/assignedTutorIds`]=tutorIds;
+      updates[`users/${studentId}/assignedCourses`]=courses;
+      updates[`users/${studentId}/assignmentSyncedAt`]=Date.now();
+    });
+    if(Object.keys(updates).length)await db.ref().update(updates);
+    await loadData();
+    if(showAlert)alert(`Assignments synced successfully for ${Object.keys(perStudent).length} student(s).`);
+    if(typeof adminStudents==="function" && profile?.role==="admin")adminStudents();
+  }catch(e){console.error(e);alert("Could not sync assignments. The website is still safe; please try again.");}
+}
+
+const s917OriginalAutoAssignStudentFromBooking = typeof autoAssignStudentFromBooking==="function" ? autoAssignStudentFromBooking : null;
+async function autoAssignStudentFromBooking(studentId,tutorId,course){
+  if(!studentId||!tutorId)return;
+  try{
+    const s=(DATA.users||{})[studentId]||{};
+    const assignedTutorIds=Array.from(new Set([...s917Arr(s.assignedTutorIds),tutorId].filter(Boolean)));
+    const assignedCourses=s917MergeText(s.assignedCourses||[], course?[course]:[]);
+    await db.ref("users/"+studentId).update({assignedTutorIds,assignedCourses,autoAssignedUpdatedAt:Date.now()});
+  }catch(e){console.error("Auto assignment failed",e);}
+}
+
+const s917OriginalCreateAccount = typeof createAccount==="function" ? createAccount : null;
+async function createAccount(role){
+  // Keep original tutor creation fully untouched. Only make student creation store selected assignments.
+  if(role!=="student" || !s917OriginalCreateAccount)return s917OriginalCreateAccount(role);
+  try{
+    let name=$("sn").value.trim(), email=$("se").value.trim(), password=$("sp").value, phoneForWa=$("sphone").value;
+    if(!name||!email||!password)return alert("Please fill name, email, and password.");
+    const assignedTutorIds=(typeof selectedTutorIds==="function"?selectedTutorIds("assignedTutor"):[]);
+    const assignedCourses=(typeof selectedCourses==="function"?selectedCourses("assignedCourse"):[]);
+    const profileData={name,email,role:"student",createdAt:Date.now(),removed:false,phone:phoneForWa,university:($("suniversity")?.value||"").trim(),type:$("stype").value,members:$("smembers").value.split(",").map(x=>x.trim()).filter(Boolean),createdBy:currentUser.uid,assignedTutorIds,assignedCourses};
     try{
-      if(oldAutoAssign)await oldAutoAssign(studentId,tutorId,course);
-      const s=(DATA.users||{})[studentId]||{};const nextTutors=uniqText([...(Array.isArray(s.assignedTutorIds)?s.assignedTutorIds:[]),tutorId]).filter(Boolean);
-      const nextCourses=uniqText([...(Array.isArray(s.assignedCourses)?s.assignedCourses:[]),course]).filter(Boolean);
-      await db.ref('users/'+studentId).update({assignedTutorIds:nextTutors,assignedCourses:nextCourses,autoAssignedUpdatedAt:Date.now()});
-    }catch(e){console.error('autoAssignStudentFromBooking safe patch failed',e)}
-  };
-  window.adminStudents=function(){
-    try{
-      const f=window.s916StudentFilters||{};const all=profile?.role==='admin'?studentRows():studentRows().filter(s=>assignedTutorIds(s.id).includes(currentUser.uid));
-      const unis=uniqText(all.map(s=>s.university));const tutorsList=tutorRows();const courses=courseNames();
-      const visible=all.filter(s=>{const text=key(`${s.name} ${s.email} ${s.phone}`);if(f.q&&!text.includes(key(f.q)))return false;if(f.university&&key(s.university)!==key(f.university))return false;if(f.tutor&&!assignedTutorIds(s.id).includes(f.tutor))return false;if(f.course&&!assignedCourses(s.id).map(key).includes(key(f.course)))return false;if(f.balance==='unpaid'&&balance(s.id)<=0)return false;if(f.balance==='paid'&&balance(s.id)>0)return false;return true;});
-      const totalBal=visible.reduce((sum,s)=>sum+balance(s.id),0);
-      $('content').innerHTML=`<div class="card"><h2>${profile?.role==='admin'?'Students / Groups':'My Students / Groups'}</h2><p class="muted">Auto-assignment is active: every successful booking links the student with that tutor and course automatically.</p>${profile?.role==='admin'?`<div class="row"><input placeholder="Search student" value="${esc(f.q||'')}" oninput="s916SetStudentFilter('q',this.value)"><select onchange="s916SetStudentFilter('university',this.value)"><option value="">All universities</option>${unis.map(u=>`<option value="${esc(u)}" ${key(f.university)===key(u)?'selected':''}>${esc(u)}</option>`).join('')}</select><select onchange="s916SetStudentFilter('tutor',this.value)"><option value="">All tutors</option>${tutorsList.map(t=>`<option value="${t.id}" ${f.tutor===t.id?'selected':''}>${esc(t.name||t.email||'Tutor')}</option>`).join('')}</select><select onchange="s916SetStudentFilter('course',this.value)"><option value="">All courses</option>${courses.map(c=>`<option value="${esc(c)}" ${key(f.course)===key(c)?'selected':''}>${esc(c)}</option>`).join('')}</select><select onchange="s916SetStudentFilter('balance',this.value)"><option value="">All balances</option><option value="unpaid" ${f.balance==='unpaid'?'selected':''}>Unpaid only</option><option value="paid" ${f.balance==='paid'?'selected':''}>No balance</option></select><button class="ghost" onclick="s916SyncAssignments()">Sync auto-assignments</button></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Shown</div><div class="kpi-value">${visible.length}</div></div><div class="kpi-card"><div class="kpi-label">Unpaid Balance</div><div class="kpi-value">${fmtMoney(totalBal)}</div></div></div>`:''}${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Phone</th><th>University</th><th>Type</th><th>Assigned Tutors</th><th>Assigned Courses</th><th>Upcoming</th><th>Balance</th><th>Actions</th></tr>${visible.map(s=>`<tr><td><b>${esc(s.name||'')}</b></td><td>${esc(s.email||'')}</td><td>${esc(s.phone||'')}</td><td>${esc(s.university||'')}</td><td>${esc(s.type||'individual')}</td><td class="assigned-list">${esc(tutorNames(s.id)||'None')}</td><td class="course-list">${esc(assignedCourses(s.id).join(', ')||'None')}</td><td>${upcomingStudent(s.id)}</td><td>${fmtMoney(balance(s.id))}</td><td>${profile?.role==='admin'?`<button onclick="editStudent('${s.id}')">Edit</button><button onclick="editStudentTutors('${s.id}')">Assign Tutors</button><button onclick="editStudentCourses('${s.id}')">Assign Courses</button><button onclick="s916ViewStudent('${s.id}')">View</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button>`:''}</td></tr>`).join('')}</table>`:`<p class="muted">No accounts match these filters.</p>`}<hr><h3>Create Student or Group Account</h3><div class="row"><input id="sn" placeholder="Name"><input id="se" type="email" placeholder="Email"><input id="sp" placeholder="Password"><input id="sphone" placeholder="Phone"><input id="suniversity" placeholder="University"><select id="stype"><option>individual</option><option>group</option></select></div><input id="smembers" placeholder="Group members comma separated"><label>Assign Tutor(s)</label><div class="checkbox-grid">${typeof tutorCheckboxes==='function'?tutorCheckboxes('assignedTutor'):''}</div><label>Assign Course(s)</label><div class="checkbox-grid">${typeof courseCheckboxes==='function'?courseCheckboxes('assignedCourse'):''}</div><button onclick="createAccount('student')">Create Student/Group</button></div>`;
-    }catch(e){console.error(e);$('content').innerHTML=`<div class="card"><h2>Students / Groups</h2><p class="muted">The organization view could not load safely. Existing student tools are still preserved.</p><button onclick="location.reload()">Reload</button></div>`}
-  };
-  window.s916ViewStudent=function(id){try{const s=(DATA.users||{})[id]||{};const bs=arr(DATA.bookings).filter(b=>b.studentId===id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));$('content').innerHTML=`<div class="card"><button class="ghost" onclick="adminStudents()">Back to Students</button><h2>${esc(s.name||'Student')}</h2><div class="grid"><div class="card"><h3>Profile</h3><p><b>Email:</b> ${esc(s.email||'')}</p><p><b>Phone:</b> ${esc(s.phone||'')}</p><p><b>University:</b> ${esc(s.university||'')}</p><p><b>Assigned Tutors:</b> ${esc(tutorNames(id)||'None')}</p><p><b>Assigned Courses:</b> ${esc(assignedCourses(id).join(', ')||'None')}</p></div><div class="card"><h3>Tracking</h3><p><b>Upcoming sessions:</b> ${upcomingStudent(id)}</p><p><b>Unpaid balance:</b> ${fmtMoney(balance(id))}</p><label>Private admin notes</label><textarea id="s916Notes">${esc(s.adminNotes||'')}</textarea><button onclick="s916SaveStudentNotes('${id}')">Save Notes</button></div></div><div class="card"><h3>Session History</h3>${bs.length&&typeof bookingRows==='function'?bookingRows(bs,true):'<p class="muted">No sessions yet.</p>'}</div></div>`}catch(e){console.error(e);adminStudents()}};
-  window.s916SaveStudentNotes=async function(id){await db.ref('users/'+id+'/adminNotes').set($('s916Notes')?.value||'');await loadData();s916ViewStudent(id)};
-  window.adminTutors=function(){
-    try{
-      const f=window.s916TutorFilters||{};const all=tutorRows();const unis=uniqText(all.flatMap(t=>tutorUniversities(t.id)));const courses=courseNames();
-      const visible=all.filter(t=>{const text=key(`${t.name} ${t.email} ${t.phone} ${t.whatsapp}`);if(f.q&&!text.includes(key(f.q)))return false;if(f.university&&!tutorUniversities(t.id).map(key).includes(key(f.university)))return false;if(f.course&&!tutorCourses(t.id).map(key).includes(key(f.course)))return false;return true;});
-      $('content').innerHTML=`<div class="card"><h2>Booking Tutor Accounts</h2><p class="admin-note"><b>This tab creates real booking tutor accounts.</b> Filters are view-only and do not change existing tutor behavior.</p><div class="row"><input placeholder="Search tutor" value="${esc(f.q||'')}" oninput="s916SetTutorFilter('q',this.value)"><select onchange="s916SetTutorFilter('university',this.value)"><option value="">All universities</option>${unis.map(u=>`<option value="${esc(u)}" ${key(f.university)===key(u)?'selected':''}>${esc(u)}</option>`).join('')}</select><select onchange="s916SetTutorFilter('course',this.value)"><option value="">All courses</option>${courses.map(c=>`<option value="${esc(c)}" ${key(f.course)===key(c)?'selected':''}>${esc(c)}</option>`).join('')}</select></div>${visible.length?`<table class="table"><tr><th>Name</th><th>Email</th><th>Universities</th><th>Courses</th><th>Students</th><th>Upcoming</th><th>Rate</th><th>WhatsApp</th><th>Actions</th></tr>${visible.map(t=>`<tr><td><b>${esc(t.name||'')}</b></td><td>${esc(t.email||'')}</td><td>${esc(tutorUniversities(t.id).join(', ')||t.university||'')}</td><td>${esc(tutorCourses(t.id).join(', ')||'None')}</td><td>${tutorStudents(t.id).length}</td><td>${upcomingTutor(t.id)}</td><td>${fmtMoney(t.rate||0)}/h/person</td><td>${esc(t.whatsapp||'')}</td><td><button onclick="s916ViewTutor('${t.id}')">View</button><button onclick="editTutor('${t.id}')">Edit</button><button class="danger" onclick="deleteTutor('${t.id}')">Remove Access</button></td></tr>`).join('')}</table>`:`<p class="muted">No tutor accounts match these filters.</p>`}<hr><h3>Create Booking Tutor Account</h3><div class="row"><input id="tn" placeholder="Full name"><input id="te" type="email" placeholder="Email"><input id="tp" placeholder="Temporary password"><input id="tw" placeholder="WhatsApp e.g. 96176174738"><input id="tr" type="number" placeholder="Hourly rate"><input id="tuiv" placeholder="University e.g. University of Balamand"></div><input id="tl" placeholder="General locations: Online, On Campus (Koura Campus)"><button onclick="createAccount('tutor')">Create / Link Booking Tutor</button></div>`;
-    }catch(e){console.error(e);$('content').innerHTML=`<div class="card"><h2>Booking Tutor Accounts</h2><p class="muted">The tutor organization view could not load safely.</p><button onclick="location.reload()">Reload</button></div>`}
-  };
-  window.s916ViewTutor=function(id){try{const t=(DATA.users||{})[id]||{};const ids=tutorStudents(id);const bs=arr(DATA.bookings).filter(b=>b.tutorId===id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));$('content').innerHTML=`<div class="card"><button class="ghost" onclick="adminTutors()">Back to Tutors</button><h2>${esc(t.name||'Tutor')}</h2><div class="grid"><div class="card"><h3>Profile</h3><p><b>Email:</b> ${esc(t.email||'')}</p><p><b>WhatsApp:</b> ${esc(t.whatsapp||t.phone||'')}</p><p><b>Universities:</b> ${esc(tutorUniversities(id).join(', ')||t.university||'')}</p><p><b>Courses:</b> ${esc(tutorCourses(id).join(', ')||'None')}</p></div><div class="card"><h3>Teaching Summary</h3><p><b>Active students:</b> ${ids.length}</p><p><b>Upcoming sessions:</b> ${upcomingTutor(id)}</p><p><b>Total sessions:</b> ${bs.length}</p></div></div><div class="card"><h3>Students linked to this tutor</h3>${ids.length?`<table class="table"><tr><th>Name</th><th>University</th><th>Courses with tutor</th><th>Action</th></tr>${ids.map(sid=>{const s=(DATA.users||{})[sid]||{};const cs=uniqText(activeBookings().filter(b=>b.tutorId===id&&b.studentId===sid).map(b=>b.course));return `<tr><td>${esc(s.name||'')}</td><td>${esc(s.university||'')}</td><td>${esc(cs.join(', ')||'None')}</td><td><button onclick="s916ViewStudent('${sid}')">View Student</button></td></tr>`}).join('')}</table>`:'<p class="muted">No linked students yet.</p>'}</div><div class="card"><h3>Sessions</h3>${bs.length&&typeof bookingRows==='function'?bookingRows(bs,true):'<p class="muted">No sessions yet.</p>'}</div></div>`}catch(e){console.error(e);adminTutors()}};
-})();
+      let c=await secondaryAuth.createUserWithEmailAndPassword(email,password);
+      await db.ref("users/"+c.user.uid).set({uid:c.user.uid,...profileData});
+      await db.ref("profilesByEmail/"+emailKey(email)).set(profileData);
+      await secondaryAuth.signOut();
+      openWhatsApp(phoneForWa,`Hi ${name}, your Scheduled account has been created.\n\nLogin link: ${SITE_URL}\nEmail: ${email}\nTemporary password: ${password}\n\nPlease change your password after logging in.`);
+      alert("Student account created successfully.");
+    }catch(e){
+      if(String(e.code||"").includes("email-already-in-use")){
+        await savePreparedProfileByEmail(email, profileData);
+        openWhatsApp(phoneForWa,`Hi ${name}, your Scheduled student profile has been prepared using your existing email.\n\nLogin link: ${SITE_URL}\nEmail: ${email}\nPlease log in using your existing password. Your Scheduled profile will link automatically.`);
+        alert("This Firebase email already exists. Scheduled prepared the profile by email. When they log in with the same email, access will link automatically.");
+      }else{throw e;}
+    }
+    await loadData();adminStudents();
+  }catch(e){console.error(e);alert(e.message||"Could not create student account.");}
+}
+
+function s917CourseUniversitySettingsHtml(){
+  try{
+    const courses=(typeof s913ActiveCourseNames==="function"?s913ActiveCourseNames():(typeof allAssignableCourses==="function"?allAssignableCourses():[]));
+    const unis=(typeof s913Universities==="function"?s913Universities():[]);
+    if(!courses.length)return `<div class="card"><h3>Course University Settings</h3><p class="muted">No active courses yet.</p></div>`;
+    return `<div class="card"><h3>Course University Settings</h3><p class="muted">Assign each active course to the university/universities where it belongs. This affects Request Access and Booking course lists.</p><table class="table"><tr><th>Course</th><th>Universities</th><th>Save</th></tr>${courses.map(c=>{const key=s917CourseKey(c);const rec=(typeof s913CourseUniversityRecord==="function"?s913CourseUniversityRecord(c):{universities:[]});return `<tr><td>${safeOptionText(c)}</td><td><div class="checkbox-grid">${unis.map(u=>`<label class="check"><input type="checkbox" class="s917-cu-${key}" value="${safeOptionText(u)}" ${s917Arr(rec.universities).some(x=>s917Norm(x)===s917Norm(u))?"checked":""}>${safeOptionText(u)}</label>`).join("")||"<span class='muted'>No universities found yet.</span>"}</div></td><td><button onclick="s917SaveCourseUniversities('${key}','${String(c).replace(/'/g,"\\'")}')">Save</button></td></tr>`;}).join("")}</table></div>`;
+  }catch(e){console.error(e);return `<div class="card"><h3>Course University Settings</h3><p class="muted">Settings could not load safely.</p></div>`;}
+}
+async function s917SaveCourseUniversities(key,courseName){
+  try{
+    const universities=[...document.querySelectorAll(`.s917-cu-${key}:checked`)].map(x=>x.value);
+    await db.ref("courseUniversities/"+key).set({name:courseName,universities,updatedAt:Date.now(),updatedBy:currentUser?.uid||""});
+    await db.ref("courses/"+key).update({name:courseName,universities,active:true,updatedAt:Date.now()});
+    await loadData();adminCourses();
+  }catch(e){console.error(e);alert("Could not save course-university settings.");}
+}
+
+function adminCourses(){
+  try{
+    const cs=(typeof s913ActiveCourseNames==="function"?s913ActiveCourseNames():(typeof allAssignableCourses==="function"?allAssignableCourses():[]));
+    const tutorList=(typeof tutors==="function"?tutors():[]);
+    $("content").innerHTML=`<div class="card"><h2>Course Management</h2><p class="muted">Active courses are used in Request Access, Bookings, Tutors, and Availability.</p><table class="table"><tr><th>Course</th><th>Universities</th><th>Tutors Teaching It</th><th>Actions</th></tr>${cs.map(c=>`<tr><td>${safeOptionText(c)}</td><td>${((typeof s913CourseUniversityRecord==="function"?s913CourseUniversityRecord(c).universities:[])||[]).join(", ")||"All / not assigned yet"}</td><td>${tutorList.filter(t=>(typeof s913TutorHasCourse==="function"?s913TutorHasCourse(t,c):s917Arr(t.courses).some(x=>s917Norm(x)===s917Norm(c)))).map(t=>t.name).join(", ")||"None"}</td><td>${typeof deleteCourseEverywhere==="function"?`<button class="danger" onclick="deleteCourseEverywhere('${String(c).replace(/'/g,"\\'")}')">Remove Course</button>`:""}</td></tr>`).join("")||`<tr><td colspan="4">No active courses.</td></tr>`}</table><hr><h3>Assign Course to Tutor</h3><div class="row"><select id="ct">${tutorList.map(t=>`<option value="${t.id}">${safeOptionText(t.name||t.email||"")}</option>`).join("")}</select><input id="cn" placeholder="Course name exactly: Physics 213"></div><button onclick="assignCourse()">Assign Course</button></div>${s917CourseUniversitySettingsHtml()}`;
+  }catch(e){console.error(e);$("content").innerHTML=`<div class="card"><h2>Course Management</h2><p class="muted">The course page could not load safely.</p></div>`;}
+}
+
+const s917OriginalAdminStudents = typeof adminStudents==="function" ? adminStudents : null;
+function adminStudents(){
+  if(!s917OriginalAdminStudents)return;
+  try{
+    s917OriginalAdminStudents();
+    const c=$("content");
+    if(c && profile?.role==="admin"){
+      c.insertAdjacentHTML("afterbegin",`<div class="card"><h3>Student Assignment Tracking</h3><p class="muted">When a student books with a tutor, Scheduled automatically adds that tutor and course to the student's assigned list. Use this button only to repair old bookings that existed before this feature.</p><button onclick="syncStudentAssignmentsFromBookings(true)">Sync Assignments From Existing Bookings</button></div>`);
+    }
+  }catch(e){console.error(e);$("content").innerHTML=`<div class="card"><h2>Students</h2><p class="muted">Students page could not load safely. Check browser console for details.</p></div>`;}
+}
+
+function renderTabs(){
+  let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Courses","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];
+  $("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");
+  openTab(t[0],$("tabs button"));
+}
+async function openTab(tab,btn){
+  await loadData();
+  if(typeof closeMenu==="function")setTimeout(closeMenu,0);
+  document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
+  if(btn)btn.classList.add("active");
+  const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Courses:adminCourses,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:profile?.role==="student"?paymentsPage:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:profile?.role==="tutor"?tutorAnnouncementsPage:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"Schedule Session":(typeof tutorScheduleSessionPage==="function"?tutorScheduleSessionPage:schedulePage),"My Students":myStudentsPage,Financial:financialPage,Statistics:statsPage,Reviews:reviewsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false)};
+  return (routes[tab]||dashboardPage)();
+}
