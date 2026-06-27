@@ -103,7 +103,7 @@ const ADMIN_WHATSAPP="96176174738";
 const SITE_URL="https://scheduledeu.vercel.app/";
 const $=id=>document.getElementById(id);
 const money=n=>"$"+Number(n||0).toFixed(Number.isInteger(Number(n))?0:2);
-let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},courseUniversities:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{}};
+let currentUser=null,profile=null,DATA={users:{},availability:{},bookings:{},documents:{},courses:{},courseUniversities:{},unavailable:{},accessRequests:{},pendingProfiles:{},publicTutors:{},profilesByEmail:{},optionCatalog:{universities:[],courses:[]}};
 let preselectTutorId=null;
 
 setTimeout(()=>{$("splash").classList.add("hidden");$("app").classList.remove("hidden")}, 5100);
@@ -278,7 +278,7 @@ function toggleRequestAccess(){
 async function submitAccessRequest(){try{const name=($("reqName")?.value||"").trim();const email=($("reqEmail")?.value||"").trim();const rawPhone=($("reqPhone")?.value||"").trim();const phone=normalizeLebanonPhone(rawPhone);const university=($("reqUniversity")?.value||"").trim();const chosenCourses=selectedRequestCourses();const courses=chosenCourses.join(", ");const message=($("reqMessage")?.value||"").trim();if(!name||!email||!rawPhone||!university||!chosenCourses.length){return notice("Please fill full name, email, phone number, university, and course(s) needed.")}if(!phone){return notice("Please enter a valid Lebanese phone number.")}await db.ref("accessRequests").push({name,email,phone,whatsapp:phone,university,courses,courseList:chosenCourses,message,status:"pending",createdAt:Date.now()});["reqName","reqEmail","reqPhone","reqMessage"].forEach(id=>{if($(id))$(id).value=""});if($("reqUniversity"))$("reqUniversity").selectedIndex=0;if($("reqCourses"))[...$("reqCourses").options].forEach(o=>o.selected=false);notice("Access request submitted. We will contact you after review.")}catch(e){notice(e.message||"Could not submit request. Please try again.")}}
 function becomeTutorWhatsapp(){openWhatsApp(ADMIN_WHATSAPP,`Hi! I'd like to become a tutor on Scheduled.\n\nName:\nUniversity:\nDegree:\nCourses I teach:\nHourly Rate:\nTeaching Locations:\nPhone Number:\nEmail:\nYears of Tutoring Experience (optional):\n\nThank you!`)}
 
-async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},courseUniversities:v.courseUniversities||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{}}}
+async function loadData(){const s=await db.ref("/").once("value");const v=s.val()||{};DATA={users:v.users||{},availability:v.availability||{},bookings:v.bookings||{},documents:v.documents||{},courses:v.courses||{},courseUniversities:v.courseUniversities||{},unavailable:v.unavailable||{},accessRequests:v.accessRequests||{},pendingProfiles:v.pendingProfiles||{},publicTutors:v.publicTutors||{},profilesByEmail:v.profilesByEmail||{},optionCatalog:v.optionCatalog||{universities:[],courses:[]}}}
 auth.onAuthStateChanged(async u=>{
   if(!u)return;
   currentUser=u;
@@ -2664,4 +2664,91 @@ async function orgAddPublicTutorProfile(){
   if(!courses.length)return alert('Please select at least one course.');
   $('puniversity').value=universities[0];$('pcourses').value=courses.join(', ');
   await addPublicTutorProfile();
+}
+
+
+/* ===== v9.14 Admin Universities catalog tab ===== */
+function orgCatalogUniversities(){
+  return uniqueSorted([...(DATA.optionCatalog?.universities||[]),..._orgBaseAvailableUniversities(DATA)]);
+}
+function orgUniversityUsage(name){
+  const key=optionKey(name);
+  const tutorCount=tutors().filter(t=>optionKey(t.university)===key||orgArr(t.universities).some(u=>optionKey(u)===key)).length;
+  const studentCount=students().filter(s=>optionKey(s.university)===key).length;
+  const publicCount=list(DATA.publicTutors||{}).filter(p=>optionKey(p.university)===key).length;
+  const courseCount=currentAvailableCourses().filter(c=>recordUniversitiesForCourse(c).some(u=>optionKey(u)===key)).length;
+  return {tutorCount,studentCount,publicCount,courseCount,total:tutorCount+studentCount+publicCount+courseCount};
+}
+async function ensureUniversityCatalogSeed(){
+  const stored=DATA.optionCatalog?.universities||[];
+  const merged=orgCatalogUniversities();
+  if(JSON.stringify(uniqueSorted(stored))!==JSON.stringify(merged)){
+    await db.ref('optionCatalog/universities').set(merged);
+    DATA.optionCatalog=DATA.optionCatalog||{};
+    DATA.optionCatalog.universities=merged;
+  }
+}
+async function universitiesAdminPage(){
+  await ensureUniversityCatalogSeed();
+  const universities=orgCatalogUniversities();
+  $('content').innerHTML=`<section class="org-page">
+    <div class="org-page-title"><div><h2>Universities</h2><p>Add and manage the university options used throughout Scheduled. Every university listed here appears automatically in all university dropdowns, filters, and creation forms.</p></div></div>
+    <div class="card"><h3>Add university</h3><div class="row"><input id="orgUniversityName" placeholder="University name"><button onclick="addUniversityFromAdminTab()">Add University</button></div></div>
+    <div class="org-card-grid">${universities.map(name=>{const use=orgUniversityUsage(name);return `<article class="org-profile-card"><div class="org-card-head"><div class="org-avatar">${orgInitials(name)}</div><div><h3>${orgEsc(name)}</h3><p>University option</p></div></div><div class="org-meta"><span>Tutors<b>${use.tutorCount}</b></span><span>Students<b>${use.studentCount}</b></span><span>Courses<b>${use.courseCount}</b></span><span>Public profiles<b>${use.publicCount}</b></span></div><div class="org-card-actions"><button onclick="renameUniversityFromAdminTab('${String(name).replace(/'/g,"\\'")}')">Edit name</button><button class="danger" onclick="deleteUniversityFromAdminTab('${String(name).replace(/'/g,"\\'")}')">Delete</button></div></article>`}).join('')||'<p class="muted">No universities yet.</p>'}</div>
+  </section>`;
+}
+async function addUniversityFromAdminTab(){
+  const input=$('orgUniversityName');
+  const name=prettyOptionLabel(input?.value||'');
+  if(!name)return alert('Please enter a university name.');
+  const universities=orgCatalogUniversities();
+  if(universities.some(u=>optionKey(u)===optionKey(name)))return alert('This university already exists.');
+  await db.ref('optionCatalog/universities').set(uniqueSorted([...universities,name]));
+  await loadData();
+  universitiesAdminPage();
+}
+async function renameUniversityFromAdminTab(oldName){
+  const entered=prompt('University name:',oldName);if(entered===null)return;
+  const newName=prettyOptionLabel(entered);if(!newName)return alert('Please enter a university name.');
+  if(optionKey(newName)===optionKey(oldName))return;
+  if(orgCatalogUniversities().some(u=>optionKey(u)===optionKey(newName)))return alert('A university with this name already exists.');
+  const oldKey=optionKey(oldName),updates={};
+  const catalog=orgCatalogUniversities().filter(u=>optionKey(u)!==oldKey).concat(newName);
+  updates['optionCatalog/universities']=uniqueSorted(catalog);
+  Object.entries(DATA.users||{}).forEach(([id,u])=>{
+    if(optionKey(u.university)===oldKey)updates[`users/${id}/university`]=newName;
+    if(Array.isArray(u.universities)&&u.universities.some(x=>optionKey(x)===oldKey))updates[`users/${id}/universities`]=uniqueSorted(u.universities.map(x=>optionKey(x)===oldKey?newName:x));
+  });
+  Object.entries(DATA.publicTutors||{}).forEach(([id,p])=>{if(optionKey(p.university)===oldKey)updates[`publicTutors/${id}/university`]=newName;});
+  Object.entries(DATA.accessRequests||{}).forEach(([id,r])=>{if(optionKey(r.university)===oldKey)updates[`accessRequests/${id}/university`]=newName;});
+  Object.entries(DATA.pendingProfiles||{}).forEach(([id,r])=>{if(optionKey(r.university)===oldKey)updates[`pendingProfiles/${id}/university`]=newName;});
+  Object.entries(DATA.courseUniversities||{}).forEach(([id,r])=>{
+    if(r&&typeof r==='object'&&optionKey(r.university)===oldKey)updates[`courseUniversities/${id}/university`]=newName;
+    if(r&&typeof r==='object'&&Array.isArray(r.universities)&&r.universities.some(x=>optionKey(x)===oldKey))updates[`courseUniversities/${id}/universities`]=uniqueSorted(r.universities.map(x=>optionKey(x)===oldKey?newName:x));
+  });
+  await db.ref('/').update(updates);
+  await loadData();universitiesAdminPage();
+}
+async function deleteUniversityFromAdminTab(name){
+  const usage=orgUniversityUsage(name);
+  if(usage.total)return alert(`This university is still in use by ${usage.tutorCount} tutor(s), ${usage.studentCount} student(s), ${usage.courseCount} course setting(s), and ${usage.publicCount} public profile(s). Edit those records first, then delete it.`);
+  if(!confirm(`Delete ${name} from all university options?`))return;
+  await db.ref('optionCatalog/universities').set(orgCatalogUniversities().filter(u=>optionKey(u)!==optionKey(name)));
+  await loadData();universitiesAdminPage();
+}
+
+/* Final navigation override: adds Universities without altering other tabs. */
+function renderTabs(){
+  let t=profile.role==="admin"?["Dashboard","Tutors","Tutor Profiles","Students","Universities","Courses","Course Universities","Access Requests","Calendar","Bookings","Payments","Tutor Reports","Announcements","Motivation Banner","Documents","Export"]:profile.role==="tutor"?["Dashboard","Calendar","Schedule Session","Availability","Schedule","My Students","Payments","Statistics","Reviews","Announcements","Documents","Profile"]:["Dashboard","Book","Emergency","All Tutors","My Tutors","Favorites","My Sessions","Payments","Statistics","Reviews","Announcements","Documents","Student Profile","Profile"];
+  $("tabs").innerHTML=t.map((x,i)=>`<button class="${i===0?'active':''}" onclick="openTab('${x}',this)">${x}</button>`).join("");
+  openTab(t[0],$("tabs button"));
+}
+async function openTab(tab,btn){
+  await loadData();
+  if(typeof closeMenu==="function")setTimeout(closeMenu,0);
+  document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
+  if(btn)btn.classList.add("active");
+  const routes={Dashboard:dashboardPage,Overview:adminOverview,Tutors:adminTutors,"Tutor Profiles":publicTutorProfilesPage,Students:adminStudents,Universities:universitiesAdminPage,Courses:adminCourses,"Course Universities":courseUniversitySettingsPage,"Access Requests":accessRequestsPage,Calendar:calendarPage,Bookings:()=>bookingsPage(true),Payments:profile?.role==="student"?paymentsPage:financialPage,"Tutor Reports":adminTutorReportsPage,Announcements:profile?.role==="tutor"?tutorAnnouncementsPage:announcementsPage,"Motivation Banner":motivationBannerSettingsPage,Documents:docsPage,Export:exportPage,Schedule:schedulePage,Availability:availabilityPage,"Schedule Session":tutorScheduleSessionPage,"My Students":myStudentsPage,Financial:financialPage,Statistics:statsPage,Reviews:reviewsPage,Profile:profilePage,Book:bookingPage,Emergency:emergencySessionsPage,Favorites:favoritesPage,"Student Profile":studentProfilePage,"All Tutors":allTutorsPage,"My Tutors":myTutorsPage,"My Sessions":()=>bookingsPage(false)};
+  if(routes[tab])return routes[tab]();
+  dashboardPage();
 }
