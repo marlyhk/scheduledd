@@ -1348,3 +1348,11 @@ html,body{
 /* v9.11 Request Access dropdowns */
 .scroll-select{width:100%;max-height:170px;overflow-y:auto;}
 select.scroll-select[multiple]{min-height:140px;}
+
+/* Scheduled organization upgrade */
+.table-scroll{overflow:auto;max-width:100%}
+.sched-status{display:inline-block;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:800;background:#eee;color:#333}
+.sched-active{background:#dff7e8;color:#176b3b}.sched-inactive{background:#ffe5e5;color:#9a2020}
+.sched-filter-title{font-weight:800;margin:14px 0 6px;color:#12223a}.sched-chip-scroll{display:flex;gap:8px;overflow-x:auto;padding:6px 2px 12px;scroll-snap-type:x proximity}.sched-chip{white-space:nowrap;border-radius:999px;padding:8px 13px;background:#fff;border:1px solid #dbe7f5;color:#23324a}.sched-chip.active{background:#d9efff;border-color:#9bd2ff;font-weight:800}.sched-filter-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 16px}.sched-student-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;max-height:68vh;overflow-y:auto;padding:4px}.sched-student-card{background:#fff;border:1px solid #e2edf8;border-radius:18px;padding:16px;box-shadow:0 8px 22px rgba(20,60,110,.07);cursor:pointer;transition:.18s}.sched-student-card:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(20,60,110,.12)}.sched-student-card h3{margin:0 0 4px}.sched-mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.sched-mini span{background:#f6faff;border-radius:12px;padding:8px;font-size:12px}.sched-mini b{float:right}.sched-profile-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.sched-profile-grid>div,.sched-course-card{background:#f7fbff;border:1px solid #e2edf8;border-radius:16px;padding:14px}.sched-course-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.small{font-size:12px}
+@media(max-width:1000px){.sched-student-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sched-course-grid,.sched-profile-grid,.sched-filter-row{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.sched-student-grid,.sched-course-grid,.sched-profile-grid,.sched-filter-row{grid-template-columns:1fr}.sched-student-grid{max-height:none}}
