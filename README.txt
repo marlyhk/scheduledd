@@ -1,9 +1,22 @@
-Scheduled v7.2 — Hotfix No Blank Pages
+Scheduled v7.3 — Safe Complete from v6.7
 
-Fixes the current reported issue:
-- dashboardPage is not defined.
-- Adds a safe dashboard router for admin/tutor/student.
-- Adds fallback pages so missing routes don't blank the site.
-- JavaScript syntax check passed.
+Built directly from v6.7 stable sidebar rebuild.
 
-This is a stability hotfix so students can keep using the website.
+Critical fixes:
+- No route references undefined function variables.
+- Defines dashboardPage and announcementsPage safely.
+- openTab uses string route names and fallbacks so pages do not crash.
+- Sidebar from v6.7 preserved.
+
+Added carefully:
+- My Scheduled planner with sessions and tasks.
+- Internal chat button.
+- Groups + semester system.
+- Tutor direct scheduling for individual/group sessions.
+- Group capacity, number of students, and names.
+- Command Center.
+- Achievements, weekly/monthly goals, animated badge unlock/confetti.
+- Semester recap.
+- Admin-only hide tutor/public profile controls.
+- Removed booking WhatsApp 'find time' prompt.
+- JS syntax check passed.

@@ -1,6 +1,6 @@
 {
-  "name": "scheduled-v7-2-hotfix-no-blank-pages",
-  "version": "7.2.0",
+  "name": "scheduled-v7-3-from-v67-safe-complete",
+  "version": "7.3.0",
   "private": true,
   "scripts": {
     "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"

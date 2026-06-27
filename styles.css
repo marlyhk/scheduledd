@@ -1011,7 +1011,7 @@ html,body{
 }
 
 
-/* v7.1 stable full features */
+/* v7.3 safe complete features */
 .empty-state{ text-align:center; padding:30px 18px; border:1px dashed var(--border); border-radius:24px; background:rgba(255,255,255,.82); margin:12px 0; }
 .empty-state .emoji{font-size:40px;margin-bottom:8px}
 .section-title-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
@@ -1035,7 +1035,3 @@ html,body{
 @keyframes badgePop{0%{opacity:0;transform:scale(.72) rotate(-10deg)}35%{opacity:1;transform:scale(1.08) rotate(3deg)}70%{transform:scale(1) rotate(0)}100%{opacity:1;transform:scale(1)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @media(max-width:860px){.chat-button{right:16px;top:84px}.chat-panel{right:10px;top:142px}}
 @media print{.tabs,.topbar,.chat-button,.financial-actions,button{display:none!important}.content{margin-left:0!important;width:100%!important}.card{box-shadow:none!important}}
-
-
-/* v7.2 stable error display */
-.card .muted{line-height:1.5}
