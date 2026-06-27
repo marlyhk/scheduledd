@@ -232,10 +232,13 @@ function renderRequestCoursesForUniversity(university,source=DATA,prefillCourses
   if(!list)return;
   const courses=coursesForUniversity(university,source);
   const prefilled=String(prefillCourses||"").split(",").map(x=>prettyOptionLabel(x)).filter(Boolean).map(optionKey);
-  list.innerHTML=courses.length?courses.map((c,i)=>{
+  const otherChecked=prefilled.includes(optionKey("Others"))?" checked":"";
+  const otherOption=`<label class="request-course-option"><input type="checkbox" class="req-course-checkbox" value="Others"${otherChecked} onchange="updateRequestCourseSummary()"><span>Others</span></label>`;
+  const courseOptions=courses.map((c,i)=>{
     const checked=prefilled.includes(optionKey(c))?" checked":"";
     return `<label class="request-course-option"><input type="checkbox" class="req-course-checkbox" value="${safeOptionText(c)}"${checked} onchange="updateRequestCourseSummary()"><span>${safeOptionText(c)}</span></label>`;
-  }).join(""):`<p class="muted request-course-empty">No courses available for this university.</p>`;
+  }).join("");
+  list.innerHTML=otherOption+(courseOptions||`<p class="muted request-course-empty">No listed courses are available for this university.</p>`);
   updateRequestCourseSummary();
 }
 async function populateRequestAccessChoices(prefillCourses=""){
@@ -273,7 +276,7 @@ function openRequestAccessForm(prefillCourses=""){
       <div id="reqCoursesList" class="request-course-list"><p class="muted">Loading courses...</p></div>
     </details>
     <p class="field-hint">Tap to open the list, then scroll and select one or more courses.</p>
-    <p class="field-hint"><strong>Can’t find your course?</strong> Please write the course name in the message below.</p>
+    <p class="field-hint"><strong>Can’t find your course?</strong> Please select Others, and write the course name in the message below.</p>
     <label>Message</label>
     <textarea id="reqMessage" placeholder="Message (optional)"></textarea>
     <button onclick="submitAccessRequest()">Submit Request</button>
