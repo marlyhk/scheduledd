@@ -1081,3 +1081,29 @@ html,body{
 button.past-slot{
   display:none!important;
 }
+
+
+/* v7.9 real calendar + booking + payment fix */
+.calendar-day.past,
+.calendar-day.unavailable,
+.date-cell.past,
+.date-card.past,
+.day.past{
+  opacity:.35!important;
+  pointer-events:none!important;
+  text-decoration:line-through!important;
+}
+button[data-date].past,
+button[data-slot-date].past,
+button[data-time].past,
+.time-slot.past,
+.slot-button.past,
+.past-slot{
+  display:none!important;
+  pointer-events:none!important;
+}
+.student-payment-readonly{
+  opacity:.6!important;
+  pointer-events:none!important;
+  cursor:not-allowed!important;
+}

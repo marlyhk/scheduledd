@@ -1,14 +1,16 @@
-Scheduled v7.8 — Booking WhatsApp + Calendar Fix
+Scheduled v7.9 — Real Calendar + Booking + Payment Fix
 
-Built from v7.7.
+Built from v7.8.
 
 Fixes:
-- Contact Tutor on WhatsApp now sends booking details, not a question.
-- WhatsApp details include student, tutor, course, university, date, time, duration, rate, total, payment method.
-- Removed the reschedule/cancel/questions contact note.
-- Kept the confirmation instruction to send details via WhatsApp.
-- Removed Go to My Sessions remnants.
+- Past dates cannot be booked.
+- Past times today cannot be booked.
+- Expired slots are hidden from UI.
+- confirmBooking rebuilt defensively to avoid website errors.
+- WhatsApp confirmation sends full booking details to tutor.
+- Removed reschedule/cancel/questions note.
+- Kept only WhatsApp confirmation action after booking.
 - Tutor/admin can remove booked sessions.
-- Past dates and past times today are filtered/hidden in booking availability.
+- Students cannot mark sessions paid/unpaid. Only tutor/admin can update payment status.
 
 JS syntax check passed.
