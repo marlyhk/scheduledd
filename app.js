@@ -327,9 +327,39 @@ function user(id){return DATA.users[id]||{}}
 function tutors(){return list(DATA.users).filter(u=>u.role==="tutor"&&!u.removed).sort((a,b)=>(a.name||"").localeCompare(b.name||""))}
 function students(){return list(DATA.users).filter(u=>u.role==="student"&&!u.removed).sort((a,b)=>(a.name||"").localeCompare(b.name||""))}
 function safe(s){return String(s||"").replace(/[.#$/\[\]]/g,"_")}
-function total(b){return(b.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0)}
-function paid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>p.paid).reduce((s,p)=>s+Number(p.amount||0),0)}
-function unpaid(bs){return bs.flatMap(b=>b.payments||[]).filter(p=>!p.paid).reduce((s,p)=>s+Number(p.amount||0),0)}
+function bookingDefaultAmount(b){
+  if(!b)return 0;
+  const explicit=Number(b.totalAmount||b.total||b.amount||0);
+  if(explicit>0)return explicit;
+  const tutor=user(b.tutorId)||{};
+  const student=user(b.studentId)||{};
+  const members=student.type==="group"?((student.members||[]).filter(Boolean).length||Number(b.groupSize||1)):Number(b.groupSize||1);
+  return Number(tutor.rate||0)*Number(b.duration||1)*Math.max(1,members||1);
+}
+function bookingPaymentEntries(b){
+  if(Array.isArray(b?.payments)&&b.payments.length){
+    return b.payments.map((p,i)=>({
+      name:p.name||user(b.studentId).name||`Payment ${i+1}`,
+      amount:Number(p.amount||0),
+      paid:p.paid===true,
+      method:p.method||b.paymentMethod||"Whish",
+      paymentDate:p.paymentDate||b.paymentDate||""
+    }));
+  }
+  const amount=bookingDefaultAmount(b);
+  if(amount<=0)return [];
+  return [{
+    name:user(b.studentId).name||"Student",
+    amount,
+    paid:b?.paid===true,
+    method:b?.paymentMethod||"Whish",
+    paymentDate:b?.paymentDate||""
+  }];
+}
+function bookingFullyPaid(b){const ps=bookingPaymentEntries(b);return ps.length>0&&ps.every(p=>p.paid===true)}
+function total(b){return bookingPaymentEntries(b).reduce((s,p)=>s+Number(p.amount||0),0)}
+function paid(bs){return (bs||[]).flatMap(bookingPaymentEntries).filter(p=>p.paid).reduce((s,p)=>s+Number(p.amount||0),0)}
+function unpaid(bs){return (bs||[]).flatMap(bookingPaymentEntries).filter(p=>!p.paid).reduce((s,p)=>s+Number(p.amount||0),0)}
 function badge(p){return`<span class="badge ${p?'paid':'unpaid'}">${p?'Paid':'Unpaid'}</span>`}
 function method(l){return String(l||"").toLowerCase().includes("online")?"Whish":"Cash"}
 function allCourseNames(){let names=[];tutors().forEach(t=>(t.courses||[]).forEach(c=>names.push(c)));return uniqueSorted(names)}
@@ -671,7 +701,25 @@ async function autoAssignStudentFromBooking(studentId,tutorId,course){
   const assignedCourses=mergeTextArrayCaseInsensitive(Array.isArray(s.assignedCourses)?s.assignedCourses:[], course?[course]:[]);
   await db.ref("users/"+studentId).update({assignedTutorIds,assignedCourses,autoAssignedUpdatedAt:Date.now()});
 }
-function markBookingPayment(bookingId){const b=DATA.bookings[bookingId];if(!b)return alert("Booking not found.");const method=prompt("Payment method: Cash or Whish",(b.paymentMethod||"Cash"));if(method===null)return;const cleanMethod=(method.toLowerCase().includes("whish")||method.toLowerCase().includes("wish"))?"Whish":"Cash";const date=prompt("Payment date YYYY-MM-DD:",todayISO());if(date===null)return;const payments=(b.payments||[]).map(p=>({...p,paid:true,method:cleanMethod,paymentDate:date}));db.ref("bookings/"+bookingId).update({paymentMethod:cleanMethod,payments}).then(async()=>{await loadData();bookingsPage(profile.role!=="student")})}
+async function setBookingPaymentStatus(bookingId,shouldBePaid){
+  const b=DATA.bookings[bookingId];
+  if(!b)return alert("Booking not found.");
+  if(profile.role!=="admin"&&!(profile.role==="tutor"&&b.tutorId===currentUser.uid))return alert("Only the assigned tutor or admin can update payment status.");
+  let cleanMethod=b.paymentMethod||"Whish",date="";
+  if(shouldBePaid){
+    const enteredMethod=prompt("Payment method: Cash or Whish",cleanMethod);
+    if(enteredMethod===null)return;
+    cleanMethod=(enteredMethod.toLowerCase().includes("whish")||enteredMethod.toLowerCase().includes("wish"))?"Whish":"Cash";
+    date=prompt("Payment date YYYY-MM-DD:",todayISO());
+    if(date===null)return;
+  }
+  const payments=bookingPaymentEntries(b).map(p=>({...p,paid:!!shouldBePaid,method:cleanMethod,paymentDate:shouldBePaid?date:""}));
+  await db.ref("bookings/"+bookingId).update({paymentMethod:cleanMethod,payments,paid:!!shouldBePaid,paymentDate:shouldBePaid?date:""});
+  await loadData();
+  if(typeof financialPage==="function"&&(profile.role==="tutor"||profile.role==="admin"))financialPage();
+  else bookingsPage(profile.role!=="student");
+}
+function markBookingPayment(bookingId){const b=DATA.bookings[bookingId];if(!b)return alert("Booking not found.");return setBookingPaymentStatus(bookingId,!bookingFullyPaid(b))}
 function calendarLinkForBooking(b){const t=user(b.tutorId),s=user(b.studentId);const title=encodeURIComponent(`Scheduled: ${b.course||"Tutoring"}`);const details=encodeURIComponent(`Course: ${b.course||""}\nTutor: ${t.name||""}\nStudent: ${s.name||""}\nLocation: ${b.location||""}`);const date=(b.date||"").replaceAll("-","");const start=(b.start||"00:00").replace(":","");const dur=Math.round(Number(b.duration||1)*60), sh=Number((b.start||"00:00").split(":")[0]), sm=Number((b.start||"00:00").split(":")[1]||0);const end=sh*60+sm+dur,eh=String(Math.floor(end/60)).padStart(2,"0"),em=String(end%60).padStart(2,"0");return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${date}T${start}00/${date}T${eh}${em}00&details=${details}`}
 function contactSelectedTutorForTime(){const t=user($("bt")?.value);openWhatsApp(t.whatsapp||"","Hi, I couldn't find a time that suits me on Scheduled. Can we arrange a session time?")}
 
@@ -1343,7 +1391,8 @@ async function confirmBooking(){
     if(!S92_BOOKING.date)return alert("Please choose a date.");
     if(!S92_BOOKING.time)return alert("Please choose a time.");
     if(!s92SlotAvailableForDuration(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.time,S92_BOOKING.duration,S92_BOOKING.sessionType))return alert("This time is no longer available.");
-    const booking={studentId:currentUser.uid,tutorId:S92_BOOKING.tutorId,availabilityId:s93AvailabilityIdForBooking(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.time,S92_BOOKING.duration,S92_BOOKING.sessionType),course:s92SelectedCourse(),date:S92_BOOKING.date,start:S92_BOOKING.time,duration:Number(S92_BOOKING.duration||1),sessionType:S92_BOOKING.sessionType,paymentMethod:"Whish",paid:false,status:"confirmed",done:false,createdAt:Date.now(),autoAssigned:true};
+    const tutor=s92SelectedTutor(),amount=Number(tutor.rate||0)*Number(S92_BOOKING.duration||1),studentName=(user(currentUser.uid)||profile||{}).name||"Student";
+    const booking={studentId:currentUser.uid,tutorId:S92_BOOKING.tutorId,availabilityId:s93AvailabilityIdForBooking(S92_BOOKING.tutorId,S92_BOOKING.date,S92_BOOKING.time,S92_BOOKING.duration,S92_BOOKING.sessionType),course:s92SelectedCourse(),date:S92_BOOKING.date,start:S92_BOOKING.time,duration:Number(S92_BOOKING.duration||1),sessionType:S92_BOOKING.sessionType,location:S92_BOOKING.sessionType,paymentMethod:"Whish",payments:[{name:studentName,amount,paid:false,method:"Whish",paymentDate:""}],totalAmount:amount,paid:false,status:"confirmed",done:false,createdAt:Date.now(),createdBy:currentUser.uid,createdByRole:"student",studentBooked:true,autoAssigned:true};
     const ref=await db.ref("bookings").push(booking);
     await autoAssignStudentFromBooking(currentUser.uid,S92_BOOKING.tutorId,booking.course);
     await loadData();
@@ -1356,13 +1405,33 @@ setInterval(()=>{ if(document.getElementById("content")?.querySelector(".s92-boo
 
 /* Payments */
 function s92CanEditPayment(b){ if(!profile)return false; if(profile.role==="admin")return true; return profile.role==="tutor" && b.tutorId===currentUser.uid; }
-function s92PaymentBadge(b){ return `<span class="status-badge ${b.paid?"s92-paid":"s92-unpaid"}">${b.paid?"Paid":"Unpaid"}</span>`; }
+function s92PaymentBadge(b){ const isPaid=bookingFullyPaid(b); return `<span class="status-badge ${isPaid?"s92-paid":"s92-unpaid"}">${isPaid?"Paid":"Unpaid"}</span>`; }
 function s92StudentPaymentsPage(){
   const rows=s92List(DATA.bookings||{}).filter(b=>b.studentId===currentUser.uid).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  document.getElementById("content").innerHTML=`<div class="s92-card"><h2>Payments</h2><div class="s92-payment-note">You can view payment status here. Only your assigned tutor or admin can update it.</div>${rows.length?rows.map(b=>`<div class="s92-payment-card"><b>${b.course||"Session"}</b><br>${b.date||""} • ${s92FormatTime(b.start||b.time||"")}<br>Tutor: ${(user(b.tutorId)||{}).name||""}<br>Payment method: Whish<br>Status: ${s92PaymentBadge(b)}</div>`).join(""):s92Empty("💵","No payments yet","Your booked sessions will appear here.")}</div>`;
+  document.getElementById("content").innerHTML=`<div class="s92-card"><h2>Payments</h2><div class="s92-payment-note">You can view payment status here. Only your assigned tutor or admin can update it.</div>${rows.length?rows.map(b=>`<div class="s92-payment-card"><b>${b.course||"Session"}</b><br>${b.date||""} • ${s92FormatTime(b.start||b.time||"")}<br>Tutor: ${(user(b.tutorId)||{}).name||""}<br>Payment method: Whish<br>Total: ${s92Money(total(b))}<br>Status: ${s92PaymentBadge(b)}</div>`).join(""):s92Empty("💵","No payments yet","Your booked sessions will appear here.")}</div>`;
 }
-async function markPayment(id,paid){ const b=(DATA.bookings||{})[id]||{}; if(!s92CanEditPayment(b))return alert("Only the assigned tutor or admin can update payment status."); await db.ref("bookings/"+id+"/paid").set(!!paid); await loadData(); if(profile.role==="student")return s92StudentPaymentsPage(); if(typeof financialPage==="function")financialPage(); }
-async function togglePayment(id){ const b=(DATA.bookings||{})[id]||{}; if(!s92CanEditPayment(b))return alert("Only the assigned tutor or admin can update payment status."); await db.ref("bookings/"+id+"/paid").set(!b.paid); await loadData(); if(profile.role==="student")return s92StudentPaymentsPage(); if(typeof financialPage==="function")financialPage(); }
+async function markPayment(id,paid){ const b=(DATA.bookings||{})[id]||{}; if(!s92CanEditPayment(b))return alert("Only the assigned tutor or admin can update payment status."); return setBookingPaymentStatus(id,!!paid); }
+async function togglePayment(id,index){
+  const b=(DATA.bookings||{})[id]||{};
+  if(!s92CanEditPayment(b))return alert("Only the assigned tutor or admin can update payment status.");
+  const payments=bookingPaymentEntries(b);
+  if(!payments.length)return alert("No payment amount is available for this session.");
+  if(Number.isInteger(Number(index))&&Number(index)>=0&&Number(index)<payments.length){
+    const i=Number(index),nextPaid=!payments[i].paid;
+    let methodName=payments[i].method||b.paymentMethod||"Whish",date=payments[i].paymentDate||"";
+    if(nextPaid){
+      const entered=prompt("Payment method: Cash or Whish",methodName);if(entered===null)return;
+      methodName=(entered.toLowerCase().includes("whish")||entered.toLowerCase().includes("wish"))?"Whish":"Cash";
+      date=prompt("Payment date YYYY-MM-DD:",todayISO());if(date===null)return;
+    }else date="";
+    payments[i]={...payments[i],paid:nextPaid,method:methodName,paymentDate:date};
+    const allPaid=payments.every(p=>p.paid===true);
+    await db.ref("bookings/"+id).update({payments,paid:allPaid,paymentMethod:methodName,paymentDate:allPaid?date:""});
+  }else return setBookingPaymentStatus(id,!bookingFullyPaid(b));
+  await loadData();
+  if(profile.role==="student")return s92StudentPaymentsPage();
+  if(typeof financialPage==="function")financialPage();
+}
 setInterval(()=>{ if(profile?.role==="student" && document.getElementById("content")?.textContent?.includes("Payments"))loadData().then(()=>s92StudentPaymentsPage()).catch(()=>{}); },60000);
 
 /* Internal Chat */
@@ -2441,8 +2510,11 @@ function bookingRows(bs,edit){
     const active=s97IsActiveBooking(b);
     const canTutorControl=profile.role==="tutor"&&b.tutorId===currentUser.uid&&active;
     const status=s97Status(b)||"confirmed";
-    const actions=edit?`${canTutorControl?`<button onclick="rescheduleTutorBooking('${b.id}')">Reschedule</button><button class="danger" onclick="cancelTutorBooking('${b.id}')">Cancel</button>`:""}<button onclick="editBooking('${b.id}')">Edit</button><button onclick="markBookingPayment('${b.id}')">Mark Paid</button><button onclick="markDone('${b.id}')">Mark Done</button><button class="danger" onclick="deleteBooking('${b.id}')">Delete</button>`:"";
-    return `<tr><td>${b.date||""}</td><td>${s97FmtTime(b.start||b.time||"")}</td><td>${b.course||""}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${status}${!active?"<br><span class='muted'>released</span>":""}</td><td>${b.duration||""}h • ${b.format||"Individual"} ${b.groupSize||1}<br>${b.location||b.sessionType||""}<br>${b.paymentMethod||""}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${s97Money(s97Total(b))}</td><td>${(b.payments||[]).map((p,i)=>`${p.name}: ${s97Money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">Toggle</button>`:""}`).join("<br>")}</td><td>${b.notes||""}${b.cancelReason?`<br><b>Cancel reason:</b> ${b.cancelReason}`:""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td><td>${actions}</td></tr>`;
+    const paymentEntries=bookingPaymentEntries(b);
+    const paymentButton=bookingFullyPaid(b)?"Mark Unpaid":"Mark Paid";
+    const actions=edit?`${canTutorControl?`<button onclick="rescheduleTutorBooking('${b.id}')">Reschedule</button><button class="danger" onclick="cancelTutorBooking('${b.id}')">Cancel</button>`:""}<button onclick="editBooking('${b.id}')">Edit</button><button onclick="markBookingPayment('${b.id}')">${paymentButton}</button><button onclick="markDone('${b.id}')">Mark Done</button><button class="danger" onclick="deleteBooking('${b.id}')">Delete</button>`:"";
+    const paymentHtml=paymentEntries.length?paymentEntries.map((p,i)=>`${p.name}: ${s97Money(p.amount)} ${badge(p.paid)} ${edit?`<button onclick="togglePayment('${b.id}',${i})">${p.paid?"Mark Unpaid":"Mark Paid"}</button>`:""}`).join("<br>"):"<span class='muted'>No payment amount</span>";
+    return `<tr><td>${b.date||""}</td><td>${s97FmtTime(b.start||b.time||"")}</td><td>${b.course||""}</td><td>${user(b.tutorId).name||""}</td><td>${user(b.studentId).name||""}</td><td>${status}${!active?"<br><span class='muted'>released</span>":""}</td><td>${b.duration||""}h • ${b.format||"Individual"} ${b.groupSize||1}<br>${b.location||b.sessionType||""}<br>${b.paymentMethod||"Whish"}<br>${(b.sessionTypes||[]).join(", ")}<br>Total: ${s97Money(total(b))}</td><td>${paymentHtml}</td><td>${b.notes||""}${b.cancelReason?`<br><b>Cancel reason:</b> ${b.cancelReason}`:""}${edit?`<br><button onclick="editNotes('${b.id}')">Edit Notes</button>`:""}</td><td>${actions}</td></tr>`;
   }).join("")}</table>`:`<p class="muted">No sessions yet.</p>`;
 }
 function bookingsPage(edit){
