@@ -2509,6 +2509,7 @@ async function createTutorScheduledSession(){
   const payDate=paidNow?(typeof todayISO==="function"?todayISO():new Date().toISOString().slice(0,10)):"";
   const booking={tutorId:currentUser.uid,studentId,course,date,start,duration,location,paymentMethod,payments:[{name:student.name||"Student",amount,paid:paidNow,method:paymentMethod,paymentDate:payDate}],status:"confirmed",done:false,createdAt:Date.now(),createdBy:currentUser.uid,createdByRole:"tutor",tutorScheduled:true};
   const ref=await db.ref("bookings").push(booking); booking.id=ref.key;
+  if(paidNow){ if(!DATA.bookings)DATA.bookings={}; DATA.bookings[ref.key]=booking; await ensureReceiptForBooking(ref.key); }
   await autoAssignStudentFromBooking(studentId,currentUser.uid,course);
   await s97NotifyStudent(booking,"scheduled",null,"",true);
   await loadData(); showToast("✓ Session created successfully.","The time is now blocked globally and the student was notified."); tutorScheduleSessionPage();
@@ -3075,3 +3076,122 @@ function financialPage(){
   const b=myBookings().filter(bookingCountsFinancially),month=new Date().toISOString().slice(0,7),mb=b.filter(x=>(x.date||"").startsWith(month));
   $("content").innerHTML=`<div class="grid"><div class="card"><h3>Total Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Total Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>This Month Paid</h3><h1>${money(paid(mb))}</h1></div><div class="card"><h3>This Month Unpaid</h3><h1>${money(unpaid(mb))}</h1></div></div><div class="card"><h2>Financial Details</h2>${bookingRows(b,true)}</div>`;
 }
+
+
+/* Scheduled Payment Receipts v1 */
+function receiptCanView(b){
+  if(!currentUser||!profile||!b)return false;
+  return profile.role==='admin'||(profile.role==='tutor'&&b.tutorId===currentUser.uid)||(profile.role==='student'&&b.studentId===currentUser.uid);
+}
+function receiptCanSend(b){return !!(profile&&(profile.role==='admin'||(profile.role==='tutor'&&b.tutorId===currentUser.uid)));}
+function receiptStatusForBooking(b){
+  if(!bookingCountsFinancially(b))return 'cancelled';
+  if(!bookingFullyPaid(b))return 'void';
+  return 'paid';
+}
+function receiptRandomCode(length=6){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const out=[];
+  if(window.crypto&&crypto.getRandomValues){const a=new Uint32Array(length);crypto.getRandomValues(a);for(const n of a)out.push(chars[n%chars.length]);}
+  else for(let i=0;i<length;i++)out.push(chars[Math.floor(Math.random()*chars.length)]);
+  return out.join('');
+}
+function receiptSnapshot(b,number,existing={}){
+  const student=user(b.studentId)||{},tutor=user(b.tutorId)||{};
+  const paymentDate=b.paymentDate||bookingPaymentEntries(b).find(p=>p.paid)?.paymentDate||todayISO();
+  const rate=Number(tutor.rate||0),duration=Number(b.duration||0),amount=Number(total(b)||rate*duration||0);
+  return {number,issuedAt:existing.issuedAt||Date.now(),updatedAt:Date.now(),status:'paid',paymentDate,studentId:b.studentId||'',studentName:student.name||'Student',studentPhone:student.whatsapp||student.phone||'',tutorId:b.tutorId||'',tutorName:tutor.name||'Tutor',course:b.course||'',university:student.university||b.university||tutor.university||'',date:b.date||'',start:b.start||b.time||'',duration,rate,amount,paymentMethod:b.paymentMethod||bookingPaymentEntries(b)[0]?.method||'',bookingId:b.id||''};
+}
+async function ensureReceiptForBooking(bookingId){
+  let b=(DATA.bookings||{})[bookingId];if(!b)return null;
+  if(!bookingFullyPaid(b)||!bookingCountsFinancially(b))return b.receipt||null;
+  const existing=b.receipt||{};
+  let number=existing.number||'';
+  if(!number){
+    const year=String((b.paymentDate||todayISO()).slice(0,4)||new Date().getFullYear());
+    for(let i=0;i<30&&!number;i++){
+      const candidate=`STH-${year}-${receiptRandomCode(6)}`;
+      const key=candidate.replace(/[^A-Z0-9_-]/gi,'_');
+      const result=await db.ref(`receiptNumbers/${key}`).transaction(v=>v===null?{bookingId,createdAt:Date.now()}:undefined);
+      if(result.committed)number=candidate;
+    }
+    if(!number)throw new Error('Could not generate a unique receipt number. Please try again.');
+  }
+  const receipt=receiptSnapshot({...b,id:bookingId},number,existing);
+  await db.ref(`bookings/${bookingId}/receipt`).set(receipt);
+  if(DATA.bookings&&DATA.bookings[bookingId])DATA.bookings[bookingId].receipt=receipt;
+  return receipt;
+}
+async function updateReceiptStateAfterPayment(bookingId,isPaid){
+  const b=(DATA.bookings||{})[bookingId];if(!b)return;
+  if(isPaid&&bookingCountsFinancially(b))await ensureReceiptForBooking(bookingId);
+  else if(b.receipt)await db.ref(`bookings/${bookingId}/receipt`).update({status:'void',voidedAt:Date.now(),updatedAt:Date.now()});
+}
+function receiptDateLabel(iso){if(!iso)return '—';const d=new Date(`${iso}T12:00:00`);return Number.isNaN(d.getTime())?iso:d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});}
+function receiptTimeLabel(t){return typeof formatTime12==='function'?formatTime12(t||''):(t||'—');}
+function receiptAmount(n){return '$'+Number(n||0).toFixed(2);}
+function receiptHtml(b,r){
+  const status=receiptStatusForBooking(b),stamp=status==='paid'?'':`<div class="receipt-void">${status==='cancelled'?'CANCELLED':'VOID'}</div>`;
+  return `<div class="receipt-paper">${stamp}<div class="receipt-brand"><img src="scheduled-icon.jpeg" alt="Scheduled"><div class="receipt-brand-name">Scheduled</div><div class="receipt-subtitle">Session Payment Receipt</div></div><h1 class="receipt-title">Thank you for choosing Scheduled, ${finEsc(r.studentName)}!</h1><p class="receipt-intro">Your session scheduled for ${finEsc(receiptDateLabel(r.date))} at ${finEsc(receiptTimeLabel(r.start))} has been successfully paid.</p><p class="receipt-number"><b>Receipt #:</b> ${finEsc(r.number)}</p><hr class="receipt-divider"><div class="receipt-grid"><div class="receipt-label">Student Name:</div><div class="receipt-value">${finEsc(r.studentName)}</div><div class="receipt-label">Tutor Name:</div><div class="receipt-value">${finEsc(r.tutorName)}</div><div class="receipt-label">Course:</div><div class="receipt-value">${finEsc(r.course||'—')}</div><div class="receipt-label">University:</div><div class="receipt-value">${finEsc(r.university||'—')}</div><div class="receipt-label">Date & Time:</div><div class="receipt-value">${finEsc(receiptDateLabel(r.date))} — ${finEsc(receiptTimeLabel(r.start))}</div><div class="receipt-label">Duration:</div><div class="receipt-value">${Number(r.duration||0)} hour${Number(r.duration||0)===1?'':'s'}</div></div><hr class="receipt-divider"><div class="receipt-grid"><div class="receipt-label">Duration:</div><div class="receipt-value">${Number(r.duration||0)} hour${Number(r.duration||0)===1?'':'s'}</div><div class="receipt-label">Rate per Hour:</div><div class="receipt-value">${receiptAmount(r.rate)}</div><div class="receipt-label">Total:</div><div class="receipt-value">${receiptAmount(r.amount)}</div></div><div class="receipt-total-box"><span>Total Amount Paid</span><strong>${receiptAmount(r.amount)}</strong></div><p class="receipt-footer">Thank you for using Scheduled. Wishing you success in your studies!</p></div>`;
+}
+async function getReceiptReady(bookingId){
+  let b=(DATA.bookings||{})[bookingId];if(!b)throw new Error('Booking not found.');
+  if(!receiptCanView(b))throw new Error('You do not have access to this receipt.');
+  if(!bookingFullyPaid(b)&&!b.receipt)throw new Error('A receipt is available only after the session is marked paid.');
+  let r=b.receipt;if(!r&&bookingFullyPaid(b))r=await ensureReceiptForBooking(bookingId);
+  b=(DATA.bookings||{})[bookingId]||b;return {b,r:r||b.receipt};
+}
+async function viewReceipt(bookingId){
+  try{const {b,r}=await getReceiptReady(bookingId);let modal=$('receiptModal');if(!modal){modal=document.createElement('div');modal.id='receiptModal';modal.className='receipt-modal';document.body.appendChild(modal);}modal.innerHTML=`<div class="receipt-modal-card"><div class="receipt-modal-bar"><b>Receipt ${finEsc(r.number)}</b><div class="receipt-modal-actions"><button class="ghost" onclick="downloadReceipt('${bookingId}')">Download PDF</button>${receiptCanSend(b)?`<button onclick="shareReceiptWhatsApp('${bookingId}')">Send on WhatsApp</button>`:''}<button class="ghost" onclick="closeReceipt()">Close</button></div></div>${receiptHtml(b,r)}</div>`;modal.classList.remove('hidden');}catch(e){alert(e.message||String(e));}
+}
+function closeReceipt(){const m=$('receiptModal');if(m)m.classList.add('hidden');}
+async function receiptImageData(url='scheduled-icon.jpeg'){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);resolve(c.toDataURL('image/jpeg',.92));};img.onerror=reject;img.src=url+(url.includes('?')?'&':'?')+'v=receipt';});}
+async function buildReceiptPdf(bookingId){
+  const {b,r}=await getReceiptReady(bookingId);if(!window.jspdf?.jsPDF)throw new Error('PDF generator is still loading. Please try again in a moment.');
+  const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),navy=[13,45,103],blue=[73,184,232],black=[20,24,32],pale=[234,246,255];
+  doc.setFillColor(239,248,255);doc.rect(0,0,210,297,'F');doc.setFillColor(255,255,255);doc.roundedRect(16,12,178,273,5,5,'F');
+  try{const logo=await receiptImageData();doc.addImage(logo,'JPEG',88,20,34,34);}catch(_){ }
+  doc.setTextColor(...blue);doc.setFont('helvetica','bold');doc.setFontSize(22);doc.text('Scheduled',105,61,{align:'center'});doc.setTextColor(94,103,116);doc.setFont('helvetica','normal');doc.setFontSize(11);doc.text('Session Payment Receipt',105,68,{align:'center'});
+  doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text(`Thank you for choosing Scheduled, ${r.studentName}!`,105,82,{align:'center',maxWidth:160});
+  doc.setTextColor(...black);doc.setFont('helvetica','normal');doc.setFontSize(10.5);const intro=`Your session scheduled for ${receiptDateLabel(r.date)} at ${receiptTimeLabel(r.start)} has been successfully paid.`;doc.text(doc.splitTextToSize(intro,150),105,92,{align:'center'});doc.setFontSize(11);doc.text(`Receipt #: ${r.number}`,105,106,{align:'center'});
+  const st=receiptStatusForBooking(b);if(st!=='paid'){doc.setTextColor(178,59,59);doc.setFont('helvetica','bold');doc.setFontSize(17);doc.text(st==='cancelled'?'CANCELLED':'VOID',105,114,{align:'center',angle:-5});}
+  doc.setDrawColor(203,213,223);doc.line(28,119,182,119);
+  const rows=[['Student Name:',r.studentName],['Tutor Name:',r.tutorName],['Course:',r.course||'—'],['University:',r.university||'—'],['Date & Time:',`${receiptDateLabel(r.date)} — ${receiptTimeLabel(r.start)}`],['Duration:',`${Number(r.duration||0)} hour${Number(r.duration||0)===1?'':'s'}`]];let y=132;doc.setFontSize(11);for(const [lab,val] of rows){doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.text(lab,31,y);doc.setTextColor(...black);doc.setFont('helvetica','normal');doc.text(String(val),78,y,{maxWidth:100});y+=11;}
+  doc.setDrawColor(203,213,223);doc.line(28,y-2,182,y-2);y+=9;const pay=[['Duration:',`${Number(r.duration||0)} hour${Number(r.duration||0)===1?'':'s'}`],['Rate per Hour:',receiptAmount(r.rate)],['Total:',receiptAmount(r.amount)]];for(const [lab,val] of pay){doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.text(lab,31,y);doc.setTextColor(...black);doc.setFont('helvetica','normal');doc.text(val,78,y);y+=11;}
+  doc.setFillColor(...pale);doc.setDrawColor(169,209,243);doc.roundedRect(28,y+2,154,36,4,4,'FD');doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.text('Total Amount Paid',105,y+15,{align:'center'});doc.setFontSize(25);doc.text(receiptAmount(r.amount),105,y+30,{align:'center'});doc.setTextColor(...black);doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.text('Thank you for using Scheduled. Wishing you success in your studies!',105,273,{align:'center'});doc.setProperties({title:`Scheduled Receipt ${r.number}`,subject:'Session Payment Receipt',author:'Scheduled'});return {doc,b,r};
+}
+async function downloadReceipt(bookingId){try{const {doc,r}=await buildReceiptPdf(bookingId);doc.save(`Scheduled-Receipt-${r.number}.pdf`);}catch(e){alert(e.message||String(e));}}
+async function shareReceiptWhatsApp(bookingId){
+  try{const {doc,b,r}=await buildReceiptPdf(bookingId);if(!receiptCanSend(b))throw new Error('Only the tutor or admin can send receipts on WhatsApp.');const blob=doc.output('blob'),file=new File([blob],`Scheduled-Receipt-${r.number}.pdf`,{type:'application/pdf'});const msg=`Hello ${r.studentName}, here is your Scheduled payment receipt ${r.number} for ${r.course} on ${receiptDateLabel(r.date)}. Thank you for using Scheduled.`;
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({title:`Scheduled Receipt ${r.number}`,text:msg,files:[file]});return;}
+    doc.save(file.name);openWhatsApp(r.studentPhone||user(b.studentId).whatsapp||user(b.studentId).phone||'',`${msg}\n\nThe PDF has been downloaded. Please attach it to this chat.`);
+  }catch(e){if(e?.name!=='AbortError')alert(e.message||String(e));}
+}
+function receiptButtons(b){
+  if(!b||(!bookingFullyPaid(b)&&!b.receipt)||!receiptCanView(b))return '';
+  return `<div class="receipt-actions"><button class="ghost" onclick="viewReceipt('${b.id}')">View Receipt</button><button class="ghost" onclick="downloadReceipt('${b.id}')">Download Receipt</button>${receiptCanSend(b)?`<button onclick="shareReceiptWhatsApp('${b.id}')">Send on WhatsApp</button>`:''}</div>`;
+}
+
+/* Keep existing payment behavior, then issue/void the receipt. */
+const _scheduledSetBookingPaymentStatus=setBookingPaymentStatus;
+setBookingPaymentStatus=async function(bookingId,shouldBePaid){await _scheduledSetBookingPaymentStatus(bookingId,shouldBePaid);await loadData();await updateReceiptStateAfterPayment(bookingId,!!shouldBePaid);await loadData();if(profile.role==='student')s92StudentPaymentsPage();else if(typeof financialPage==='function')financialPage();};
+const _scheduledTogglePayment=togglePayment;
+togglePayment=async function(id,index){await _scheduledTogglePayment(id,index);await loadData();const b=(DATA.bookings||{})[id];if(b)await updateReceiptStateAfterPayment(id,bookingFullyPaid(b));await loadData();if(profile.role==='student')s92StudentPaymentsPage();else if(typeof financialPage==='function')financialPage();};
+
+/* Receipt buttons in tutor finance rows. */
+const _scheduledFinMainActions=finMainActions;
+finMainActions=function(b){return _scheduledFinMainActions(b)+receiptButtons(b);};
+
+/* Receipt buttons in Students > Payments. */
+s92StudentPaymentsPage=function(){
+  const rows=s92List(DATA.bookings||{}).filter(b=>b.studentId===currentUser.uid).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  document.getElementById('content').innerHTML=`<div class="s92-card"><h2>Payments</h2><div class="s92-payment-note">You can view payment status and download receipts here. Only your assigned tutor or admin can update payments or send receipts on WhatsApp.</div>${rows.length?rows.map(b=>`<div class="s92-payment-card"><b>${b.course||'Session'}</b><br>${b.date||''} • ${s92FormatTime(b.start||b.time||'')}<br>Tutor: ${(user(b.tutorId)||{}).name||''}<br>Payment method: ${b.paymentMethod||'Whish'}<br>Total: ${s92Money(total(b))}<br>Status: ${s92PaymentBadge(b)}${receiptButtons(b)}</div>`).join(''):s92Empty('💵','No payments yet','Your booked sessions will appear here.')}</div>`;
+};
+
+/* Receipt controls in regular booking tables for tutor/admin/student. */
+const _scheduledBookingRows=bookingRows;
+bookingRows=function(bs,edit){
+  const html=_scheduledBookingRows(bs,edit);if(!bs.length)return html;
+  const wrap=document.createElement('div');wrap.innerHTML=html;const rows=[...wrap.querySelectorAll('table tr')].slice(1);
+  rows.forEach((tr,i)=>{const b=bs[i],last=tr.lastElementChild;if(last&&b){const holder=document.createElement('div');holder.innerHTML=receiptButtons(b);while(holder.firstChild)last.appendChild(holder.firstChild);}});return wrap.innerHTML;
+};
