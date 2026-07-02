@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Scheduled</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <div id="splash" class="splash">
+        <div class="logo-draw-intro" aria-hidden="true">
+          <svg class="scheduled-drawn-logo" viewBox="0 0 320 360" role="img">
+            <defs>
+              <linearGradient id="scheduledBlueStroke" x1="40" y1="45" x2="270" y2="260" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#B7DDFC"/>
+                <stop offset="48%" stop-color="#8EBEF4"/>
+                <stop offset="100%" stop-color="#6EA4E9"/>
+              </linearGradient>
+              <linearGradient id="foldBlue" x1="215" y1="208" x2="288" y2="286" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#EAF4FF"/>
+                <stop offset="48%" stop-color="#A9CBF7"/>
+                <stop offset="100%" stop-color="#6EA4E9"/>
+              </linearGradient>
+              <linearGradient id="foldShade" x1="225" y1="217" x2="260" y2="260" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+                <stop offset="100%" stop-color="#6EA4E9" stop-opacity="0.55"/>
+              </linearGradient>
+              <filter id="softLogoShadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#1F2A37" flood-opacity="0.12"/>
+              </filter>
+            </defs>
+
+            <!-- icon group -->
+            <g class="drawn-icon" filter="url(#softLogoShadow)">
+              <!-- actual logo rounded calendar outline -->
+              <path class="draw-calendar-outline" d="
+                M91 88
+                H229
+                Q265 88 265 124
+                V226
+                Q265 262 229 262
+                H91
+                Q55 262 55 226
+                V124
+                Q55 88 91 88
+                Z" />
+
+              <!-- top binder tabs from real logo -->
+              <path class="draw-calendar-tab tab-left" d="M102 88 V61 Q102 49 114 49 Q126 49 126 61 V88" />
+              <path class="draw-calendar-tab tab-right" d="M205 88 V61 Q205 49 217 49 Q229 49 229 61 V88" />
+
+              <!-- dark checkmark -->
+              <path class="draw-checkmark" d="M119 172 L145 198 L204 137" />
+
+              <!-- fold base + fold curl, animated later -->
+              <path class="draw-fold-base" d="M211 207 H265 V226 Q265 262 229 262 H211 Z" />
+              <path class="draw-fold-curl" d="M211 262 C235 249 253 229 265 207 V226 Q265 262 229 262 Z" />
+              <path class="draw-fold-highlight" d="M211 262 C230 246 245 228 265 207" />
+            </g>
+
+            <!-- wordmark appears after the icon draw -->
+            <g class="drawn-wordmark">
+              <text class="drawn-scheduled-text" x="160" y="325" text-anchor="middle">scheduled</text>
+              <text class="drawn-tagline" x="160" y="350" text-anchor="middle">TUTORING, MADE SIMPLE</text>
+            </g>
+          </svg>
+        </div>
+</div>
+    </div>
+
+  <main id="app" class="app hidden">
+    <section id="loginPage" class="login-card">
+      <div class="brand">
+        <img src="scheduled-icon.jpeg" alt="Scheduled" onerror="this.style.display='none'">
+        <h1 class="brand-word">Scheduled</h1>
+        <p>Tutoring, made simple.</p>
+      </div>
+
+      <div id="notice" class="notice hidden"></div>
+
+      <label>Email</label>
+      <input id="loginEmail" type="email" placeholder="name@example.com">
+      <label>Password</label>
+      <input id="loginPassword" type="password" placeholder="Password">
+      <button onclick="login()">Log In</button>
+
+      <div class="public-cards">
+        <div class="mini-card">
+          <h3>📚 Need tutoring?</h3>
+          <p>Request access to book tutoring sessions with verified tutors.</p>
+          <button class="ghost" onclick="openRequestAccessForm()">Request Access</button>
+        </div>
+        <div class="mini-card">
+          <h3>👩‍🏫 Browse Tutors</h3>
+          <p>View available tutors, their courses, universities, rates, and teaching style.</p>
+          <button class="ghost" onclick="browsePublicTutors()">Browse Tutors</button>
+        </div>
+        <div class="mini-card">
+          <h3>🎓 Become a Tutor</h3>
+          <p>Join Scheduled's team of tutors. Every application is reviewed to ensure students receive high-quality academic support.</p>
+          <button class="ghost" onclick="becomeTutorWhatsapp()">Become a Tutor</button>
+        </div>
+      </div>
+
+      <div id="requestAccess" class="hidden setup">
+        <hr>
+        <h3>Request Access</h3>
+        <input id="reqName" placeholder="Full name">
+        <input id="reqEmail" type="email" placeholder="Email address">
+        <input id="reqPhone" placeholder="Phone number">
+        <input id="reqUniversity" placeholder="University">
+        <input id="reqCourses" placeholder="Course(s) needed">
+        <p class="field-hint"><strong>Can’t find your course?</strong> Please write the course name in the message below.</p>
+        <textarea id="reqMessage" placeholder="Message (optional)"></textarea>
+        <button onclick="submitAccessRequest()">Submit Request</button>
+      </div>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <header class="topbar">
+        <button type="button" id="menuButton" class="menu-button" onclick="toggleMenu()">☰</button>
+        <div class="top-brand">
+          <img src="scheduled-icon.jpeg" alt="Scheduled" onerror="this.style.display='none'">
+          <div>
+            <h1 class="brand-word small-brand">Scheduled</h1>
+            <p id="roleLabel"></p>
+          </div>
+        </div>
+        <button class="ghost" onclick="logout()">Logout</button>
+      </header>
+      <nav id="tabs" class="tabs"></nav>
+      <section id="content" class="content"></section>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
