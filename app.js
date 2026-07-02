@@ -2849,3 +2849,229 @@ async function openTab(tab,btn){
   if(routes[tab])return routes[tab]();
   dashboardPage();
 }
+
+/* ===== v9.14 Professional tutor financial dashboard layout ===== */
+function finEsc(value){
+  return String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+}
+function finGrossAmount(b){
+  if(Array.isArray(b?.payments)&&b.payments.length){
+    const sum=b.payments.reduce((s,p)=>s+Number(p?.amount||0),0);
+    if(sum>0)return sum;
+  }
+  return Number(typeof bookingDefaultAmount==="function"?bookingDefaultAmount(b):(b?.totalAmount||b?.total||b?.amount||0));
+}
+function finSessionState(b){
+  if(!bookingCountsFinancially(b))return "cancelled";
+  return b.done===true?"completed":"upcoming";
+}
+function finPaymentState(b){
+  if(!bookingCountsFinancially(b))return "excluded";
+  const entries=bookingPaymentEntries(b);
+  if(!entries.length)return "unpaid";
+  const paidCount=entries.filter(p=>p.paid===true).length;
+  if(paidCount===entries.length)return "paid";
+  if(paidCount>0)return "partial";
+  return "unpaid";
+}
+function finDateObject(iso){
+  const parts=String(iso||"").split("-").map(Number);
+  if(parts.length!==3||parts.some(n=>!Number.isFinite(n)))return null;
+  return new Date(parts[0],parts[1]-1,parts[2],12,0,0);
+}
+function finDateInRange(date,start,end){
+  if(!date)return false;
+  return (!start||date>=start)&&(!end||date<=end);
+}
+function finShiftMonth(month,delta){
+  const [y,m]=String(month||currentMonth()).split("-").map(Number);
+  const d=new Date(y,m-1+delta,1,12,0,0);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+function finMonthBounds(month){
+  const [y,m]=String(month).split("-").map(Number);
+  const first=`${y}-${String(m).padStart(2,"0")}-01`;
+  const lastDate=new Date(y,m,0).getDate();
+  return {start:first,end:`${y}-${String(m).padStart(2,"0")}-${String(lastDate).padStart(2,"0")}`};
+}
+function finFilterBounds(){
+  const period=$("finPeriod")?.value||"this-month";
+  if(period==="all")return {start:"",end:""};
+  if(period==="custom")return {start:$("finDateFrom")?.value||"",end:$("finDateTo")?.value||""};
+  const month=period==="last-month"?finShiftMonth(currentMonth(),-1):currentMonth();
+  return finMonthBounds(month);
+}
+function finFilteredBookings(all){
+  const bounds=finFilterBounds();
+  const payment=$("finPaymentFilter")?.value||"";
+  const session=$("finSessionFilter")?.value||"";
+  const course=$("finCourseFilter")?.value||"";
+  const student=$("finStudentFilter")?.value||"";
+  return all.filter(b=>{
+    const inDate=finDateInRange(String(b.date||""),bounds.start,bounds.end);
+    return inDate&&(!payment||finPaymentState(b)===payment)&&(!session||finSessionState(b)===session)&&(!course||b.course===course)&&(!student||b.studentId===student);
+  });
+}
+function finStatusBadge(b){
+  const state=finSessionState(b);
+  if(state==="cancelled")return `<span class="fin-pill fin-cancelled">Cancelled</span>`;
+  if(state==="completed")return `<span class="fin-pill fin-completed">Finished</span>`;
+  return `<span class="fin-pill fin-upcoming">Upcoming</span>`;
+}
+function finPaymentBadge(b){
+  const state=finPaymentState(b);
+  if(state==="paid")return `<span class="fin-pill fin-paid">Paid</span>`;
+  if(state==="partial")return `<span class="fin-pill fin-partial">Partially paid</span>`;
+  if(state==="excluded")return `<span class="fin-pill fin-excluded">Excluded</span>`;
+  return `<span class="fin-pill fin-unpaid">Unpaid</span>`;
+}
+function finGroupLabel(b){
+  const iso=String(b.date||"");
+  const today=typeof todayISO==="function"?todayISO():new Date().toISOString().slice(0,10);
+  if(iso===today)return "Today";
+  const date=finDateObject(iso),now=finDateObject(today);
+  if(!date||!now)return "Other Sessions";
+  const day=(now.getDay()+6)%7;
+  const weekStart=new Date(now);weekStart.setDate(now.getDate()-day);
+  const weekEnd=new Date(weekStart);weekEnd.setDate(weekStart.getDate()+6);
+  if(date>=weekStart&&date<=weekEnd)return "This Week";
+  if(date.getFullYear()===now.getFullYear()&&date.getMonth()===now.getMonth())return date>now?"Later This Month":"Earlier This Month";
+  if(date>now)return "Upcoming Months";
+  return "Previous Months";
+}
+function finGroupOrder(label){
+  return ({"Today":0,"This Week":1,"Later This Month":2,"Earlier This Month":3,"Upcoming Months":4,"Previous Months":5,"Other Sessions":6})[label]??7;
+}
+function finMainActions(b){
+  if(!bookingCountsFinancially(b))return `<span class="fin-zero-note">$0 counted</span>`;
+  const paymentLabel=bookingFullyPaid(b)?"Mark Unpaid":"Mark Paid";
+  const markFinished=b.done?"":`<button class="fin-action fin-finish" onclick="finMarkFinished('${b.id}')">Mark Finished</button>`;
+  return `<div class="fin-primary-actions"><button class="fin-action fin-pay" onclick="markBookingPayment('${b.id}')">${paymentLabel}</button>${markFinished}</div>`;
+}
+function finMoreActions(b){
+  const active=typeof s97IsActiveBooking==="function"?s97IsActiveBooking(b):bookingCountsFinancially(b)&&!b.done;
+  const controls=[];
+  if(active){
+    controls.push(`<button onclick="rescheduleTutorBooking('${b.id}')">Reschedule</button>`);
+    controls.push(`<button class="danger" onclick="cancelTutorBooking('${b.id}')">Cancel Session</button>`);
+  }
+  controls.push(`<button onclick="finEditBooking('${b.id}')">Edit Session</button>`);
+  controls.push(`<button onclick="finEditNotes('${b.id}')">Edit Notes</button>`);
+  controls.push(`<button class="danger" onclick="finDeleteBooking('${b.id}')">Delete</button>`);
+  return `<details class="fin-more"><summary>More</summary><div class="fin-more-menu">${controls.join("")}</div></details>`;
+}
+function finBookingRow(b){
+  const student=user(b.studentId)||{};
+  const gross=finGrossAmount(b);
+  const counted=bookingCountsFinancially(b)?gross:0;
+  const amountHtml=bookingCountsFinancially(b)?`<b>${money(counted)}</b>`:`<span class="fin-strike">${money(gross)}</span><small>${money(0)} counted</small>`;
+  const paymentEntries=bookingCountsFinancially(b)?bookingPaymentEntries(b):[];
+  const paymentDetails=paymentEntries.length?paymentEntries.map(p=>`${finEsc(p.name)}: ${money(p.amount)} · ${p.paid?"Paid":"Unpaid"}`).join("<br>"):"No payment details";
+  return `<tr class="${bookingCountsFinancially(b)?"":"fin-cancelled-row"}">
+    <td><b>${finEsc(b.date||"")}</b><br><span class="muted">${finEsc(typeof formatTime12==="function"?formatTime12(b.start||b.time||""):(b.start||b.time||""))}</span></td>
+    <td><b>${finEsc(student.name||"Student")}</b><details class="fin-row-details"><summary>Details</summary><div><b>University:</b> ${finEsc(student.university||"—")}<br><b>Location:</b> ${finEsc(b.location||b.sessionType||"—")}<br><b>Booked by:</b> ${finEsc(b.createdByRole|| (b.studentBooked?"student":"tutor"))}<br><b>Payment:</b> ${paymentDetails}${b.notes?`<br><b>Notes:</b> ${finEsc(b.notes)}`:""}${b.cancelReason?`<br><b>Cancellation:</b> ${finEsc(b.cancelReason)}`:""}</div></details></td>
+    <td>${finEsc(b.course||"—")}</td>
+    <td>${Number(b.duration||0)}h</td>
+    <td class="fin-amount-cell">${amountHtml}</td>
+    <td>${finPaymentBadge(b)}<br>${finStatusBadge(b)}</td>
+    <td><div class="fin-action-stack">${finMainActions(b)}${finMoreActions(b)}</div></td>
+  </tr>`;
+}
+function finGroupedTables(bookings){
+  if(!bookings.length)return `<div class="fin-empty"><div>💳</div><h3>No matching sessions</h3><p>Try changing the financial filters.</p></div>`;
+  const groups={};
+  bookings.forEach(b=>{const label=finGroupLabel(b);(groups[label]||(groups[label]=[])).push(b);});
+  return Object.keys(groups).sort((a,b)=>finGroupOrder(a)-finGroupOrder(b)).map(label=>{
+    const rows=groups[label].sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))||String(b.start||b.time||"").localeCompare(String(a.start||a.time||"")));
+    return `<section class="fin-payment-group"><div class="fin-group-title"><h3>${label}</h3><span>${rows.length} session${rows.length===1?"":"s"}</span></div><div class="fin-table-wrap"><table class="fin-table"><thead><tr><th>Date</th><th>Student</th><th>Course</th><th>Duration</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map(finBookingRow).join("")}</tbody></table></div></section>`;
+  }).join("");
+}
+function finChartData(metric){
+  const active=myBookings().filter(bookingCountsFinancially);
+  const months=[];
+  for(let i=5;i>=0;i--)months.push(finShiftMonth(currentMonth(),-i));
+  return months.map(month=>{
+    const bs=active.filter(b=>String(b.date||"").startsWith(month));
+    let value=0;
+    if(metric==="hours")value=bs.reduce((s,b)=>s+Number(b.duration||0),0);
+    else if(metric==="sessions")value=bs.length;
+    else value=bs.reduce((s,b)=>s+finGrossAmount(b),0);
+    const [y,m]=month.split("-").map(Number);
+    return {month,label:new Date(y,m-1,1).toLocaleDateString("en-US",{month:"short"}),value};
+  });
+}
+function renderTutorFinanceChart(){
+  const box=$("finChart");if(!box)return;
+  const metric=$("finChartMetric")?.value||"earnings";
+  const data=finChartData(metric),max=Math.max(1,...data.map(x=>x.value));
+  const format=v=>metric==="earnings"?money(v):(metric==="hours"?`${Number(v).toFixed(1)}h`:String(v));
+  box.innerHTML=`<div class="fin-chart-bars">${data.map(x=>`<div class="fin-chart-column"><div class="fin-chart-value">${format(x.value)}</div><div class="fin-chart-track"><div class="fin-chart-bar" style="height:${Math.max(x.value?8:2,(x.value/max)*100)}%"></div></div><div class="fin-chart-label">${x.label}</div></div>`).join("")}</div>`;
+}
+function renderTutorFinanceDashboard(){
+  const all=myBookings();
+  const filtered=finFilteredBookings(all);
+  const financial=filtered.filter(bookingCountsFinancially);
+  const paidAmount=paid(financial),pendingAmount=unpaid(financial),gross=financial.reduce((s,b)=>s+finGrossAmount(b),0);
+  const completed=financial.filter(b=>b.done===true);
+  const cancelled=filtered.filter(b=>!bookingCountsFinancially(b));
+  const excluded=cancelled.reduce((s,b)=>s+finGrossAmount(b),0);
+  const collectionPct=gross>0?Math.round((paidAmount/gross)*100):0;
+  const custom=$("finCustomDates");if(custom)custom.hidden=$("finPeriod")?.value!=="custom";
+  const summary=$("finFilteredSummary");
+  if(summary)summary.innerHTML=`<div><b>${financial.length}</b><span>Counted sessions</span></div><div><b>${totalHours(completed).toFixed(1)}</b><span>Hours taught</span></div><div><b>${money(gross)}</b><span>Gross earnings</span></div><div><b>${money(paidAmount)}</b><span>Paid</span></div><div><b>${money(pendingAmount)}</b><span>Pending</span></div><div><b>${cancelled.length}</b><span>Cancelled</span></div><div><b>${money(excluded)}</b><span>Excluded value</span></div>`;
+  const donut=$("finDonut");if(donut)donut.style.setProperty("--fin-paid-angle",`${Math.min(100,Math.max(0,collectionPct))*3.6}deg`);
+  const pct=$("finCollectionPct");if(pct)pct.textContent=`${collectionPct}%`;
+  const paidBox=$("finBreakPaid");if(paidBox)paidBox.textContent=money(paidAmount);
+  const pendingBox=$("finBreakPending");if(pendingBox)pendingBox.textContent=money(pendingAmount);
+  const excludedBox=$("finBreakExcluded");if(excludedBox)excludedBox.textContent=money(excluded);
+  const rows=$("finPaymentGroups");if(rows)rows.innerHTML=finGroupedTables(filtered);
+  renderTutorFinanceChart();
+}
+function tutorFinancialDashboardPage(){
+  const all=myBookings();
+  const financial=all.filter(bookingCountsFinancially);
+  const month=currentMonth();
+  const monthBookings=financial.filter(b=>String(b.date||"").startsWith(month));
+  const courses=uniqueSorted(all.map(b=>b.course).filter(Boolean));
+  const studentIds=[...new Set(all.map(b=>b.studentId).filter(Boolean))];
+  const totalEarnings=financial.reduce((s,b)=>s+finGrossAmount(b),0);
+  const paidTotal=paid(financial),pendingTotal=unpaid(financial),monthTotal=monthBookings.reduce((s,b)=>s+finGrossAmount(b),0);
+  $("content").innerHTML=`<section class="fin-page">
+    <div class="fin-heading"><div><p class="fin-eyebrow">Tutor finances</p><h2>Financial Overview</h2><p>Track earnings, payment status, and session activity in one organized place.</p></div><div class="fin-heading-actions"><button class="ghost" onclick="exportTutorBookingsCSV(currentUser.uid,$('tutorExportMonth').value)">Export Month</button><button onclick="exportTutorBookingsCSV(currentUser.uid,'')">Export All</button></div></div>
+    <div class="fin-kpi-grid"><article class="fin-kpi"><span>Total Earnings</span><strong>${money(totalEarnings)}</strong><small>All non-cancelled sessions</small></article><article class="fin-kpi"><span>Paid</span><strong>${money(paidTotal)}</strong><small>Money marked as received</small></article><article class="fin-kpi"><span>Pending</span><strong>${money(pendingTotal)}</strong><small>Still unpaid</small></article><article class="fin-kpi"><span>This Month</span><strong>${money(monthTotal)}</strong><small>${new Date().toLocaleDateString("en-US",{month:"long",year:"numeric"})}</small></article></div>
+    <div class="fin-filter-card"><div class="fin-filter-title"><div><h3>Filter Sessions</h3><p>Refine the financial view without changing any records.</p></div><input id="tutorExportMonth" type="month" value="${month}"></div><div class="fin-filter-grid"><label>Period<select id="finPeriod" onchange="renderTutorFinanceDashboard()"><option value="this-month">This month</option><option value="last-month">Last month</option><option value="all">All time</option><option value="custom">Custom dates</option></select></label><label>Payment status<select id="finPaymentFilter" onchange="renderTutorFinanceDashboard()"><option value="">All payment statuses</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="partial">Partially paid</option><option value="excluded">Excluded</option></select></label><label>Session status<select id="finSessionFilter" onchange="renderTutorFinanceDashboard()"><option value="">All session statuses</option><option value="upcoming">Upcoming</option><option value="completed">Finished</option><option value="cancelled">Cancelled</option></select></label><label>Course<select id="finCourseFilter" onchange="renderTutorFinanceDashboard()"><option value="">All courses</option>${courses.map(c=>`<option value="${finEsc(c)}">${finEsc(c)}</option>`).join("")}</select></label><label>Student<select id="finStudentFilter" onchange="renderTutorFinanceDashboard()"><option value="">All students</option>${studentIds.map(id=>`<option value="${finEsc(id)}">${finEsc((user(id)||{}).name||"Student")}</option>`).join("")}</select></label></div><div id="finCustomDates" class="fin-custom-dates" hidden><label>From<input id="finDateFrom" type="date" onchange="renderTutorFinanceDashboard()"></label><label>To<input id="finDateTo" type="date" onchange="renderTutorFinanceDashboard()"></label></div></div>
+    <div class="fin-insight-grid"><article class="fin-panel fin-chart-panel"><div class="fin-panel-head"><div><h3>Monthly Performance</h3><p>Last six months</p></div><select id="finChartMetric" onchange="renderTutorFinanceChart()"><option value="earnings">Earnings</option><option value="hours">Hours taught</option><option value="sessions">Sessions</option></select></div><div id="finChart"></div></article><article class="fin-panel"><div class="fin-panel-head"><div><h3>Payment Breakdown</h3><p>Based on the selected filters</p></div></div><div class="fin-breakdown"><div id="finDonut" class="fin-donut"><div><strong id="finCollectionPct">0%</strong><span>collected</span></div></div><div class="fin-breakdown-list"><div><span class="fin-dot paid"></span><span>Paid</span><b id="finBreakPaid">$0</b></div><div><span class="fin-dot unpaid"></span><span>Pending</span><b id="finBreakPending">$0</b></div><div><span class="fin-dot excluded"></span><span>Cancelled / excluded</span><b id="finBreakExcluded">$0</b></div></div></div></article></div>
+    <article class="fin-panel"><div class="fin-panel-head"><div><h3>Monthly Summary</h3><p>Updates automatically with the filters above.</p></div></div><div id="finFilteredSummary" class="fin-summary-grid"></div></article>
+    <article class="fin-panel fin-payments-panel"><div class="fin-panel-head"><div><h3>Session Payments</h3><p>Finished and upcoming sessions keep the same payment and session controls.</p></div></div><div id="finPaymentGroups"></div></article>
+  </section>`;
+  renderTutorFinanceDashboard();
+}
+async function finMarkFinished(id){
+  const b=DATA.bookings[id];if(!b)return alert("Booking not found.");
+  if(!bookingCountsFinancially(b))return alert("A cancelled session cannot be marked finished.");
+  await db.ref(`bookings/${id}`).update({done:true,doneAt:Date.now()});
+  await loadData();financialPage();
+}
+async function finEditNotes(id){
+  const b=DATA.bookings[id];if(!b)return alert("Booking not found.");
+  const value=prompt("Session notes:",b.notes||"");if(value===null)return;
+  await db.ref(`bookings/${id}/notes`).set(value);await loadData();financialPage();
+}
+async function finEditBooking(id){
+  const b=DATA.bookings[id];if(!b)return alert("Booking not found.");
+  const date=prompt("Date:",b.date||"");if(date===null)return;
+  const start=prompt("Start time:",b.start||b.time||"");if(start===null)return;
+  const duration=prompt("Duration:",b.duration||1);if(duration===null)return;
+  const location=prompt("Location:",b.location||b.sessionType||"");if(location===null)return;
+  await db.ref(`bookings/${id}`).update({date,start,duration:Number(duration),location,paymentMethod:b.paymentMethod||method(location)});
+  await loadData();financialPage();
+}
+async function finDeleteBooking(id){
+  if(!confirm("Delete this booking? This cannot be undone."))return;
+  await db.ref(`bookings/${id}`).remove();await loadData();financialPage();
+}
+function financialPage(){
+  if(profile?.role==="tutor")return tutorFinancialDashboardPage();
+  const b=myBookings().filter(bookingCountsFinancially),month=new Date().toISOString().slice(0,7),mb=b.filter(x=>(x.date||"").startsWith(month));
+  $("content").innerHTML=`<div class="grid"><div class="card"><h3>Total Paid</h3><h1>${money(paid(b))}</h1></div><div class="card"><h3>Total Unpaid</h3><h1>${money(unpaid(b))}</h1></div><div class="card"><h3>This Month Paid</h3><h1>${money(paid(mb))}</h1></div><div class="card"><h3>This Month Unpaid</h3><h1>${money(unpaid(mb))}</h1></div></div><div class="card"><h2>Financial Details</h2>${bookingRows(b,true)}</div>`;
+}
