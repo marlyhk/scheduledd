@@ -1396,35 +1396,78 @@ function s92Confirmation(id){
   return `<div class="s92-card"><h2>Booking Confirmed ✅</h2><p>Your tutoring session has been successfully booked.<br>Please send the following information via WhatsApp for your tutor to confirm.</p><div class="s92-summary"><b>${b.course||"Session"}</b><br>Student: ${student?.name||""}<br>Tutor: ${tutor.name||""}<br>University: ${student?.university||profile?.university||""}<br>Date: ${b.date||""}<br>Time: ${s92FormatTime(b.start||"")} → ${s92FormatTime(s92EndTime(b.start,b.duration))}<br>Duration: ${b.duration||""} hour(s)<br>Session type: ${b.sessionType||""}<br>Rate: ${s92Money(tutor.rate||0)}<br>Total: ${s92Money(Number(tutor.rate||0)*Number(b.duration||1))}<br>Payment method: Whish</div><div class="s92-confirm-actions"><a class="button" target="_blank" href="${s92WhatsappUrl(b)}">Final Confirmation with Tutor on WhatsApp</a></div></div>`;
 }
 
-/* ===== Scheduled v9.14: merge consecutive student-booked sessions ===== */
+/* ===== Scheduled v9.14: reliable same-student consecutive-session merge ===== */
 let SCM_MIGRATION_RUNNING=false;
 function scmNorm(v){return String(v||"").trim().toLowerCase().replace(/\s+/g," ");}
 function scmStatus(b){return scmNorm(b?.status);}
-function scmIsStudentCreated(b){return b?.studentBooked===true||scmNorm(b?.createdByRole)==="student";}
-function scmEligible(b){
+function scmIsCancelledOrHidden(b){
   const st=scmStatus(b);
-  return !!b&&scmIsStudentCreated(b)&&!!b.studentId&&!!b.tutorId&&!b.deleted&&!b.mergedInto&&!b.financialExcluded&&!b.cancelledAt&&!b.canceledAt&&!b.cancelledBy&&!b.canceledBy&&!['cancelled','canceled','deleted','rescheduled','merged'].includes(st);
+  return !b||b.deleted===true||!!b.mergedInto||b.financialExcluded===true||!!b.cancelledAt||!!b.canceledAt||!!b.cancelledBy||!!b.canceledBy||["cancelled","canceled","deleted","rescheduled","merged"].includes(st);
 }
-function scmStartMinutes(b){const n=toMin(b?.start||b?.time||"");return Number.isFinite(n)?n:null;}
-function scmDurationMinutes(b){const n=Math.round(Number(b?.duration||0)*60);return Number.isFinite(n)&&n>0?n:0;}
-function scmContextKey(b){
+function scmEligible(b){
+  return !!b&&!!b.studentId&&!!b.tutorId&&!!b.date&&!scmIsCancelledOrHidden(b)&&scmStartMinutes(b)!==null&&scmDurationMinutes(b)>0;
+}
+function scmParseTime(value){
+  const raw=String(value||"").trim();
+  if(!raw)return null;
+  const twelve=raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if(twelve){
+    let h=Number(twelve[1]),m=Number(twelve[2]);
+    if(!Number.isFinite(h)||!Number.isFinite(m)||h<1||h>12||m<0||m>59)return null;
+    const ap=twelve[3].toUpperCase();
+    if(h===12)h=0;if(ap==="PM")h+=12;
+    return h*60+m;
+  }
+  const twentyFour=raw.match(/^(\d{1,2}):(\d{2})$/);
+  if(!twentyFour)return null;
+  const h=Number(twentyFour[1]),m=Number(twentyFour[2]);
+  if(!Number.isFinite(h)||!Number.isFinite(m)||h<0||h>23||m<0||m>59)return null;
+  return h*60+m;
+}
+function scmStartMinutes(b){return scmParseTime(b?.start||b?.time||"");}
+function scmDurationMinutes(b){
+  const raw=b?.durationMinutes??b?.duration;
+  const n=Number(raw||0);
+  if(!Number.isFinite(n)||n<=0)return 0;
+  return b?.durationMinutes!=null?Math.round(n):Math.round(n*60);
+}
+function scmUniversity(b){
   const student=user(b.studentId)||{};
-  return [b.studentId,b.tutorId,b.date||'',scmNorm(b.course),scmNorm(b.university||student.university),scmNorm(b.sessionType||b.location),scmNorm(b.format||'individual'),String(Number(b.groupSize||1)),b.done===true?'done':'open'].join('|');
+  return b.university||student.university||"";
+}
+function scmSessionType(b){return b.sessionType||b.location||b.type||"";}
+function scmFormat(b){return b.format||b.sessionFormat||"individual";}
+function scmContextKey(b){
+  return [
+    b.studentId,
+    b.tutorId,
+    String(b.date||""),
+    scmNorm(b.course),
+    scmNorm(scmUniversity(b)),
+    scmNorm(scmSessionType(b)),
+    scmNorm(scmFormat(b)),
+    String(Number(b.groupSize||1))
+  ].join("|");
 }
 function scmConsecutiveGroups(rows){
   const buckets={};
-  rows.filter(scmEligible).forEach(b=>(buckets[scmContextKey(b)]||(buckets[scmContextKey(b)]=[])).push(b));
+  (rows||[]).filter(scmEligible).forEach(b=>{
+    const key=scmContextKey(b);
+    (buckets[key]||(buckets[key]=[])).push(b);
+  });
   const groups=[];
   Object.values(buckets).forEach(bucket=>{
-    const sorted=bucket.filter(b=>scmStartMinutes(b)!==null&&scmDurationMinutes(b)>0).sort((a,b)=>scmStartMinutes(a)-scmStartMinutes(b)||Number(a.createdAt||0)-Number(b.createdAt||0));
-    let chain=[];let chainEnd=null;
-    sorted.forEach(b=>{
-      const start=scmStartMinutes(b),end=start+scmDurationMinutes(b);
-      if(!chain.length){chain=[b];chainEnd=end;return;}
-      if(start===chainEnd){chain.push(b);chainEnd=end;return;}
+    const sorted=bucket.slice().sort((a,b)=>scmStartMinutes(a)-scmStartMinutes(b)||Number(a.createdAt||0)-Number(b.createdAt||0));
+    let chain=[];
+    let chainEnd=null;
+    for(const b of sorted){
+      const start=scmStartMinutes(b);
+      const end=start+scmDurationMinutes(b);
+      if(!chain.length){chain=[b];chainEnd=end;continue;}
+      if(start===chainEnd){chain.push(b);chainEnd=end;continue;}
       if(chain.length>1)groups.push(chain);
       chain=[b];chainEnd=end;
-    });
+    }
     if(chain.length>1)groups.push(chain);
   });
   return groups;
@@ -1435,11 +1478,12 @@ function scmCombinedPayments(group){
   const buckets=new Map();
   group.forEach(b=>bookingPaymentEntries(b).forEach(p=>{
     const paidState=p.paid===true;
-    const methodName=p.method||b.paymentMethod||'Whish';
-    const paymentDate=paidState?(p.paymentDate||b.paymentDate||''):'';
-    const key=[paidState?'1':'0',scmNorm(methodName),paymentDate].join('|');
-    const prev=buckets.get(key)||{name:(user(b.studentId)||{}).name||p.name||'Student',amount:0,paid:paidState,method:methodName,paymentDate};
-    prev.amount+=Number(p.amount||0);buckets.set(key,prev);
+    const methodName=p.method||b.paymentMethod||"Whish";
+    const paymentDate=paidState?(p.paymentDate||b.paymentDate||""):"";
+    const key=[paidState?"1":"0",scmNorm(methodName),paymentDate].join("|");
+    const prev=buckets.get(key)||{name:(user(b.studentId)||{}).name||p.name||"Student",amount:0,paid:paidState,method:methodName,paymentDate};
+    prev.amount+=Number(p.amount||0);
+    buckets.set(key,prev);
   }));
   return [...buckets.values()].map(p=>({...p,amount:Number(p.amount.toFixed(2))}));
 }
@@ -1447,74 +1491,161 @@ function scmReceiptArchive(group,canonicalId,when){
   const map=new Map();
   group.forEach(b=>{
     (Array.isArray(b.mergedReceiptArchive)?b.mergedReceiptArchive:[]).forEach(r=>{if(r?.number&&!map.has(r.number))map.set(r.number,r);});
-    if(b.receipt?.number&&!map.has(b.receipt.number))map.set(b.receipt.number,{...b.receipt,status:'superseded',sourceBookingId:b.id,supersededAt:when,mergedInto:canonicalId});
+    if(b.receipt?.number&&!map.has(b.receipt.number))map.set(b.receipt.number,{...b.receipt,status:"superseded",sourceBookingId:b.id,supersededAt:when,mergedInto:canonicalId});
   });
   return [...map.values()];
 }
 function scmNotes(group){
-  const notes=[];group.forEach(b=>{const n=String(b.notes||'').trim();if(n&&!notes.includes(n))notes.push(n);});
-  return notes.join('\n\n');
+  const notes=[];
+  group.forEach(b=>{const n=String(b.notes||"").trim();if(n&&!notes.includes(n))notes.push(n);});
+  return notes.join("\n\n");
 }
 function scmResolveCanonical(id){
   const seen=new Set();let current=id;
-  while(current&&!seen.has(current)){seen.add(current);const b=(DATA.bookings||{})[current];if(!b?.mergedInto)return current;current=b.mergedInto;}
+  while(current&&!seen.has(current)){
+    seen.add(current);
+    const b=(DATA.bookings||{})[current];
+    if(!b?.mergedInto)return current;
+    current=b.mergedInto;
+  }
   return current||id;
 }
 async function scmMergeGroup(group){
   const sorted=[...group].sort((a,b)=>scmStartMinutes(a)-scmStartMinutes(b)||Number(a.createdAt||0)-Number(b.createdAt||0));
-  const ids=sorted.map(b=>b.id).filter(Boolean);if(ids.length<2)return ids[0]||'';
-  const signature=scmHash(ids.slice().sort().join('|'));
-  const lockRef=db.ref(`bookingMergeLocks/${signature}`);let lock=null,lockAvailable=true;
-  try{lock=await lockRef.transaction(v=>v===null?{bookingIds:ids,createdAt:Date.now()}:undefined);}catch(e){lockAvailable=false;console.warn('Merge lock unavailable; continuing with booking-safe merge.',e);}
-  if(lockAvailable&&!lock.committed){await loadData();return scmResolveCanonical(ids[0]);}
-  const releaseLock=async()=>{if(lockAvailable&&lock?.committed){try{await lockRef.remove();}catch(_){}}};
-  const current=ids.map(id=>({id,...((DATA.bookings||{})[id]||{})})).filter(b=>b.id&&scmEligible(b));
-  if(current.length<2){await releaseLock();return current[0]?.id||ids[0];}
-  const verified=scmConsecutiveGroups(current).find(g=>g.length===current.length&&g.every(x=>ids.includes(x.id)));
-  if(!verified){await releaseLock();return current[0]?.id||ids[0];}
-  const ordered=[...verified].sort((a,b)=>scmStartMinutes(a)-scmStartMinutes(b)||Number(a.createdAt||0)-Number(b.createdAt||0));
-  const canonical=ordered[0],canonicalId=canonical.id,when=Date.now();
-  const startMin=scmStartMinutes(canonical),last=ordered[ordered.length-1],endMin=scmStartMinutes(last)+scmDurationMinutes(last);
-  const duration=(endMin-startMin)/60;
-  const payments=scmCombinedPayments(ordered);
-  const totalAmount=Number(payments.reduce((sum,p)=>sum+Number(p.amount||0),0).toFixed(2));
-  const fullyPaid=payments.length>0&&payments.every(p=>p.paid===true);
-  const originalReceipts=ordered.filter(b=>b.receipt?.number).map(b=>b.receipt);
-  const archive=scmReceiptArchive(ordered,canonicalId,when);
-  const availabilityIds=[...new Set(ordered.flatMap(b=>[b.availabilityId,...(Array.isArray(b.availabilityIds)?b.availabilityIds:[])].filter(Boolean)))];
-  const paymentMethods=[...new Set(payments.map(p=>p.method).filter(Boolean))];
-  const merged={...scmCleanRecord(canonical),start:toTime(startMin),duration,totalAmount,ratePerHour:duration>0?Number((totalAmount/duration).toFixed(2)):Number(canonical.ratePerHour||0),payments,paid:fullyPaid,paymentMethod:paymentMethods.length===1?paymentMethods[0]:(paymentMethods.length?'Multiple':(canonical.paymentMethod||'Whish')),paymentDate:fullyPaid?(payments.map(p=>p.paymentDate).filter(Boolean).sort().pop()||canonical.paymentDate||''):'',availabilityId:availabilityIds[0]||canonical.availabilityId||'',availabilityIds,notes:scmNotes(ordered),studentBooked:true,mergedSourceBookingIds:[...new Set(ordered.flatMap(b=>[b.id,...(Array.isArray(b.mergedSourceBookingIds)?b.mergedSourceBookingIds:[])].filter(Boolean)))],mergedReceiptArchive:archive,mergeVersion:1,mergedAt:when,updatedAt:when,mergeHistory:[...(Array.isArray(canonical.mergeHistory)?canonical.mergeHistory:[]),{at:when,type:'consecutive_student_sessions',sourceBookingIds:ids,start:toTime(startMin),duration}]};
-  delete merged.receipt;
-  let createFreshReceipt=false;
-  if(fullyPaid&&originalReceipts.length===1&&typeof receiptSnapshot==='function')merged.receipt=receiptSnapshot({...merged,id:canonicalId},originalReceipts[0].number,originalReceipts[0]);
-  else if(fullyPaid)createFreshReceipt=true;
-  const updates={};updates[`bookings/${canonicalId}`]=merged;
-  ordered.slice(1).forEach(source=>{updates[`bookings/${source.id}`]={...scmCleanRecord(source),status:'merged',deleted:true,financialExcluded:true,financialExcludedAt:when,financialExclusionReason:'merged_into_consecutive_session',mergedInto:canonicalId,mergedAt:when};});
+  const ids=sorted.map(b=>b.id).filter(Boolean);
+  if(ids.length<2)return ids[0]||"";
+
+  const signature=scmHash(ids.slice().sort().join("|"));
+  const lockRef=db.ref(`bookingMergeLocks/${signature}`);
+  let ownsLock=false;
   try{
-    await db.ref().update(updates);
-    if(createFreshReceipt&&typeof ensureReceiptForBooking==='function'){await loadData();await ensureReceiptForBooking(canonicalId);}
+    try{
+      const result=await lockRef.transaction(v=>v===null?{bookingIds:ids,createdAt:Date.now()}:undefined);
+      ownsLock=!!result?.committed;
+      if(result&&!result.committed){await loadData();return scmResolveCanonical(ids[0]);}
+    }catch(lockError){
+      console.warn("Merge lock unavailable; using booking-level verification.",lockError);
+    }
+
+    await loadData();
+    const fresh=ids.map(id=>({id,...((DATA.bookings||{})[id]||{})})).filter(scmEligible);
+    if(fresh.length<2)return fresh[0]?.id||ids[0];
+    const verified=scmConsecutiveGroups(fresh).find(g=>g.length===fresh.length&&g.every(x=>ids.includes(x.id)));
+    if(!verified)return fresh[0]?.id||ids[0];
+
+    const ordered=[...verified].sort((a,b)=>scmStartMinutes(a)-scmStartMinutes(b)||Number(a.createdAt||0)-Number(b.createdAt||0));
+    const canonical=ordered[0];
+    const canonicalId=canonical.id;
+    const when=Date.now();
+    const startMin=scmStartMinutes(canonical);
+    const last=ordered[ordered.length-1];
+    const endMin=scmStartMinutes(last)+scmDurationMinutes(last);
+    const duration=Number(((endMin-startMin)/60).toFixed(4));
+    const payments=scmCombinedPayments(ordered);
+    const totalAmount=Number(payments.reduce((sum,p)=>sum+Number(p.amount||0),0).toFixed(2));
+    const fullyPaid=payments.length>0&&payments.every(p=>p.paid===true);
+    const allDone=ordered.every(b=>b.done===true);
+    const originalReceipts=ordered.filter(b=>b.receipt?.number).map(b=>b.receipt);
+    const archive=scmReceiptArchive(ordered,canonicalId,when);
+    const availabilityIds=[...new Set(ordered.flatMap(b=>[b.availabilityId,...(Array.isArray(b.availabilityIds)?b.availabilityIds:[])].filter(Boolean)))];
+    const paymentMethods=[...new Set(payments.map(p=>p.method).filter(Boolean))];
+    const merged={
+      ...scmCleanRecord(canonical),
+      start:toTime(startMin),
+      duration,
+      totalAmount,
+      ratePerHour:duration>0?Number((totalAmount/duration).toFixed(2)):Number(canonical.ratePerHour||0),
+      payments,
+      paid:fullyPaid,
+      done:allDone,
+      doneAt:allDone?(ordered.map(b=>Number(b.doneAt||0)).filter(Boolean).sort((a,b)=>b-a)[0]||canonical.doneAt||when):null,
+      paymentMethod:paymentMethods.length===1?paymentMethods[0]:(paymentMethods.length?"Multiple":(canonical.paymentMethod||"Whish")),
+      paymentDate:fullyPaid?(payments.map(p=>p.paymentDate).filter(Boolean).sort().pop()||canonical.paymentDate||""):"",
+      availabilityId:availabilityIds[0]||canonical.availabilityId||"",
+      availabilityIds,
+      notes:scmNotes(ordered),
+      studentBooked:ordered.some(b=>b.studentBooked===true||scmNorm(b.createdByRole)==="student"||b.createdBy===b.studentId),
+      mergedSourceBookingIds:[...new Set(ordered.flatMap(b=>[b.id,...(Array.isArray(b.mergedSourceBookingIds)?b.mergedSourceBookingIds:[])].filter(Boolean)))],
+      mergedReceiptArchive:archive,
+      mergeVersion:2,
+      mergedAt:when,
+      updatedAt:when,
+      mergeHistory:[...(Array.isArray(canonical.mergeHistory)?canonical.mergeHistory:[]),{at:when,type:"consecutive_same_student_sessions",sourceBookingIds:ids,start:toTime(startMin),duration}]
+    };
+    if(!allDone)delete merged.doneAt;
+    delete merged.receipt;
+
+    let createFreshReceipt=false;
+    if(fullyPaid&&originalReceipts.length===1&&typeof receiptSnapshot==="function"){
+      merged.receipt=receiptSnapshot({...merged,id:canonicalId},originalReceipts[0].number,originalReceipts[0]);
+    }else if(fullyPaid){
+      createFreshReceipt=true;
+    }
+
+    const bookingUpdates={};
+    bookingUpdates[canonicalId]=merged;
+    ordered.slice(1).forEach(source=>{
+      bookingUpdates[source.id]={
+        ...scmCleanRecord(source),
+        status:"merged",
+        deleted:true,
+        financialExcluded:true,
+        financialExcludedAt:when,
+        financialExclusionReason:"merged_into_consecutive_session",
+        mergedInto:canonicalId,
+        mergedAt:when,
+        updatedAt:when
+      };
+    });
+
+    await db.ref("bookings").update(bookingUpdates);
+    await loadData();
+    if(createFreshReceipt&&typeof ensureReceiptForBooking==="function"){
+      await ensureReceiptForBooking(canonicalId);
+      await loadData();
+    }
     return canonicalId;
-  }catch(e){await releaseLock();throw e;}
+  }finally{
+    if(ownsLock){try{await lockRef.remove();}catch(_){}}
+  }
 }
 async function mergeConsecutiveStudentBookingsForBooking(bookingId){
   await loadData();
   const groups=scmConsecutiveGroups(list(DATA.bookings||{}));
   const group=groups.find(g=>g.some(b=>b.id===bookingId));
   if(!group)return scmResolveCanonical(bookingId);
-  const id=await scmMergeGroup(group);await loadData();return scmResolveCanonical(id||bookingId);
+  const id=await scmMergeGroup(group);
+  await loadData();
+  return scmResolveCanonical(id||bookingId);
 }
 async function mergeExistingConsecutiveStudentBookings(){
   if(SCM_MIGRATION_RUNNING||!currentUser||!profile)return 0;
   SCM_MIGRATION_RUNNING=true;
   try{
+    await loadData();
     let rows=list(DATA.bookings||{});
-    if(profile.role==='student')rows=rows.filter(b=>b.studentId===currentUser.uid);
-    else if(profile.role==='tutor')rows=rows.filter(b=>b.tutorId===currentUser.uid);
-    const groups=scmConsecutiveGroups(rows);let merged=0;
-    for(const group of groups){await scmMergeGroup(group);merged++;}
-    return merged;
-  }catch(e){console.warn('Could not merge existing consecutive sessions:',e);return 0;}
-  finally{SCM_MIGRATION_RUNNING=false;}
+    if(profile.role==="student")rows=rows.filter(b=>b.studentId===currentUser.uid);
+    else if(profile.role==="tutor")rows=rows.filter(b=>b.tutorId===currentUser.uid);
+    let mergedCount=0;
+    while(true){
+      const groups=scmConsecutiveGroups(rows);
+      if(!groups.length)break;
+      for(const group of groups){
+        await scmMergeGroup(group);
+        mergedCount++;
+      }
+      await loadData();
+      rows=list(DATA.bookings||{});
+      if(profile.role==="student")rows=rows.filter(b=>b.studentId===currentUser.uid);
+      else if(profile.role==="tutor")rows=rows.filter(b=>b.tutorId===currentUser.uid);
+    }
+    return mergedCount;
+  }catch(e){
+    console.warn("Could not merge existing consecutive sessions:",e);
+    return 0;
+  }finally{
+    SCM_MIGRATION_RUNNING=false;
+  }
 }
 
 async function confirmBooking(){
@@ -2971,6 +3102,9 @@ function renderTabs(){
 }
 async function openTab(tab,btn){
   await loadData();
+  if(typeof mergeExistingConsecutiveStudentBookings==="function"&&!SCM_MIGRATION_RUNNING){
+    try{const merged=await mergeExistingConsecutiveStudentBookings();if(merged)await loadData();}catch(e){console.warn("Consecutive-session refresh skipped:",e);}
+  }
   if(typeof closeMenu==="function")setTimeout(closeMenu,0);
   document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
   if(btn)btn.classList.add("active");
