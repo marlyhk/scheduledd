@@ -1,8 +1,0 @@
-{
-  "name": "scheduled-v9-4-availability-type-compatibility-fix",
-  "version": "9.4.0",
-  "private": true,
-  "scripts": {
-    "build": "mkdir -p public && cp index.html styles.css app.js scheduled-icon.jpeg scheduled-splash.jpeg scheduled-full-logo.jpeg public/"
-  }
-}
